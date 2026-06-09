@@ -634,6 +634,8 @@ function subscribeRealtime(){
     sb.channel("os-live")
       .on("postgres_changes",{event:"*",schema:"public",table:"os_requests"},()=>{ if(activeTab==="req") renderRequests(); else bumpReqBadge(); })
       .on("postgres_changes",{event:"*",schema:"public",table:"os_join_requests"},()=>{ if(activeTab==="req") renderRequests(); })
+      .on("postgres_changes",{event:"*",schema:"public",table:"os_tasks"},()=>{ if(activeTab==="tasks"&&taskFilter!=="events") renderTasks(); })
+      .on("postgres_changes",{event:"*",schema:"public",table:"os_events"},()=>{ if(activeTab==="tasks"&&taskFilter==="events") renderTasks(); })
       .subscribe();
   }catch(e){}
 }
@@ -947,11 +949,13 @@ function taskCard(t){
 }
 function openTask(id,all){
   const t=(all||[]).find(x=>x.id===id); if(!t) return;
+  loadTaskTimeline(id);
   const mine = t.assignee_id===ME.id || isOwnerOps() || (PROFILE.role==="manager"&&t.dept===myDeptKey());
   openSheet(`<h3>${esc(t.title)}</h3>
     <div class="meta" style="margin-bottom:10px"><span>👤 ${esc(t.assignee_name||"—")}</span>${t.deadline?`<span class="dot"></span><span>📅 ${fmtDate(t.deadline)}</span>`:""}<span class="dot"></span>${statusBadge(t.status)}</div>
     <div class="prog" style="margin-bottom:6px"><i style="width:${Math.max(0,Math.min(100,t.progress||0))}%"></i></div>
-    <div class="muted" style="margin-bottom:14px">التقدّم: ${t.progress||0}%</div>
+    <div class="muted" style="margin-bottom:10px">التقدّم: ${t.progress||0}%</div>
+    <div id="tlBox" class="muted" style="font-size:12.5px;margin-bottom:14px">بيحمّل سجل التقدّم…</div>
     ${mine?`
     <div class="field"><label>حدّث التقدّم</label><div class="qbtns" id="qp">${[0,25,50,75,100].map(p=>`<button class="qbtn ${(t.progress||0)===p?'on':''}" data-p="${p}">${p}%</button>`).join("")}</div></div>
     <div class="field"><label>إيه اللي اتعمل؟ (اختياري)</label><textarea id="tNote" placeholder="اكتب تحديث قصير…"></textarea></div>
@@ -990,6 +994,16 @@ async function renderEvents(){
     if(error){ toast("معرفناش نحذف: "+error.message,"bad"); return; }
     toast("اتحذف ✓","ok"); renderTasks();
   });
+}
+async function loadTaskTimeline(taskId){
+  let ups=[]; try{ const r=await sb.from("os_task_updates").select("by_name,note,percent,at").eq("task_id",taskId).order("at",{ascending:false}).limit(15); ups=r.data||[]; }catch(e){}
+  const box=$("tlBox"); if(!box) return;
+  if(!ups.length){ box.innerHTML=`لسه مفيش تحديثات متسجّلة على المهمة دي.`; return; }
+  box.innerHTML=`<div class="sec-h" style="margin-top:4px">سجل التقدّم <span class="ln"></span></div>`+
+    ups.map(u=>`<div style="display:flex;gap:8px;align-items:baseline;margin-bottom:7px;font-size:13px;color:var(--ink)">
+      <span class="badge b-green" style="min-width:46px;justify-content:center">${u.percent==null?"—":u.percent+"%"}</span>
+      <div style="flex:1"><b>${esc(u.by_name||"")}</b>${u.note?(" — "+esc(u.note)):""} <span class="muted" style="font-size:11.5px">· ${timeAgo(u.at)}</span></div>
+    </div>`).join("");
 }
 function openNewEvent(){
   openSheet(`<h3>موعد جديد</h3>
