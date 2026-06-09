@@ -690,7 +690,8 @@ function openNewReq(){
 {"title":"عنوان قصير للطلب","to_name":"اسم الشخص المقصود من القايمة دي [${names}] أو فاضي لو مش واضح","kind":"info أو approval أو deadline أو modify أو document","priority":"high أو normal","details":"تفاصيل الطلب كاملة"}
 الكلام: "${raw}"`;
       const res=await askAI({prompt,dept:null,mode:"fast",max_tokens:300});
-      const clean=res.replace(/\`\`\`[a-z]*|<[^>]+>/g,"").replace(/^[^{]*({)/,"$1").replace(/}[^}]*$/,"}");
+      const _js=res.indexOf("{"), _je=res.lastIndexOf("}");
+      const clean = _js>=0&&_je>_js ? res.slice(_js,_je+1) : res;
       const d=JSON.parse(clean);
       if(d.title) $("rTitle").value=d.title;
       if(d.details) $("rDet").value=d.details;
