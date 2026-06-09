@@ -480,11 +480,13 @@ function renderContract(){
       <div class="mic-hint" id="micHint">اضغط واتكلم: قول أطراف العقد، الموضوع، القيمة، المدة…</div>
     </div>
     <div class="field"><label>النص المسموع (تقدر تعدّله)</label><textarea id="vtext" placeholder="هيظهر هنا كلامك… أو اكتب بنفسك" style="min-height:110px"></textarea></div>
+    <div class="row-actions" style="margin:-2px 0 12px"><button class="btn ghost sm" id="fixBtn">✨ صحّح النص بالذكاء</button></div>
     <button class="btn" id="toContract">حوّل لعقد بالذكاء ✨</button>
     <div id="cfields"></div>
     <div id="cout"></div>`;
   committed = $("vtext").value || "";
   $("micBtn").onclick=toggleVoice;
+  $("fixBtn").onclick=smartFixText;
   $("toContract").onclick=extractContract;
   if(!voiceSupported()){ $("micHint").textContent="متصفحك مش بيدعم التسجيل الصوتي — اكتب النص بإيدك في الخانة تحت."; $("micBtn").style.opacity=".5"; }
 }
@@ -500,12 +502,29 @@ function toggleVoice(){
   try{ rec.start(); recording=true; $("micBtn").classList.add("rec"); $("micBtn").textContent="⏹️"; $("micHint").textContent="بسجّل… اتكلم وبعدين اضغط لإيقاف."; }
   catch(e){ toast("معرفناش نبدأ التسجيل","bad"); }
 }
-function stopVoice(){ recording=false; try{ rec&&rec.stop(); }catch(e){} const b=$("micBtn"); if(b){ b.classList.remove("rec"); b.textContent="🎙️"; } const h=$("micHint"); if(h) h.textContent="اضغط واتكلم تاني — أو حوّل النص لعقد."; }
+function stopVoice(){ recording=false; try{ rec&&rec.stop(); }catch(e){} const b=$("micBtn"); if(b){ b.classList.remove("rec"); b.textContent="🎙️"; } smartFixText(); }
+let lastRawVoice="";
+async function smartFixText(){
+  const ta=$("vtext"); if(!ta) return;
+  const text=ta.value.trim(); if(!text){ const h=$("micHint"); if(h) h.textContent="اضغط واتكلم تاني — أو حوّل النص لعقد."; return; }
+  lastRawVoice=text;
+  const hint=$("micHint"); if(hint) hint.textContent="✨ بيصحّح النص بالذكاء…";
+  const names=PROFILES.map(p=>p.name).join("، ");
+  const prompt=`النص التالي اتكتب بالإملاء الصوتي بالعامية المصرية، والإملاء بيغلط كتير: بيستبدل كلمات بكلمات شبهها في النطق (مثلاً "ميتينج" بتتسمع "200 جنيه"، و"يسلم" بتتسمع "يخلص") وبيضيف أرقام وأوقات مالهاش لازمة. صحّح النص بالسياق ده: شركة استشارات هندسية مصرية — عقود، تسليم ورق، رخص، رسومات، اجتماعات/ميتينج، دفعات، مقاولات، مواعيد. أسماء الفريق: ${names}. المدن: الشيخ زايد، أكتوبر، حدائق أكتوبر. أي رقم أو مبلغ أو وقت غريب في النص اشتبه فيه إنه كلمة اتسمعت غلط واحكم بالمعنى. رجّع النص المصحّح فقط، من غير أي مقدمة أو شرح.\nالنص: ${text}`;
+  try{
+    const fixed=(await askAI(prompt,400)).trim();
+    if(fixed && fixed!==text){
+      ta.value=fixed;
+      if(hint){ hint.innerHTML='✨ اتصحّح بالذكاء — راجعه. <a href="#" id="undoFix">رجّع اللي اتسمع</a>';
+        const u=$("undoFix"); if(u) u.onclick=(e)=>{ e.preventDefault(); ta.value=lastRawVoice; hint.textContent="رجّعنا النص زي ما اتسمع."; }; }
+    } else if(hint){ hint.textContent="النص تمام ✓ — حوّله لعقد."; }
+  }catch(e){ if(hint) hint.textContent="معرفناش نصحّح دلوقتي — عدّل بإيدك أو جرّب زرار التصحيح."; }
+}
 async function extractContract(){
   const text=$("vtext").value.trim();
   if(!text){ toast("اكتب أو سجّل تفاصيل العقد الأول","bad"); return; }
   const btn=$("toContract"); btn.disabled=true; btn.textContent="بيحلّل… ✨";
-  const prompt=`من النص ده استخرج بيانات العقد ورجّعها JSON مصغّر صالح فقط من غير أي شرح أو علامات. المفاتيح بالظبط: {"contract_type":"","party_a":"","party_b":"","subject":"","scope":"","value_egp":"","payment":"","duration":"","start_date":"","special":"","notes":""}. لو معلومة مش موجودة سيبها فاضية "". النص:\n`+text;
+  const prompt=`النص جاي من إملاء صوتي بالعامية المصرية وممكن فيه أخطاء سمعية (كلمات اتسمعت غلط بكلمات شبهها) — فسّرها بالسياق وصحّحها قبل الاستخراج. استخرج بيانات العقد ورجّعها JSON مصغّر صالح فقط من غير أي شرح أو علامات. المفاتيح بالظبط: {"contract_type":"","party_a":"","party_b":"","subject":"","scope":"","value_egp":"","payment":"","duration":"","start_date":"","special":"","notes":""}. لو معلومة مش موجودة سيبها فاضية "". النص:\n`+text;
   try{
     let out=await askAI(prompt,700);
     out=out.replace(/```json/gi,"").replace(/```/g,"").trim();
