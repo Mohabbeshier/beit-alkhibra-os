@@ -534,8 +534,8 @@ function openJoinForm(){
     openSheet(`<h3>طلبك اتبعت ✓</h3><p class="muted">الإدارة هتراجعه، وأول ما يتوافق عليه هيوصلك الإيميل والباسوورد على واتساب.</p><button class="btn ghost" onclick="closeSheet()">تمام</button>`);
   };
 }
-/* generic sheet mic (join form etc.) */
-let sRec=null, sRecOn=false, sCommit="";
+/* generic sheet mic (join form, smart tasks, etc.) */
+let sRec=null, sRecOn=false, sCommit="", sBtnId=null;
 function bindSheetMic(btnId, taId){
   const b=$(btnId); if(!b) return;
   if(!voiceSupported()){ b.style.display="none"; return; }
@@ -543,7 +543,7 @@ function bindSheetMic(btnId, taId){
     if(sRecOn){ stopSheetMic(); return; }
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
     sRec=new SR(); sRec.lang="ar-EG"; sRec.continuous=true; sRec.interimResults=true;
-    const ta=$(taId); sCommit=ta.value?(ta.value+" "):"";
+    const ta=$(taId); sCommit=ta.value?(ta.value+" "):""; sBtnId=btnId;
     sRec.onresult=(e)=>{ let it=""; for(let i=e.resultIndex;i<e.results.length;i++){ const t=e.results[i][0].transcript; if(e.results[i].isFinal) sCommit+=t+" "; else it+=t; } ta.value=(sCommit+it).trim(); };
     sRec.onerror=(e)=>{ if(e.error==="not-allowed"||e.error==="service-not-allowed"){ toast("لازم تسمح بالميكروفون","bad"); stopSheetMic(); } };
     sRec.onend=()=>{ if(sRecOn){ try{ sRec.start(); }catch(_e){} } };
@@ -553,7 +553,7 @@ function bindSheetMic(btnId, taId){
 }
 function stopSheetMic(){
   sRecOn=false; try{ sRec&&sRec.stop(); }catch(e){}
-  const b=$("jMic"); if(b){ b.textContent="🎙️ سجّل بصوتك"; b.classList.remove("on"); }
+  const b=sBtnId?$(sBtnId):null; if(b){ b.textContent="🎙️ سجّل بصوتك"; b.classList.remove("on"); }
 }
 async function createUserViaFn(payload){
   let token=""; try{ const r=await sb.auth.getSession(); token=(r.data.session||{}).access_token||""; }catch(e){}
@@ -895,6 +895,76 @@ function openNewEvent(){
     closeSheet(); toast("الموعد اتسجّل ✓","ok"); renderTasks();
   };
 }
+/* ===== smart task capture: speech → multiple tasks ===== */
+function openSmartTask(){
+  openSheet(`<h3>مهام بالكلام ✨</h3>
+    <div class="field"><label>قول المهام كلها مرة واحدة — والذكاء هيفصلها</label>
+    <textarea id="stStory" style="min-height:120px" placeholder="مثلاً: دعاء تخلص رسومات الفيلا الخميس، ومحمد سعد يراجع المقايسة بكرة، وعوض يتابع رخصة زايد عاجل"></textarea></div>
+    <div class="row-actions" style="margin:-2px 0 12px"><button class="btn ghost sm" id="stMic">🎙️ سجّل بصوتك</button><button class="btn ghost sm" id="stManual">＋ مهمة يدوي</button></div>
+    <button class="btn" id="stGo">✨ فصّلها لمهام</button>
+    <div id="stPrev"></div>`);
+  bindSheetMic("stMic","stStory");
+  $("stManual").onclick=()=>{ stopSheetMic(); openNewTask(); };
+  $("stGo").onclick=parseSmartTasks;
+}
+function matchProfile(nm){
+  if(!nm) return null;
+  const n=String(nm).trim(); if(!n) return null;
+  return PROFILES.find(p=>p.name===n) || PROFILES.find(p=>p.name.includes(n)||n.includes(p.name)) || null;
+}
+async function parseSmartTasks(){
+  stopSheetMic();
+  const story=$("stStory").value.trim();
+  if(!story){ toast("اكتب أو سجّل المهام الأول","bad"); return; }
+  const btn=$("stGo"); btn.disabled=true; btn.textContent="✨ بيفصّل المهام…";
+  const team=PROFILES.map(p=>p.name).join("، ");
+  const d=new Date();
+  const prompt=`النهارده ${d.toLocaleDateString("ar-EG",{weekday:"long"})} الموافق ${d.toISOString().slice(0,10)}. الكلام التالي فيه مهمة أو أكتر اتقالت بالعامية المصرية، وممكن يكون من إملاء صوتي فيه أخطاء سمعية — صحّحها بالسياق (شركة استشارات هندسية). أسماء الفريق المتاحة: ${team}. فصّل الكلام لمهام ورجّع JSON بالشكل ده بالظبط: {"tasks":[{"title":"","assignee":"","deadline":"","priority":"medium"}]} — title فعل واضح مختصر، assignee اسم من الفريق زي ما هو بالظبط أو "" لو مش محدد، deadline بصيغة YYYY-MM-DD محسوبة من تاريخ النهارده (بكرة/الخميس/بعد أسبوع…) أو "" لو مفيش، priority واحدة من high/medium/low (عاجل=high). الكلام:\n${story}`;
+  try{
+    let out=await askAI({ prompt, mode:"fast", want_json:true, max_tokens:700 });
+    out=out.replace(/```json/gi,"").replace(/```/g,"").trim();
+    const s=out.indexOf("{"), eI=out.lastIndexOf("}");
+    if(s>=0&&eI>=0) out=out.slice(s,eI+1);
+    const arr=(JSON.parse(out).tasks||[]).filter(t=>t&&String(t.title||"").trim());
+    if(!arr.length) throw new Error("empty");
+    renderSmartPreview(arr);
+  }catch(e){ toast("معرفناش نفصّل — جرّب صياغة تانية أو ضيف يدوي","bad"); }
+  btn.disabled=false; btn.textContent="✨ فصّلها لمهام";
+}
+function renderSmartPreview(arr){
+  const opts=(sel)=>`<option value="">ليّا (${esc(PROFILE.name)})</option>`+PROFILES.filter(p=>p.id!==ME.id).map(p=>`<option value="${p.id}" ${sel===p.id?"selected":""}>${esc(p.name)}</option>`).join("");
+  const okDate=(v)=>/^\d{4}-\d{2}-\d{2}$/.test(v||"")?v:"";
+  $("stPrev").innerHTML=`<div class="sec-h">راجع المهام (${arr.length}) <span class="ln"></span></div>`+
+    arr.map((t,i)=>{ const m=matchProfile(t.assignee); const pr=["high","low"].includes(t.priority)?t.priority:"medium";
+      return `<div class="card flat" data-row="${i}" data-prio="${pr}" style="background:var(--soft)">
+      <div class="field" style="margin-bottom:8px"><input class="st-title" value="${esc(t.title)}"/></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select class="st-ass" style="flex:1;min-width:140px;padding:9px;border:1.6px solid var(--line);border-radius:10px;background:#fff">${opts(m?m.id:"")}</select>
+        <input class="st-due" type="date" value="${okDate(t.deadline)}" style="padding:9px;border:1.6px solid var(--line);border-radius:10px;background:#fff"/>
+        ${pr==="high"?'<span class="badge b-red">عاجل</span>':""}
+        <button class="qbtn st-del" title="حذف">🗑</button>
+      </div></div>`; }).join("")+
+    `<button class="btn green" id="stSave">احفظ المهام ✓</button>`;
+  $("stPrev").querySelectorAll(".st-del").forEach(b=>b.onclick=()=>{ b.closest("[data-row]").remove(); if(!$("stPrev").querySelector("[data-row]")) $("stPrev").innerHTML=""; });
+  $("stSave").onclick=saveSmartTasks;
+  setTimeout(()=>{ const el=$("stSave"); if(el) el.scrollIntoView({behavior:"smooth",block:"nearest"}); },60);
+}
+async function saveSmartTasks(){
+  const rows=[...$("stPrev").querySelectorAll("[data-row]")];
+  const payloads=rows.map(r=>{
+    const title=r.querySelector(".st-title").value.trim(); if(!title) return null;
+    const assId=r.querySelector(".st-ass").value;
+    const ap=assId?BY_ID[assId]:PROFILE;
+    return { title, assignee_id:ap.id, assignee_name:ap.name, dept:ap.dept,
+      deadline:r.querySelector(".st-due").value||null, priority:r.dataset.prio||"medium",
+      type:"task", status:"new", progress:0, created_by:ME.id, created_by_name:PROFILE.name };
+  }).filter(Boolean);
+  if(!payloads.length){ toast("مفيش مهام تتحفظ","bad"); return; }
+  const btn=$("stSave"); btn.disabled=true; btn.textContent="بيحفظ…";
+  const { error }=await sb.from("os_tasks").insert(payloads);
+  if(error){ toast("معرفناش نحفظ: "+error.message,"bad"); btn.disabled=false; btn.textContent="احفظ المهام ✓"; return; }
+  closeSheet(); toast("اتحفظت "+payloads.length+" مهمة ✓","ok"); renderTasks();
+}
 function openNewTask(){
   const opts=PROFILES.map(p=>`<option value="${p.id}">${esc(p.name)} — ${esc((DEPT_BY_KEY[p.dept]&&DEPT_BY_KEY[p.dept].name)||p.dept||"")}</option>`).join("");
   openSheet(`<h3>مهمة جديدة</h3>
@@ -918,7 +988,7 @@ function openNewTask(){
 function ensureFab(){
   let fab=$("fab");
   if(!fab){ fab=document.createElement("button"); fab.id="fab"; fab.className="fab"; fab.textContent="＋"; document.body.appendChild(fab); }
-  fab.onclick=()=>{ if(activeTab==="tasks"){ taskFilter==="events"?openNewEvent():openNewTask(); } else if(activeTab==="req") openNewReq(); };
+  fab.onclick=()=>{ if(activeTab==="tasks"){ taskFilter==="events"?openNewEvent():openSmartTask(); } else if(activeTab==="req") openNewReq(); };
   const show = activeTab==="req" || (activeTab==="tasks" && (taskFilter==="events" || canWrite()));
   fab.style.display=show?"flex":"none";
 }
