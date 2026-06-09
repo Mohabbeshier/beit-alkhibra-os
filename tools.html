@@ -107,7 +107,7 @@ a{color:var(--blue-d);}
 .b-red{background:var(--red-l);color:var(--red);}
 .b-grey{background:var(--soft);color:var(--muted);}
 
-.resp-box{margin-top:11px;background:var(--green-l);border-radius:12px;padding:10px 12px;font-size:13.5px;color:var(--green-d);}
+.resp-box{margin-top:11px;background:var(--green-l);border-radius:12px;padding:10px 12px;font-size:13.5px;color:var(--green-d);white-space:pre-wrap;}
 .row-actions{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap;}
 
 .empty{text-align:center;color:var(--muted);padding:30px 16px;}
@@ -250,7 +250,7 @@ let activeTab="req";
 let chatHistory=[];
 let askDeptKey=null;
 let contractFields=null, chosenCtype="";
-let LAST_JOINS={};
+let LAST_JOINS={}, LAST_REQS={};
 
 const $=(id)=>document.getElementById(id);
 const esc=(s)=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
@@ -381,6 +381,7 @@ async function renderRequests(){
   $("newReq").onclick=openNewReq;
   let d; try{ d=await loadRequests(); }catch(e){ $("reqList").innerHTML=`<div class="empty">معرفناش نجيب الطلبات. ${esc(e.message||"")}</div>`; return; }
   LAST_JOINS={}; d.joins.forEach(j=>LAST_JOINS[j.id]=j);
+  LAST_REQS={}; d.reqs.forEach(r=>LAST_REQS[r.id]=r);
   const mine = d.reqs.filter(r=> (r.to_id===ME.id || r.to_id==null) && r.from_id!==ME.id );
   const sent = d.reqs.filter(r=> r.from_id===ME.id );
   const pendIn = mine.filter(r=>r.status==="pending").length;
@@ -395,7 +396,7 @@ async function renderRequests(){
   h+=`<div class="sec-h">اللي بعتها <span class="ln"></span></div>`;
   h+= sent.length? sent.map(reqCard).join("") : `<div class="card flat muted">لسه مبعتش أي طلب. اضغط «+ طلب جديد».</div>`;
   $("reqList").innerHTML=h;
-  el.querySelectorAll("[data-reply]").forEach(b=>b.onclick=()=>openReply(b.dataset.reply, b.dataset.title));
+  el.querySelectorAll("[data-reply]").forEach(b=>b.onclick=()=>openReply(b.dataset.reply));
   el.querySelectorAll("[data-jr]").forEach(b=>b.onclick=()=>{ if(b.dataset.act==="approved") openApprove(b.dataset.jr); else reviewJoin(b.dataset.jr,"rejected"); });
 }
 function kindBadge(k){ const m={info:["معلومة","b-blue"],deadline:["موعد","b-amber"],approval:["موافقة","b-green"],task:["مهمة","b-blue"],other:["أخرى","b-grey"]}; const x=m[k]||["طلب","b-grey"]; return `<span class="badge ${x[1]}">${x[0]}</span>`; }
@@ -437,12 +438,44 @@ function openNewReq(){
     closeSheet(); toast("اتبعت ✓","ok"); renderRequests();
   };
 }
-function openReply(id,title){
-  openSheet(`<h3>ردّ على: ${esc(title)}</h3>
-    <div class="field"><label>الرد</label><textarea id="repTxt" placeholder="اكتب ردّك…"></textarea></div>
+function kindLabel(k){ return ({info:"معلومة/استفسار",deadline:"موعد تسليم",approval:"طلب موافقة",task:"مهمة",other:"طلب"})[k]||"طلب"; }
+function openReply(id){
+  const r=LAST_REQS[id]; if(!r) return;
+  const isApproval=r.kind==="approval";
+  const decisions=["✅ موافق","🟡 موافق بتعديلات","❌ مرفوض","❓ محتاج توضيح"];
+  openSheet(`<h3>ردّ على: ${esc(r.title)}</h3>
+    ${r.details?`<div class="card flat" style="background:var(--soft);margin-bottom:14px"><div class="muted" style="font-size:13px"><b>الطلب:</b> ${esc(r.details)}</div></div>`:""}
+    ${isApproval?`<div class="field"><label>قرارك (بضغطة)</label><div class="qbtns" id="decBtns">${decisions.map(d=>`<button class="qbtn" data-dec="${d}">${d}</button>`).join("")}</div></div>`:""}
+    <div class="field"><label>ملاحظاتك على بنود الطلب — اكتب براحتك</label><textarea id="repNotes" placeholder="مثلاً: الرسومات تمام، بس واجهة قطاع أ محتاجة تعديل قبل التسليم، وقول لدعاء تراجع المقاسات…"></textarea></div>
+    <button class="btn ghost" id="repAI" style="margin-bottom:12px">✨ نظّم الرد بالذكاء — بنود وتوجيهات</button>
+    <div class="field"><label>الرد النهائي (تقدر تعدّله)</label><textarea id="repTxt" style="min-height:140px" placeholder="هيتكتب هنا بعد التنظيم — أو اكتبه بإيدك"></textarea></div>
     <div class="row-actions"><button class="btn green" id="repSave">إرسال الرد</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+  let decision="";
+  const db=$("decBtns");
+  if(db) db.querySelectorAll("[data-dec]").forEach(b=>b.onclick=()=>{ decision=(decision===b.dataset.dec?"":b.dataset.dec); db.querySelectorAll("[data-dec]").forEach(x=>x.classList.toggle("on",x.dataset.dec===decision)); });
+  $("repAI").onclick=async()=>{
+    const notes=$("repNotes").value.trim();
+    if(!notes && !decision){ toast("اختار قرار أو اكتب ملاحظة الأول","bad"); return; }
+    const btn=$("repAI"); btn.disabled=true; btn.textContent="✨ بيفصّل الطلب وينظّم…";
+    const prompt=`اكتب رد داخلي منظم بالعامية المصرية المهنية على الطلب ده في شركة بيت الخبرة الهندسية.
+الطلب (${kindLabel(r.kind)}) من ${r.from_id?nameOf(r.from_id):"النظام"}: «${r.title}»${r.details?(" — تفاصيله: "+r.details):""}
+${decision?("قرار "+PROFILE.name+": "+decision):""}
+ملاحظاته الخام: ${notes||"—"}
+فصّل الطلب لبنوده ورد بالهيكل ده، واحذف أي بند مالوش لازمة:
+القرار: …
+✅ المعتمد زي ما هو: …
+✏️ المطلوب تعديله (بالتحديد): …
+📌 توجيهات: …
+⏭️ الخطوة الجاية ومين المسؤول: …
+مختصر ومباشر، من غير أي مقدمة أو خاتمة.`;
+    try{ const out=await askAI({ prompt, mode:"fast", max_tokens:550 }); $("repTxt").value=(out||"").trim(); toast("اتنظّم ✓ راجعه وابعت","ok"); }
+    catch(e){ toast("معرفناش ننظّم دلوقتي — اكتب الرد بإيدك","bad"); }
+    btn.disabled=false; btn.textContent="✨ نظّم الرد بالذكاء — بنود وتوجيهات";
+  };
   $("repSave").onclick=async()=>{
-    const txt=$("repTxt").value.trim(); if(!txt){ toast("اكتب الرد","bad"); return; }
+    let txt=$("repTxt").value.trim();
+    if(!txt){ const n=$("repNotes").value.trim(); txt=(decision?decision+(n?"\n"+n:""):n); }
+    if(!txt){ toast("اكتب الرد","bad"); return; }
     const btn=$("repSave"); btn.disabled=true; btn.textContent="…";
     const { error }=await sb.from("os_requests").update({ response_text:txt, status:"done", responded_at:new Date().toISOString(), response_date:today() }).eq("id",id);
     if(error){ toast("معرفناش نحفظ: "+error.message,"bad"); btn.disabled=false; btn.textContent="إرسال الرد"; return; }
@@ -569,6 +602,10 @@ function toggleVoice(){
   catch(e){ toast("معرفناش نبدأ التسجيل","bad"); }
 }
 function stopVoice(){ recording=false; try{ rec&&rec.stop(); }catch(e){} const b=$("micBtn"); if(b){ b.classList.remove("rec"); b.textContent="🎙️"; } smartFixText(); }
+function stopVoiceSilent(){ recording=false; try{ rec&&rec.stop(); }catch(e){} const b=$("micBtn"); if(b){ b.classList.remove("rec"); b.textContent="🎙️"; } const h=$("micHint"); if(h) h.textContent="التسجيل اتوقف تلقائيًا — كمّل أو اضغط ✨ صحّح."; }
+document.addEventListener("visibilitychange",()=>{ if(document.hidden && recording) stopVoiceSilent(); });
+window.addEventListener("pagehide",()=>{ if(recording) stopVoiceSilent(); });
+window.addEventListener("blur",()=>{ if(recording) stopVoiceSilent(); });
 let lastRawVoice="";
 async function smartFixText(){
   const ta=$("vtext"); if(!ta) return;
@@ -844,7 +881,7 @@ function ensureFab(){
   const show = activeTab==="req" || (activeTab==="tasks" && (taskFilter==="events" || canWrite()));
   fab.style.display=show?"flex":"none";
 }
-const _switch=switchTab; switchTab=function(id){ _switch(id); ensureFab(); };
+const _switch=switchTab; switchTab=function(id){ if(recording) stopVoiceSilent(); _switch(id); ensureFab(); };
 
 /* ===================== EVENTS ===================== */
 $("btnLogin").onclick=doLogin;
