@@ -268,7 +268,7 @@ function nameOf(id){ return (BY_ID[id]&&BY_ID[id].name)||"—"; }
 
 /* ===================== MODAL ===================== */
 function openSheet(html){ $("sheet").innerHTML=html; $("modal").classList.add("open"); }
-function closeSheet(){ $("modal").classList.remove("open"); if(typeof sRecOn!=="undefined" && sRecOn) stopSheetMic(); }
+function closeSheet(){ $("modal").classList.remove("open"); if(typeof sRecOn!=="undefined" && sRecOn) stopSheetMic(true); }
 $("modal").addEventListener("click",(e)=>{ if(e.target.id==="modal") closeSheet(); });
 
 /* ===================== BOOT ===================== */
@@ -526,7 +526,7 @@ function openJoinForm(){
     const name=$("jName").value.trim(), email=$("jEmail").value.trim();
     if(!name){ toast("اكتب اسمك","bad"); return; }
     if(!email){ toast("اكتب الإيميل","bad"); return; }
-    stopSheetMic();
+    await stopSheetMic();
     const story=$("jStory").value.trim();
     const btn=$("jSend"); btn.disabled=true;
     let f={ responsibilities:story||null, team_members:null, recurring_tasks:null, main_challenge:null };
@@ -549,26 +549,51 @@ function openJoinForm(){
     openSheet(`<h3>طلبك اتبعت ✓</h3><p class="muted">الإدارة هتراجعه، وأول ما يتوافق عليه هيوصلك الإيميل والباسوورد على واتساب.</p><button class="btn ghost" onclick="closeSheet()">تمام</button>`);
   };
 }
-/* generic sheet mic (join form, smart tasks, etc.) */
-let sRec=null, sRecOn=false, sCommit="", sBtnId=null;
+/* generic sheet mic (join form, smart tasks, etc.) — Gemini first, dictation fallback */
+let sRec=null, sRecOn=false, sCommit="", sBtnId=null, sTaId=null, sEngine=null, sMediaRec=null, sChunks=[], sStream=null;
 function bindSheetMic(btnId, taId){
   const b=$(btnId); if(!b) return;
-  if(!voiceSupported()){ b.style.display="none"; return; }
-  b.onclick=()=>{
-    if(sRecOn){ stopSheetMic(); return; }
+  if(!micSupported()){ b.style.display="none"; return; }
+  b.onclick=async()=>{
+    if(sRecOn){ await stopSheetMic(); return; }
+    sBtnId=btnId; sTaId=taId;
+    if(VOICE_GEMINI && hasMediaRec()){
+      try{
+        sStream=await navigator.mediaDevices.getUserMedia({audio:true});
+        sMediaRec=new MediaRecorder(sStream, recMime()?{mimeType:recMime()}:undefined);
+        sChunks=[]; sMediaRec.ondataavailable=(e)=>{ if(e.data&&e.data.size) sChunks.push(e.data); };
+        sMediaRec.start(); sRecOn=true; sEngine="gemini";
+        b.textContent="⏹️ وقف واسمع"; b.classList.add("on");
+        return;
+      }catch(e){ if(e&&e.name==="NotAllowedError"){ toast("لازم تسمح بالميكروفون","bad"); return; } }
+    }
+    if(!dictSupported()){ toast("التسجيل مش متاح هنا — اكتب بإيدك","bad"); return; }
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
     sRec=new SR(); sRec.lang="ar-EG"; sRec.continuous=true; sRec.interimResults=true;
-    const ta=$(taId); sCommit=ta.value?(ta.value+" "):""; sBtnId=btnId;
+    const ta=$(taId); sCommit=ta.value?(ta.value+" "):"";
     sRec.onresult=(e)=>{ let it=""; for(let i=e.resultIndex;i<e.results.length;i++){ const t=e.results[i][0].transcript; if(e.results[i].isFinal) sCommit+=t+" "; else it+=t; } ta.value=(sCommit+it).trim(); };
     sRec.onerror=(e)=>{ if(e.error==="not-allowed"||e.error==="service-not-allowed"){ toast("لازم تسمح بالميكروفون","bad"); stopSheetMic(); } };
-    sRec.onend=()=>{ if(sRecOn){ try{ sRec.start(); }catch(_e){} } };
-    try{ sRec.start(); sRecOn=true; b.textContent="⏹️ وقف التسجيل"; b.classList.add("on"); }
+    sRec.onend=()=>{ if(sRecOn&&sEngine==="dict"){ try{ sRec.start(); }catch(_e){} } };
+    try{ sRec.start(); sRecOn=true; sEngine="dict"; b.textContent="⏹️ وقف التسجيل"; b.classList.add("on"); }
     catch(e){ toast("معرفناش نبدأ التسجيل","bad"); }
   };
 }
-function stopSheetMic(){
-  sRecOn=false; try{ sRec&&sRec.stop(); }catch(e){}
+async function stopSheetMic(discard){
+  if(!sRecOn) return;
+  sRecOn=false;
   const b=sBtnId?$(sBtnId):null; if(b){ b.textContent="🎙️ سجّل بصوتك"; b.classList.remove("on"); }
+  if(sEngine==="gemini"){
+    const blob=await new Promise((res)=>{ try{ sMediaRec.onstop=()=>{ const bl=new Blob(sChunks,{type:(sMediaRec&&sMediaRec.mimeType)||"audio/mp4"}); try{ sStream.getTracks().forEach(t=>t.stop()); }catch(_e){} res(bl); }; sMediaRec.stop(); }catch(e){ res(null); } });
+    if(discard||!blob||!blob.size) return;
+    if(b){ b.disabled=true; b.textContent="🤖 بيسمع…"; }
+    try{
+      const text=await geminiTranscribe(blob);
+      const ta=$(sTaId); if(ta) ta.value=(ta.value?ta.value+" ":"")+text;
+    }catch(e){ transErrToast(e); }
+    if(b){ b.disabled=false; b.textContent="🎙️ سجّل بصوتك"; }
+  } else {
+    try{ sRec&&sRec.stop(); }catch(e){}
+  }
 }
 async function createUserViaFn(payload){
   let token=""; try{ const r=await sb.auth.getSession(); token=(r.data.session||{}).access_token||""; }catch(e){}
@@ -621,8 +646,30 @@ async function bumpReqBadge(){
 }
 
 /* ===================== CONTRACTS (voice, legal) ===================== */
-let rec=null, recording=false, committed="";
-function voiceSupported(){ return ("webkitSpeechRecognition" in window)||("SpeechRecognition" in window); }
+let rec=null, recording=false, committed="", recEngine=null;
+let mediaRecC=null, chunksC=[], streamC=null, timerC=null, secsC=0;
+let VOICE_GEMINI=true; /* بيقع تلقائيًا للإملاء العادي لو المفتاح مش متظبط */
+function dictSupported(){ return ("webkitSpeechRecognition" in window)||("SpeechRecognition" in window); }
+function voiceSupported(){ return dictSupported(); }
+function hasMediaRec(){ return !!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder); }
+function micSupported(){ return hasMediaRec()||dictSupported(); }
+function recMime(){ const c=["audio/mp4","audio/webm;codecs=opus","audio/webm"]; for(const t of c){ try{ if(MediaRecorder.isTypeSupported(t)) return t; }catch(e){} } return ""; }
+function fmtSecs(s){ return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); }
+function blobToB64(blob){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(",")[1]||""); r.onerror=rej; r.readAsDataURL(blob); }); }
+async function geminiTranscribe(blob){
+  const audio_b64=await blobToB64(blob);
+  const { data, error }=await sb.functions.invoke("os-transcribe",{ body:{ audio_b64, mime:blob.type||"audio/mp4" } });
+  if(error) throw new Error("NET");
+  if(data&&data.error==="MISSING_KEY"){ VOICE_GEMINI=false; throw new Error("MISSING_KEY"); }
+  if(!data||data.error||!data.text) throw new Error((data&&data.error)||"EMPTY");
+  return String(data.text).trim();
+}
+function transErrToast(e){
+  const m=String((e&&e.message)||e);
+  if(m.includes("MISSING_KEY")) toast("سماع جيميناي لسه مش متفعّل — ناقص GEMINI_API_KEY","bad");
+  else if(m==="NET") toast("النت قطع وإحنا بنبعت التسجيل — جرّب تاني","bad");
+  else toast("معرفناش نسمع التسجيل — جرّب تاني","bad");
+}
 function renderContract(){
   const dep=DEPT_BY_KEY["legal"];
   $("v-contract").innerHTML=`<div class="page-h"><div><h2>إنشاء عقد بالصوت</h2><div class="sub">${esc((dep&&dep.name)||"القسم القانوني")}</div></div></div>
@@ -643,25 +690,69 @@ function renderContract(){
   $("v-contract").querySelectorAll("[data-ct]").forEach(b=>b.onclick=()=>{ chosenCtype=(chosenCtype===b.dataset.ct?"":b.dataset.ct); $("v-contract").querySelectorAll("[data-ct]").forEach(x=>x.classList.toggle("on",x.dataset.ct===chosenCtype)); });
   $("fixBtn").onclick=smartFixText;
   $("toContract").onclick=extractContract;
-  if(!voiceSupported()){ $("micHint").textContent="متصفحك مش بيدعم التسجيل الصوتي — اكتب النص بإيدك في الخانة تحت."; $("micBtn").style.opacity=".5"; }
+  if(!micSupported()){ $("micHint").textContent="متصفحك مش بيدعم التسجيل الصوتي — اكتب النص بإيدك في الخانة تحت."; $("micBtn").style.opacity=".5"; }
 }
-function toggleVoice(){
-  if(!voiceSupported()){ toast("التسجيل الصوتي مش متاح هنا — اكتب بإيدك","bad"); return; }
-  if(recording){ stopVoice(); return; }
+async function toggleVoice(){
+  if(recording){ await stopVoice(); return; }
+  if(VOICE_GEMINI && hasMediaRec()){
+    try{
+      streamC=await navigator.mediaDevices.getUserMedia({audio:true});
+      mediaRecC=new MediaRecorder(streamC, recMime()?{mimeType:recMime()}:undefined);
+      chunksC=[]; mediaRecC.ondataavailable=(e)=>{ if(e.data&&e.data.size) chunksC.push(e.data); };
+      mediaRecC.start(); recording=true; recEngine="gemini"; secsC=0;
+      const b=$("micBtn"); b.classList.add("rec"); b.textContent="⏹️";
+      const h=$("micHint"); if(h) h.textContent="🔴 بسجّل — اتكلم براحتك وبعدين اضغط إيقاف";
+      timerC=setInterval(()=>{ secsC++; const hh=$("micHint"); if(hh) hh.textContent="🔴 بسجّل "+fmtSecs(secsC)+" — اتكلم براحتك وبعدين اضغط إيقاف"; },1000);
+      return;
+    }catch(e){ if(e&&e.name==="NotAllowedError"){ toast("لازم تسمح بالميكروفون","bad"); return; } }
+  }
+  startDictation();
+}
+function startDictation(){
+  if(!dictSupported()){ toast("التسجيل الصوتي مش متاح هنا — اكتب بإيدك","bad"); return; }
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   rec=new SR(); rec.lang="ar-EG"; rec.continuous=true; rec.interimResults=true;
   committed=$("vtext").value?($("vtext").value+" "):"";
   rec.onresult=(e)=>{ let interim=""; for(let i=e.resultIndex;i<e.results.length;i++){ const tr=e.results[i][0].transcript; if(e.results[i].isFinal) committed+=tr+" "; else interim+=tr; } $("vtext").value=(committed+interim).trim(); };
   rec.onerror=(e)=>{ if(e.error==="not-allowed"||e.error==="service-not-allowed"){ toast("لازم تسمح بالميكروفون","bad"); stopVoice(); } };
-  rec.onend=()=>{ if(recording){ try{ rec.start(); }catch(_e){} } };
-  try{ rec.start(); recording=true; $("micBtn").classList.add("rec"); $("micBtn").textContent="⏹️"; $("micHint").textContent="بسجّل… اتكلم وبعدين اضغط لإيقاف."; }
+  rec.onend=()=>{ if(recording&&recEngine==="dict"){ try{ rec.start(); }catch(_e){} } };
+  try{ rec.start(); recording=true; recEngine="dict"; $("micBtn").classList.add("rec"); $("micBtn").textContent="⏹️"; $("micHint").textContent="بسجّل بالإملاء… اتكلم وبعدين اضغط لإيقاف."; }
   catch(e){ toast("معرفناش نبدأ التسجيل","bad"); }
 }
-function stopVoice(){ recording=false; try{ rec&&rec.stop(); }catch(e){} const b=$("micBtn"); if(b){ b.classList.remove("rec"); b.textContent="🎙️"; } smartFixText(); }
-function stopVoiceSilent(){ recording=false; try{ rec&&rec.stop(); }catch(e){} const b=$("micBtn"); if(b){ b.classList.remove("rec"); b.textContent="🎙️"; } const h=$("micHint"); if(h) h.textContent="التسجيل اتوقف تلقائيًا — كمّل أو اضغط ✨ صحّح."; }
-document.addEventListener("visibilitychange",()=>{ if(document.hidden){ if(recording) stopVoiceSilent(); if(sRecOn) stopSheetMic(); } });
-window.addEventListener("pagehide",()=>{ if(recording) stopVoiceSilent(); if(sRecOn) stopSheetMic(); });
-window.addEventListener("blur",()=>{ if(recording) stopVoiceSilent(); if(sRecOn) stopSheetMic(); });
+async function stopVoice(){
+  if(!recording) return;
+  recording=false; clearInterval(timerC);
+  const b=$("micBtn"); if(b){ b.classList.remove("rec"); b.textContent="🎙️"; }
+  if(recEngine==="gemini"){
+    const h=$("micHint");
+    const blob=await new Promise((res)=>{ try{ mediaRecC.onstop=()=>{ const bl=new Blob(chunksC,{type:(mediaRecC&&mediaRecC.mimeType)||"audio/mp4"}); try{ streamC.getTracks().forEach(t=>t.stop()); }catch(_e){} res(bl); }; mediaRecC.stop(); }catch(e){ res(null); } });
+    if(!blob||!blob.size){ if(h) h.textContent="التسجيل اتوقف."; return; }
+    if(h) h.textContent="🤖 جيميناي بيسمع التسجيل…";
+    try{
+      const text=await geminiTranscribe(blob);
+      const ta=$("vtext"); if(ta) ta.value=(ta.value?ta.value+" ":"")+text;
+      if(h) h.textContent="اتكتب ✓ — راجعه أو حوّله لعقد على طول.";
+    }catch(e){
+      transErrToast(e);
+      const miss=String((e&&e.message)||"").includes("MISSING_KEY");
+      if(h) h.textContent= miss? "جيميناي مش متفعّل لسه — المايك هيشتغل بالإملاء العادي مؤقتًا." : "حصلت مشكلة في السمع — جرّب تسجّل تاني.";
+    }
+  } else {
+    try{ rec&&rec.stop(); }catch(e){}
+    smartFixText();
+  }
+}
+function stopVoiceSilent(){
+  if(!recording) return;
+  recording=false; clearInterval(timerC);
+  const b=$("micBtn"); if(b){ b.classList.remove("rec"); b.textContent="🎙️"; }
+  if(recEngine==="gemini"){ try{ mediaRecC&&mediaRecC.stop(); }catch(e){} try{ streamC&&streamC.getTracks().forEach(t=>t.stop()); }catch(e){} }
+  else { try{ rec&&rec.stop(); }catch(e){} }
+  const h=$("micHint"); if(h) h.textContent="التسجيل اتوقف تلقائيًا — اضغط المايك وسجّل تاني.";
+}
+document.addEventListener("visibilitychange",()=>{ if(document.hidden){ if(recording) stopVoiceSilent(); if(sRecOn) stopSheetMic(true); } });
+window.addEventListener("pagehide",()=>{ if(recording) stopVoiceSilent(); if(sRecOn) stopSheetMic(true); });
+window.addEventListener("blur",()=>{ if(recording) stopVoiceSilent(); if(sRecOn) stopSheetMic(true); });
 let lastRawVoice="";
 async function smartFixText(){
   const ta=$("vtext"); if(!ta) return;
@@ -925,7 +1016,7 @@ function openSmartTask(){
     <button class="btn" id="stGo">✨ فصّلها لمهام</button>
     <div id="stPrev"></div>`);
   bindSheetMic("stMic","stStory");
-  $("stManual").onclick=()=>{ stopSheetMic(); openNewTask(); };
+  $("stManual").onclick=()=>{ stopSheetMic(true); openNewTask(); };
   $("stGo").onclick=parseSmartTasks;
 }
 function matchProfile(nm){
@@ -934,7 +1025,7 @@ function matchProfile(nm){
   return PROFILES.find(p=>p.name===n) || PROFILES.find(p=>p.name.includes(n)||n.includes(p.name)) || null;
 }
 async function parseSmartTasks(){
-  stopSheetMic();
+  await stopSheetMic();
   const story=$("stStory").value.trim();
   if(!story){ toast("اكتب أو سجّل المهام الأول","bad"); return; }
   const btn=$("stGo"); btn.disabled=true; btn.textContent="✨ بيفصّل المهام…";
