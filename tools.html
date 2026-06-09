@@ -194,6 +194,7 @@ a{color:var(--blue-d);}
       <div class="field"><label>الإيميل</label><input id="inEmail" type="email" inputmode="email" placeholder="name@beit-alkhibra.com" autocomplete="username" /></div>
       <div class="field"><label>الباسوورد</label><input id="inPass" type="password" placeholder="••••••••" autocomplete="current-password" /></div>
       <button class="btn" id="btnLogin">دخول</button>
+      <button class="btn ghost" id="btnJoin" style="margin-top:10px">مدير قسم جديد؟ اطلب انضمام</button>
       <p class="muted" style="text-align:center;margin-top:12px;font-size:12px">لو داخل من نفس المتصفح اللي فاتح المنظومة، هتلاقي نفسك داخل على طول.</p>
     </div>
   </div>
@@ -247,8 +248,9 @@ const safeStorage = {
 let sb=null, ME=null, PROFILE=null, PROFILES=[], BY_ID={}, DEPTS=[], DEPT_BY_KEY={};
 let activeTab="req";
 let chatHistory=[];
-let askDeptKey=null, askKnowledge=[];
-let contractFields=null;
+let askDeptKey=null;
+let contractFields=null, chosenCtype="";
+let LAST_JOINS={};
 
 const $=(id)=>document.getElementById(id);
 const esc=(s)=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
@@ -356,8 +358,9 @@ function switchTab(id){
 }
 
 /* ===================== AI helper ===================== */
-async function askAI(prompt, max_tokens){
-  const { data, error } = await sb.functions.invoke("os-ai",{ body:{ prompt, max_tokens:max_tokens||900 } });
+async function askAI(opts){
+  const body = Object.assign({ max_tokens:900 }, typeof opts==="string" ? { prompt:opts } : opts);
+  const { data, error } = await sb.functions.invoke("os-ai",{ body });
   if(error) throw new Error(error.message||"AI error");
   if(!data) throw new Error("مفيش رد");
   if(data.error) throw new Error(data.error);
@@ -377,6 +380,7 @@ async function renderRequests(){
   el.innerHTML=`<div class="page-h"><div><h2>الطلبات</h2><div class="sub">طلبات داخلية بين الفريق — لحظية</div></div><button class="btn green sm" id="newReq">+ طلب جديد</button></div><div id="reqList"><div class="empty"><div class="big">⏳</div>بيحمّل…</div></div>`;
   $("newReq").onclick=openNewReq;
   let d; try{ d=await loadRequests(); }catch(e){ $("reqList").innerHTML=`<div class="empty">معرفناش نجيب الطلبات. ${esc(e.message||"")}</div>`; return; }
+  LAST_JOINS={}; d.joins.forEach(j=>LAST_JOINS[j.id]=j);
   const mine = d.reqs.filter(r=> (r.to_id===ME.id || r.to_id==null) && r.from_id!==ME.id );
   const sent = d.reqs.filter(r=> r.from_id===ME.id );
   const pendIn = mine.filter(r=>r.status==="pending").length;
@@ -392,7 +396,7 @@ async function renderRequests(){
   h+= sent.length? sent.map(reqCard).join("") : `<div class="card flat muted">لسه مبعتش أي طلب. اضغط «+ طلب جديد».</div>`;
   $("reqList").innerHTML=h;
   el.querySelectorAll("[data-reply]").forEach(b=>b.onclick=()=>openReply(b.dataset.reply, b.dataset.title));
-  el.querySelectorAll("[data-jr]").forEach(b=>b.onclick=()=>reviewJoin(b.dataset.jr, b.dataset.act));
+  el.querySelectorAll("[data-jr]").forEach(b=>b.onclick=()=>{ if(b.dataset.act==="approved") openApprove(b.dataset.jr); else reviewJoin(b.dataset.jr,"rejected"); });
 }
 function kindBadge(k){ const m={info:["معلومة","b-blue"],deadline:["موعد","b-amber"],approval:["موافقة","b-green"],task:["مهمة","b-blue"],other:["أخرى","b-grey"]}; const x=m[k]||["طلب","b-grey"]; return `<span class="badge ${x[1]}">${x[0]}</span>`; }
 function prioBadge(p){ if(p==="high")return `<span class="badge b-red">عاجل</span>`; if(p==="low")return `<span class="badge b-grey">عادي</span>`; return ""; }
@@ -451,6 +455,65 @@ async function reviewJoin(id,act){
   toast(act==="approved"?"اتقبل ✓":"اترفض","ok"); renderRequests();
 }
 
+/* ===================== JOIN (public) + APPROVAL (ops) ===================== */
+const JOIN_DEPTS=[["legal","القسم القانوني والعقود"],["finance","القسم المالي"],["admin","القسم الإداري والحكومي"],["engineering","القسم الإنشائي والهندسي والرسومات"]];
+function openJoinForm(){
+  openSheet(`<h3>طلب انضمام — مدير قسم</h3>
+    <div class="field"><label>الاسم بالكامل</label><input id="jName" placeholder="اكتب اسمك"/></div>
+    <div class="field"><label>القسم</label><select id="jDept">${JOIN_DEPTS.map(d=>`<option value="${d[0]}">${d[1]}</option>`).join("")}</select></div>
+    <div class="field"><label>الإيميل</label><input id="jEmail" type="email" inputmode="email" placeholder="name@beit-alkhibra.com"/></div>
+    <div class="field"><label>واتساب</label><input id="jWa" inputmode="tel" placeholder="01xxxxxxxxx"/></div>
+    <div class="field"><label>مسؤولياتك في القسم</label><textarea id="jResp" placeholder="إنت مسؤول عن إيه؟"></textarea></div>
+    <div class="field"><label>فريقك (أسماء + أدوار)</label><textarea id="jTeam"></textarea></div>
+    <div class="field"><label>أهم مهام متكررة عندك</label><textarea id="jRec"></textarea></div>
+    <div class="field"><label>أكبر تحدي بتواجهه</label><textarea id="jCh"></textarea></div>
+    <div class="row-actions"><button class="btn green" id="jSend">ابعت الطلب</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+  $("jSend").onclick=async()=>{
+    const name=$("jName").value.trim(), email=$("jEmail").value.trim();
+    if(!name){ toast("اكتب اسمك","bad"); return; }
+    if(!email){ toast("اكتب الإيميل","bad"); return; }
+    const btn=$("jSend"); btn.disabled=true; btn.textContent="بيتبعت…";
+    const payload={ manager_name:name, dept:$("jDept").value, email, whatsapp:$("jWa").value.trim()||null,
+      responsibilities:$("jResp").value.trim()||null, team_members:$("jTeam").value.trim()||null,
+      recurring_tasks:$("jRec").value.trim()||null, main_challenge:$("jCh").value.trim()||null, status:"pending" };
+    const { error }=await sb.from("os_join_requests").insert(payload);
+    if(error){ toast("معرفناش نبعت: "+error.message,"bad"); btn.disabled=false; btn.textContent="ابعت الطلب"; return; }
+    closeSheet(); toast("اتبعت ✓ هيتم مراجعته والرد عليك","ok");
+  };
+}
+async function createUserViaFn(payload){
+  let token=""; try{ const r=await sb.auth.getSession(); token=(r.data.session||{}).access_token||""; }catch(e){}
+  const res=await fetch(SUPABASE_URL+"/functions/v1/os-create-user",{ method:"POST",
+    headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+token, "apikey":SUPABASE_KEY },
+    body:JSON.stringify(payload) });
+  const d=await res.json().catch(()=>({}));
+  return { status:res.status, ok:res.ok, data:d };
+}
+function openApprove(id){
+  const j=LAST_JOINS[id]; if(!j) return;
+  const deptOpts=JOIN_DEPTS.map(d=>`<option value="${d[0]}" ${d[0]===j.dept?"selected":""}>${d[1]}</option>`).join("");
+  const tmpPass="Bk!"+Math.random().toString(36).slice(2,8);
+  openSheet(`<h3>قبول وإنشاء حساب — ${esc(j.manager_name)}</h3>
+    <div class="field"><label>الاسم</label><input id="aName" value="${esc(j.manager_name)}"/></div>
+    <div class="field"><label>الإيميل</label><input id="aEmail" type="email" value="${esc(j.email||"")}"/></div>
+    <div class="field"><label>باسوورد مؤقت (ابعتهوله)</label><input id="aPass" value="${tmpPass}"/></div>
+    <div class="field"><label>الدور</label><select id="aRole"><option value="manager">مدير قسم</option><option value="employee">موظف</option></select></div>
+    <div class="field"><label>القسم</label><select id="aDept">${deptOpts}</select></div>
+    <div class="row-actions"><button class="btn green" id="aGo">اعمل الحساب واقبل ✓</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+  $("aGo").onclick=async()=>{
+    const name=$("aName").value.trim(), email=$("aEmail").value.trim(), pass=$("aPass").value.trim();
+    if(!name||!email||!pass){ toast("كمّل البيانات","bad"); return; }
+    const btn=$("aGo"); btn.disabled=true; btn.textContent="بيعمل الحساب…";
+    const r=await createUserViaFn({ name, email, password:pass, role:$("aRole").value, dept:$("aDept").value });
+    if(r.status===409){ toast("الإيميل ده مسجّل قبل كده","bad"); btn.disabled=false; btn.textContent="اعمل الحساب واقبل ✓"; return; }
+    if(!r.ok){ toast("معرفناش نعمل الحساب: "+esc((r.data&&r.data.error)||r.status),"bad"); btn.disabled=false; btn.textContent="اعمل الحساب واقبل ✓"; return; }
+    await sb.from("os_join_requests").update({ status:"approved", reviewed_by:ME.id, reviewed_at:new Date().toISOString() }).eq("id",id);
+    closeSheet();
+    openSheet(`<h3>الحساب اتعمل ✓</h3><div class="card flat"><div><b>الإيميل:</b> ${esc(email)}</div><div><b>الباسوورد المؤقت:</b> <span style="font-family:monospace">${esc(pass)}</span></div></div><p class="muted">ابعتله البيانات دي على واتساب ${esc(j.whatsapp||"")} وخليه يغيّر الباسوورد.</p><button class="btn ghost" onclick="closeSheet()">تمام</button>`);
+    renderRequests();
+  };
+}
+
 /* ===================== REALTIME ===================== */
 function subscribeRealtime(){
   try{
@@ -475,6 +538,8 @@ function renderContract(){
   const dep=DEPT_BY_KEY["legal"];
   $("v-contract").innerHTML=`<div class="page-h"><div><h2>إنشاء عقد بالصوت</h2><div class="sub">${esc((dep&&dep.name)||"القسم القانوني")}</div></div></div>
     <div class="banner"><span>⚠️</span><span>المخرج <b>مسودة</b> اتعملت بمساعدة الذكاء — لازم مراجعة بشرية قانونية قبل الاعتماد أو التوقيع.</span></div>
+    <div class="sec-h">نوع العقد (اختار بضغطة) <span class="ln"></span></div>
+    <div class="qbtns" id="ctypes" style="margin-bottom:14px">${["مقاولة عامة","استشارة هندسية","رسومات هندسية","توريد مواد","تشطيبات","إدارة مشروع"].map(t=>`<button class="qbtn ${chosenCtype===t?'on':''}" data-ct="${t}">${t}</button>`).join("")}</div>
     <div class="mic-wrap">
       <button class="mic" id="micBtn" title="اضغط للكلام">🎙️</button>
       <div class="mic-hint" id="micHint">اضغط واتكلم: قول أطراف العقد، الموضوع، القيمة، المدة…</div>
@@ -486,6 +551,7 @@ function renderContract(){
     <div id="cout"></div>`;
   committed = $("vtext").value || "";
   $("micBtn").onclick=toggleVoice;
+  $("v-contract").querySelectorAll("[data-ct]").forEach(b=>b.onclick=()=>{ chosenCtype=(chosenCtype===b.dataset.ct?"":b.dataset.ct); $("v-contract").querySelectorAll("[data-ct]").forEach(x=>x.classList.toggle("on",x.dataset.ct===chosenCtype)); });
   $("fixBtn").onclick=smartFixText;
   $("toContract").onclick=extractContract;
   if(!voiceSupported()){ $("micHint").textContent="متصفحك مش بيدعم التسجيل الصوتي — اكتب النص بإيدك في الخانة تحت."; $("micBtn").style.opacity=".5"; }
@@ -512,7 +578,7 @@ async function smartFixText(){
   const names=PROFILES.map(p=>p.name).join("، ");
   const prompt=`النص التالي اتكتب بالإملاء الصوتي بالعامية المصرية، والإملاء بيغلط كتير: بيستبدل كلمات بكلمات شبهها في النطق (مثلاً "ميتينج" بتتسمع "200 جنيه"، و"يسلم" بتتسمع "يخلص") وبيضيف أرقام وأوقات مالهاش لازمة. صحّح النص بالسياق ده: شركة استشارات هندسية مصرية — عقود، تسليم ورق، رخص، رسومات، اجتماعات/ميتينج، دفعات، مقاولات، مواعيد. أسماء الفريق: ${names}. المدن: الشيخ زايد، أكتوبر، حدائق أكتوبر. أي رقم أو مبلغ أو وقت غريب في النص اشتبه فيه إنه كلمة اتسمعت غلط واحكم بالمعنى. رجّع النص المصحّح فقط، من غير أي مقدمة أو شرح.\nالنص: ${text}`;
   try{
-    const fixed=(await askAI(prompt,400)).trim();
+    const fixed=(await askAI({ prompt, mode:"fast", max_tokens:400 })).trim();
     if(fixed && fixed!==text){
       ta.value=fixed;
       if(hint){ hint.innerHTML='✨ اتصحّح بالذكاء — راجعه. <a href="#" id="undoFix">رجّع اللي اتسمع</a>';
@@ -524,13 +590,15 @@ async function extractContract(){
   const text=$("vtext").value.trim();
   if(!text){ toast("اكتب أو سجّل تفاصيل العقد الأول","bad"); return; }
   const btn=$("toContract"); btn.disabled=true; btn.textContent="بيحلّل… ✨";
-  const prompt=`النص جاي من إملاء صوتي بالعامية المصرية وممكن فيه أخطاء سمعية (كلمات اتسمعت غلط بكلمات شبهها) — فسّرها بالسياق وصحّحها قبل الاستخراج. استخرج بيانات العقد ورجّعها JSON مصغّر صالح فقط من غير أي شرح أو علامات. المفاتيح بالظبط: {"contract_type":"","party_a":"","party_b":"","subject":"","scope":"","value_egp":"","payment":"","duration":"","start_date":"","special":"","notes":""}. لو معلومة مش موجودة سيبها فاضية "". النص:\n`+text;
+  const prompt=`النص جاي من إملاء صوتي بالعامية المصرية وممكن فيه أخطاء سمعية (كلمات اتسمعت غلط بكلمات شبهها) — فسّرها بالسياق وصحّحها قبل الاستخراج. ${chosenCtype?("نوع العقد المختار: "+chosenCtype+". "):""}استخرج بيانات العقد ورجّعها JSON بالمفاتيح دي بالظبط: {"contract_type":"","party_a":"","party_b":"","subject":"","scope":"","value_egp":"","payment":"","duration":"","start_date":"","special":"","notes":""}. لو معلومة مش موجودة سيبها فاضية "". النص:\n`+text;
   try{
-    let out=await askAI(prompt,700);
+    let out=await askAI({ prompt, dept:"legal", mode:"deep", want_json:true, max_tokens:800 });
     out=out.replace(/```json/gi,"").replace(/```/g,"").trim();
     const s=out.indexOf("{"), eI=out.lastIndexOf("}");
     if(s>=0&&eI>=0) out=out.slice(s,eI+1);
     contractFields=JSON.parse(out);
+    if(!contractFields.contract_type && chosenCtype) contractFields.contract_type=chosenCtype;
+    if(!contractFields.party_a) contractFields.party_a="بيت الخبرة للمشروعات الهندسية";
     showContractFields(contractFields);
     toast("اتحلّل ✓ راجع البيانات","ok");
   }catch(e){
@@ -631,16 +699,11 @@ function renderAsk(){
     ${picker?`<div style="margin-bottom:10px">${picker}</div>`:""}
     <div class="chat" id="chat"></div>
     <div class="composer"><input id="askIn" placeholder="اكتب سؤالك للقسم…" /><button class="send" id="askSend">➤</button></div>`;
-  if(!fixed){ $("askDept").onchange=(e)=>{ askDeptKey=e.target.value; chatHistory=[]; askKnowledge=[]; renderAsk(); }; }
+  if(!fixed){ $("askDept").onchange=(e)=>{ askDeptKey=e.target.value; chatHistory=[]; renderAsk(); }; }
   const addK=$("addK"); if(addK) addK.onclick=openAddKnowledge;
   $("askSend").onclick=sendAsk;
   $("askIn").addEventListener("keydown",e=>{ if(e.key==="Enter") sendAsk(); });
   renderChat();
-  loadKnowledge();
-}
-async function loadKnowledge(){
-  try{ const { data }=await sb.from("os_knowledge").select("title,content,dept").or(`dept.eq.${askDeptKey},dept.eq.all`); askKnowledge=data||[]; }
-  catch(e){ askKnowledge=[]; }
 }
 function renderChat(){
   const c=$("chat"); if(!c) return;
@@ -652,11 +715,7 @@ async function sendAsk(){
   const inp=$("askIn"); const q=inp.value.trim(); if(!q) return;
   inp.value=""; chatHistory.push({r:"me",t:q}); renderChat();
   const c=$("chat"); const tp=document.createElement("div"); tp.className="msg ai"; tp.innerHTML='<div class="typing"><span></span><span></span><span></span></div>'; c.appendChild(tp); c.scrollTop=c.scrollHeight;
-  const dep=DEPT_BY_KEY[askDeptKey];
-  const know=askKnowledge.map(k=>"• "+k.title+": "+k.content).join("\n").slice(0,5000);
-  const sys=(dep&&dep.ai_system)||"إنت مساعد القسم.";
-  const prompt=`${sys}\n\nقاعدة المعرفة المعتمدة للقسم:\n${know||"(لسه فاضية)"}\n\nردّ مختصر ومفيد بالعامية المصرية على سؤال المدير. لو السؤال محتاج معلومة مش موجودة أو فيه شك قانوني/مالي نبّه إنه محتاج مراجعة بشرية.\n\nالسؤال: ${q}`;
-  try{ const ans=await askAI(prompt,900); tp.remove(); chatHistory.push({r:"ai",t:ans||"ممعرفش أرد دلوقتي."}); renderChat(); }
+  try{ const ans=await askAI({ prompt:q, dept:askDeptKey, max_tokens:900 }); tp.remove(); chatHistory.push({r:"ai",t:ans||"ممعرفش أرد دلوقتي."}); renderChat(); }
   catch(e){ tp.remove(); chatHistory.push({r:"ai",t:"حصلت مشكلة في الرد. جرّب تاني."}); renderChat(); }
 }
 function openAddKnowledge(){
@@ -670,17 +729,18 @@ function openAddKnowledge(){
     const btn=$("kSave"); btn.disabled=true; btn.textContent="بيحفظ…";
     const { error }=await sb.from("os_knowledge").insert({ dept:askDeptKey, title, content, source:"manual", added_by:ME.id });
     if(error){ toast("خطأ: "+error.message,"bad"); btn.disabled=false; btn.textContent="حفظ"; return; }
-    closeSheet(); toast("اتحفظت ✓ القسم بقى أذكى","ok"); loadKnowledge();
+    closeSheet(); toast("اتحفظت ✓ القسم بقى أذكى","ok");
   };
 }
 
 /* ===================== TASKS ===================== */
 let taskFilter="mine";
 async function renderTasks(){
-  $("v-tasks").innerHTML=`<div class="page-h"><div><h2>المهام</h2><div class="sub">متخزّنة في الداتابيز — بتتحدّث لحظيًا</div></div></div>
-    <div class="chips"><button class="chip ${taskFilter==='mine'?'on':''}" data-f="mine">مهامي</button><button class="chip ${taskFilter==='all'?'on':''}" data-f="all">الكل</button></div>
+  $("v-tasks").innerHTML=`<div class="page-h"><div><h2>المهام والمواعيد</h2><div class="sub">متخزّنة في الداتابيز — بتتحدّث لحظيًا</div></div></div>
+    <div class="chips"><button class="chip ${taskFilter==='mine'?'on':''}" data-f="mine">مهامي</button><button class="chip ${taskFilter==='all'?'on':''}" data-f="all">الكل</button><button class="chip ${taskFilter==='events'?'on':''}" data-f="events">📅 المواعيد</button></div>
     <div id="taskList"><div class="empty"><div class="big">⏳</div>بيحمّل…</div></div>`;
-  $("v-tasks").querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{ taskFilter=b.dataset.f; renderTasks(); });
+  $("v-tasks").querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{ taskFilter=b.dataset.f; renderTasks(); ensureFab(); });
+  if(taskFilter==="events"){ renderEvents(); return; }
   let data; try{ const r=await sb.from("os_tasks").select("*").order("created_at",{ascending:false}); data=r.data||[]; }
   catch(e){ $("taskList").innerHTML=`<div class="empty">معرفناش نجيب المهام. ${esc(e.message||"")}</div>`; return; }
   let list = taskFilter==="mine" ? data.filter(t=>t.assignee_id===ME.id) : data;
@@ -721,6 +781,42 @@ function openTask(id,all){
     };
   }
 }
+async function renderEvents(){
+  let data; try{ const r=await sb.from("os_events").select("*").order("at_time",{ascending:true}); data=r.data||[]; }
+  catch(e){ $("taskList").innerHTML=`<div class="empty">معرفناش نجيب المواعيد.</div>`; return; }
+  const now=Date.now();
+  const up=data.filter(e=>!e.at_time||new Date(e.at_time).getTime()>=now-3600e3);
+  const past=data.filter(e=>e.at_time&&new Date(e.at_time).getTime()<now-3600e3);
+  const card=(e,old)=>`<div class="card" style="${old?'opacity:.55':''}">
+    <div class="req-top"><div class="t">📅 ${esc(e.title)}</div>${(e.by_id===ME.id||isOwnerOps())?`<button class="qbtn" data-del-ev="${e.id}" title="حذف">🗑</button>`:""}</div>
+    <div class="meta"><span>${e.at_time?new Date(e.at_time).toLocaleString("ar-EG",{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"—"}</span>${e.with_who?`<span class="dot"></span><span>مع ${esc(e.with_who)}</span>`:""}${e.location?`<span class="dot"></span><span>📍 ${esc(e.location)}</span>`:""}<span class="dot"></span><span>${esc(e.by_name||"")}</span></div>
+  </div>`;
+  let h = up.length? up.map(e=>card(e,false)).join("") : `<div class="empty"><div class="big">📅</div>مفيش مواعيد جاية. اضغط ➕ وسجّل ميتينج.</div>`;
+  if(past.length){ h+=`<div class="sec-h">مواعيد فاتت <span class="ln"></span></div>`+past.slice(-5).map(e=>card(e,true)).join(""); }
+  $("taskList").innerHTML=h;
+  $("taskList").querySelectorAll("[data-del-ev]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("تحذف الموعد ده؟")) return;
+    const { error }=await sb.from("os_events").delete().eq("id",b.dataset.delEv);
+    if(error){ toast("معرفناش نحذف: "+error.message,"bad"); return; }
+    toast("اتحذف ✓","ok"); renderTasks();
+  });
+}
+function openNewEvent(){
+  openSheet(`<h3>موعد جديد</h3>
+    <div class="field"><label>الموعد إيه؟</label><input id="eTitle" placeholder="ميتينج مع… / معاينة موقع…"/></div>
+    <div class="field"><label>امتى؟</label><input id="eAt" type="datetime-local"/></div>
+    <div class="field"><label>مع مين؟ (اختياري)</label><input id="eWho"/></div>
+    <div class="field"><label>فين؟ (اختياري)</label><input id="eLoc"/></div>
+    <div class="row-actions"><button class="btn green" id="eSave">حفظ الموعد</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+  $("eSave").onclick=async()=>{
+    const title=$("eTitle").value.trim(); if(!title){ toast("اكتب الموعد","bad"); return; }
+    const at=$("eAt").value; if(!at){ toast("حدّد الوقت","bad"); return; }
+    const btn=$("eSave"); btn.disabled=true; btn.textContent="بيحفظ…";
+    const { error }=await sb.from("os_events").insert({ title, by_id:ME.id, by_name:PROFILE.name, at_time:new Date(at).toISOString(), with_who:$("eWho").value.trim()||null, location:$("eLoc").value.trim()||null });
+    if(error){ toast("معرفناش نحفظ: "+error.message,"bad"); btn.disabled=false; btn.textContent="حفظ الموعد"; return; }
+    closeSheet(); toast("الموعد اتسجّل ✓","ok"); renderTasks();
+  };
+}
 function openNewTask(){
   const opts=PROFILES.map(p=>`<option value="${p.id}">${esc(p.name)} — ${esc((DEPT_BY_KEY[p.dept]&&DEPT_BY_KEY[p.dept].name)||p.dept||"")}</option>`).join("");
   openSheet(`<h3>مهمة جديدة</h3>
@@ -744,14 +840,15 @@ function openNewTask(){
 function ensureFab(){
   let fab=$("fab");
   if(!fab){ fab=document.createElement("button"); fab.id="fab"; fab.className="fab"; fab.textContent="＋"; document.body.appendChild(fab); }
-  fab.onclick=()=>{ if(activeTab==="tasks") openNewTask(); else if(activeTab==="req") openNewReq(); };
-  const show = activeTab==="req" || (activeTab==="tasks" && canWrite());
+  fab.onclick=()=>{ if(activeTab==="tasks"){ taskFilter==="events"?openNewEvent():openNewTask(); } else if(activeTab==="req") openNewReq(); };
+  const show = activeTab==="req" || (activeTab==="tasks" && (taskFilter==="events" || canWrite()));
   fab.style.display=show?"flex":"none";
 }
 const _switch=switchTab; switchTab=function(id){ _switch(id); ensureFab(); };
 
 /* ===================== EVENTS ===================== */
 $("btnLogin").onclick=doLogin;
+$("btnJoin").onclick=openJoinForm;
 $("inPass").addEventListener("keydown",e=>{ if(e.key==="Enter") doLogin(); });
 $("btnLogout").onclick=async()=>{ try{ await sb.auth.signOut(); }catch(e){} ME=null; PROFILE=null; chatHistory=[]; const f=$("fab"); if(f)f.style.display="none"; showLogin(); };
 
