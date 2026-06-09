@@ -264,7 +264,7 @@ function nameOf(id){ return (BY_ID[id]&&BY_ID[id].name)||"—"; }
 
 /* ===================== MODAL ===================== */
 function openSheet(html){ $("sheet").innerHTML=html; $("modal").classList.add("open"); }
-function closeSheet(){ $("modal").classList.remove("open"); }
+function closeSheet(){ $("modal").classList.remove("open"); if(typeof sRecOn!=="undefined" && sRecOn) stopSheetMic(); }
 $("modal").addEventListener("click",(e)=>{ if(e.target.id==="modal") closeSheet(); });
 
 /* ===================== BOOT ===================== */
@@ -316,10 +316,8 @@ async function startApp(user){
     PROFILE = { id:user.id, name:(user.email||"مستخدم").split("@")[0], role:"employee", dept:null };
   }
   $("boot").style.display="none"; $("login").style.display="none"; $("app").style.display="block";
-  const roleLabel={owner:"المدير العام",ops:"تشغيل",manager:"مدير قسم",employee:"موظف"}[PROFILE.role]||PROFILE.role;
-  const deptName = DEPT_BY_KEY[PROFILE.dept] ? DEPT_BY_KEY[PROFILE.dept].name : (PROFILE.dept||"");
   $("uName").textContent=PROFILE.name;
-  $("uRole").textContent=roleLabel+(deptName?(" · "+deptName):"");
+  $("uRole").textContent=userTitle(PROFILE);
   const av=$("uAvatar"); av.textContent=initials(PROFILE.name);
   const col={owner:"#0D47A1",ops:"#1E88E5",manager:"#2E7D32",employee:"#6b7a8d"}[PROFILE.role]||"#1E88E5";
   av.style.background="linear-gradient(135deg,"+col+","+col+"cc)";
@@ -329,6 +327,12 @@ async function startApp(user){
 }
 
 function isOwnerOps(){ return PROFILE.role==="owner"||PROFILE.role==="ops"; }
+function userTitle(p){
+  if(p.role==="owner") return "المالك · الإدارة العليا";
+  if(p.role==="ops") return p.dept||"إدارة التشغيل";
+  const dn=DEPT_BY_KEY[p.dept]?DEPT_BY_KEY[p.dept].name:(p.dept||"");
+  return ({manager:"مدير قسم",employee:"موظف"}[p.role]||p.role)+(dn?(" · "+dn):"");
+}
 function canWrite(){ return PROFILE.role!=="employee"; }
 function myDeptKey(){ return DEPT_BY_KEY[PROFILE.dept] ? PROFILE.dept : null; }
 function canContracts(){ return myDeptKey()==="legal" || isOwnerOps(); }
@@ -416,6 +420,8 @@ function joinCard(j){
   return `<div class="card">
     <div class="req-top"><div class="t">${esc(j.manager_name)} — ${esc((DEPT_BY_KEY[j.dept]&&DEPT_BY_KEY[j.dept].name)||j.dept)}</div><span class="badge b-amber">انضمام</span></div>
     <div class="muted" style="margin-top:6px">${esc(j.responsibilities||"")}</div>
+    ${j.team_members?`<div class="muted" style="margin-top:4px">👥 ${esc(j.team_members)}</div>`:""}
+    ${j.main_challenge?`<div class="muted" style="margin-top:4px">⚡ التحدي: ${esc(j.main_challenge)}</div>`:""}
     <div class="meta">${j.email?`<span>${esc(j.email)}</span><span class="dot"></span>`:""}${j.whatsapp?`<span>${esc(j.whatsapp)}</span><span class="dot"></span>`:""}<span>${timeAgo(j.created_at)}</span></div>
     <div class="row-actions"><button class="btn green sm" data-jr="${j.id}" data-act="approved">قبول</button><button class="btn ghost sm" data-jr="${j.id}" data-act="rejected">رفض</button></div>
   </div>`;
@@ -496,23 +502,58 @@ function openJoinForm(){
     <div class="field"><label>القسم</label><select id="jDept">${JOIN_DEPTS.map(d=>`<option value="${d[0]}">${d[1]}</option>`).join("")}</select></div>
     <div class="field"><label>الإيميل</label><input id="jEmail" type="email" inputmode="email" placeholder="name@beit-alkhibra.com"/></div>
     <div class="field"><label>واتساب</label><input id="jWa" inputmode="tel" placeholder="01xxxxxxxxx"/></div>
-    <div class="field"><label>مسؤولياتك في القسم</label><textarea id="jResp" placeholder="إنت مسؤول عن إيه؟"></textarea></div>
-    <div class="field"><label>فريقك (أسماء + أدوار)</label><textarea id="jTeam"></textarea></div>
-    <div class="field"><label>أهم مهام متكررة عندك</label><textarea id="jRec"></textarea></div>
-    <div class="field"><label>أكبر تحدي بتواجهه</label><textarea id="jCh"></textarea></div>
+    <div class="field"><label>احكي عن شغلك في دقيقة — والذكاء هيرتّبها</label>
+      <textarea id="jStory" style="min-height:130px" placeholder="إنت مسؤول عن إيه؟ فريقك مين؟ أهم مهامك المتكررة إيه؟ أكبر تحدي بتواجهه؟ — اتكلم براحتك أو اكتب"></textarea></div>
+    <div class="row-actions" style="margin:-2px 0 12px"><button class="btn ghost sm" id="jMic">🎙️ سجّل بصوتك</button></div>
     <div class="row-actions"><button class="btn green" id="jSend">ابعت الطلب</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+  bindSheetMic("jMic","jStory");
   $("jSend").onclick=async()=>{
     const name=$("jName").value.trim(), email=$("jEmail").value.trim();
     if(!name){ toast("اكتب اسمك","bad"); return; }
     if(!email){ toast("اكتب الإيميل","bad"); return; }
-    const btn=$("jSend"); btn.disabled=true; btn.textContent="بيتبعت…";
+    stopSheetMic();
+    const story=$("jStory").value.trim();
+    const btn=$("jSend"); btn.disabled=true;
+    let f={ responsibilities:story||null, team_members:null, recurring_tasks:null, main_challenge:null };
+    if(story){
+      btn.textContent="✨ بيرتّب كلامك…";
+      try{
+        let out=await askAI({ prompt:`ده كلام مدير قسم بيقدّم طلب انضمام لشركة هندسية مصرية، وممكن يكون من إملاء صوتي فيه أخطاء سمعية — صحّحها بالسياق. قسّم الكلام ورجّع JSON بالمفاتيح دي بالظبط: {"responsibilities":"","team_members":"","recurring_tasks":"","main_challenge":""} — كل قيمة مختصرة بالعامية المصرية، ولو معلومة مش مذكورة سيبها "". الكلام:\n${story}`, mode:"fast", want_json:true, max_tokens:450 });
+        out=out.replace(/\`\`\`json/gi,"").replace(/\`\`\`/g,"").trim();
+        const s=out.indexOf("{"), eI=out.lastIndexOf("}");
+        if(s>=0&&eI>=0) out=out.slice(s,eI+1);
+        const p=JSON.parse(out);
+        f={ responsibilities:p.responsibilities||story, team_members:p.team_members||null, recurring_tasks:p.recurring_tasks||null, main_challenge:p.main_challenge||null };
+      }catch(e){ /* fallback: keep raw story in responsibilities */ }
+    }
+    btn.textContent="بيتبعت…";
     const payload={ manager_name:name, dept:$("jDept").value, email, whatsapp:$("jWa").value.trim()||null,
-      responsibilities:$("jResp").value.trim()||null, team_members:$("jTeam").value.trim()||null,
-      recurring_tasks:$("jRec").value.trim()||null, main_challenge:$("jCh").value.trim()||null, status:"pending" };
+      responsibilities:f.responsibilities, team_members:f.team_members, recurring_tasks:f.recurring_tasks, main_challenge:f.main_challenge, status:"pending" };
     const { error }=await sb.from("os_join_requests").insert(payload);
     if(error){ toast("معرفناش نبعت: "+error.message,"bad"); btn.disabled=false; btn.textContent="ابعت الطلب"; return; }
-    closeSheet(); toast("اتبعت ✓ هيتم مراجعته والرد عليك","ok");
+    openSheet(`<h3>طلبك اتبعت ✓</h3><p class="muted">الإدارة هتراجعه، وأول ما يتوافق عليه هيوصلك الإيميل والباسوورد على واتساب.</p><button class="btn ghost" onclick="closeSheet()">تمام</button>`);
   };
+}
+/* generic sheet mic (join form etc.) */
+let sRec=null, sRecOn=false, sCommit="";
+function bindSheetMic(btnId, taId){
+  const b=$(btnId); if(!b) return;
+  if(!voiceSupported()){ b.style.display="none"; return; }
+  b.onclick=()=>{
+    if(sRecOn){ stopSheetMic(); return; }
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    sRec=new SR(); sRec.lang="ar-EG"; sRec.continuous=true; sRec.interimResults=true;
+    const ta=$(taId); sCommit=ta.value?(ta.value+" "):"";
+    sRec.onresult=(e)=>{ let it=""; for(let i=e.resultIndex;i<e.results.length;i++){ const t=e.results[i][0].transcript; if(e.results[i].isFinal) sCommit+=t+" "; else it+=t; } ta.value=(sCommit+it).trim(); };
+    sRec.onerror=(e)=>{ if(e.error==="not-allowed"||e.error==="service-not-allowed"){ toast("لازم تسمح بالميكروفون","bad"); stopSheetMic(); } };
+    sRec.onend=()=>{ if(sRecOn){ try{ sRec.start(); }catch(_e){} } };
+    try{ sRec.start(); sRecOn=true; b.textContent="⏹️ وقف التسجيل"; b.classList.add("on"); }
+    catch(e){ toast("معرفناش نبدأ التسجيل","bad"); }
+  };
+}
+function stopSheetMic(){
+  sRecOn=false; try{ sRec&&sRec.stop(); }catch(e){}
+  const b=$("jMic"); if(b){ b.textContent="🎙️ سجّل بصوتك"; b.classList.remove("on"); }
 }
 async function createUserViaFn(payload){
   let token=""; try{ const r=await sb.auth.getSession(); token=(r.data.session||{}).access_token||""; }catch(e){}
@@ -603,9 +644,9 @@ function toggleVoice(){
 }
 function stopVoice(){ recording=false; try{ rec&&rec.stop(); }catch(e){} const b=$("micBtn"); if(b){ b.classList.remove("rec"); b.textContent="🎙️"; } smartFixText(); }
 function stopVoiceSilent(){ recording=false; try{ rec&&rec.stop(); }catch(e){} const b=$("micBtn"); if(b){ b.classList.remove("rec"); b.textContent="🎙️"; } const h=$("micHint"); if(h) h.textContent="التسجيل اتوقف تلقائيًا — كمّل أو اضغط ✨ صحّح."; }
-document.addEventListener("visibilitychange",()=>{ if(document.hidden && recording) stopVoiceSilent(); });
-window.addEventListener("pagehide",()=>{ if(recording) stopVoiceSilent(); });
-window.addEventListener("blur",()=>{ if(recording) stopVoiceSilent(); });
+document.addEventListener("visibilitychange",()=>{ if(document.hidden){ if(recording) stopVoiceSilent(); if(sRecOn) stopSheetMic(); } });
+window.addEventListener("pagehide",()=>{ if(recording) stopVoiceSilent(); if(sRecOn) stopSheetMic(); });
+window.addEventListener("blur",()=>{ if(recording) stopVoiceSilent(); if(sRecOn) stopSheetMic(); });
 let lastRawVoice="";
 async function smartFixText(){
   const ta=$("vtext"); if(!ta) return;
