@@ -143,6 +143,10 @@ a{color:var(--blue-d);}
 .typing span{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:bd 1.2s infinite;}
 .typing span:nth-child(2){animation-delay:.2s;} .typing span:nth-child(3){animation-delay:.4s;}
 @keyframes bd{0%,60%,100%{transform:translateY(0);opacity:.5;}30%{transform:translateY(-5px);opacity:1;}}
+.msg.ai.warn{background:#FFFBF0;border-color:#F3D9A4;}
+.warn-tag{font-size:11.5px;font-weight:800;color:#92500c;margin-bottom:6px;}
+.deep-tg{padding:8px 14px;border-radius:999px;font-weight:800;font-size:13px;background:var(--soft);color:var(--muted);}
+.deep-tg.on{background:linear-gradient(135deg,var(--blue),var(--blue-d));color:#fff;box-shadow:0 6px 14px rgba(30,136,229,.25);}
 .composer{position:sticky;bottom:calc(var(--tabh) + env(safe-area-inset-bottom));display:flex;gap:8px;padding:10px;background:rgba(244,248,252,.95);backdrop-filter:blur(8px);border-radius:16px;border:1px solid var(--line);margin-top:8px;}
 .composer input{flex:1;padding:12px 14px;border:1.6px solid var(--line);border-radius:999px;outline:none;background:#fff;}
 .composer input:focus{border-color:var(--blue);}
@@ -248,7 +252,7 @@ const safeStorage = {
 let sb=null, ME=null, PROFILE=null, PROFILES=[], BY_ID={}, DEPTS=[], DEPT_BY_KEY={};
 let activeTab="req";
 let chatHistory=[];
-let askDeptKey=null;
+let askDeptKey=null, askDeep=false;
 let contractFields=null, chosenCtype="";
 let LAST_JOINS={}, LAST_REQS={};
 
@@ -401,9 +405,10 @@ async function renderRequests(){
   h+= sent.length? sent.map(reqCard).join("") : `<div class="card flat muted">لسه مبعتش أي طلب. اضغط «+ طلب جديد».</div>`;
   $("reqList").innerHTML=h;
   el.querySelectorAll("[data-reply]").forEach(b=>b.onclick=()=>openReply(b.dataset.reply));
-  el.querySelectorAll("[data-jr]").forEach(b=>b.onclick=()=>{ if(b.dataset.act==="approved") openApprove(b.dataset.jr); else reviewJoin(b.dataset.jr,"rejected"); });
+  el.querySelectorAll("[data-jr]").forEach(b=>b.onclick=()=>{ if(b.dataset.act==="approved") openApprove(b.dataset.jr); else openRejectJoin(b.dataset.jr); });
 }
-function kindBadge(k){ const m={info:["معلومة","b-blue"],deadline:["موعد","b-amber"],approval:["موافقة","b-green"],task:["مهمة","b-blue"],other:["أخرى","b-grey"]}; const x=m[k]||["طلب","b-grey"]; return `<span class="badge ${x[1]}">${x[0]}</span>`; }
+function kindBadge(k){ const m={info:["معلومة","b-blue"],deadline:["موعد","b-amber"],approval:["موافقة","b-green"],modify:["تعديل","b-blue"],document:["مستند","b-grey"]}; const x=m[k]||["طلب","b-grey"]; return `<span class="badge ${x[1]}">${x[0]}</span>`; }
+function reqStatusBadge(s){ const m={pending:["مفتوح","b-amber"],answered:["تم الرد","b-green"],approved:["موافقة ✓","b-green"],rejected:["مرفوض","b-red"],cancelled:["ملغي","b-grey"]}; const x=m[s]||["تم الرد","b-green"]; return `<span class="badge ${x[1]}">${x[0]}</span>`; }
 function prioBadge(p){ if(p==="high")return `<span class="badge b-red">عاجل</span>`; if(p==="low")return `<span class="badge b-grey">عادي</span>`; return ""; }
 function reqCard(r){
   const who = r.from_id===ME.id ? ("لـ "+(r.to_id?nameOf(r.to_id):"الكل")) : ("من "+(r.from_id?nameOf(r.from_id):"النظام"));
@@ -411,7 +416,7 @@ function reqCard(r){
   return `<div class="card">
     <div class="req-top"><div class="t">${esc(r.title)}</div>${kindBadge(r.kind)}</div>
     ${r.details?`<div class="muted" style="margin-top:6px">${esc(r.details)}</div>`:""}
-    <div class="meta"><span>${esc(who)}</span><span class="dot"></span><span>${timeAgo(r.created_at)}</span>${prioBadge(r.priority)?'<span class="dot"></span>'+prioBadge(r.priority):""}<span class="dot"></span><span class="badge ${done?'b-green':'b-amber'}">${done?'تم الرد':'مفتوح'}</span></div>
+    <div class="meta"><span>${esc(who)}</span><span class="dot"></span><span>${timeAgo(r.created_at)}</span>${prioBadge(r.priority)?'<span class="dot"></span>'+prioBadge(r.priority):""}<span class="dot"></span>${reqStatusBadge(r.status)}</div>
     ${r.response_text?`<div class="resp-box"><b>الرد:</b> ${esc(r.response_text)}</div>`:""}
     ${(!done && (r.to_id===ME.id||r.to_id==null) && r.from_id!==ME.id)?`<div class="row-actions"><button class="btn green sm" data-reply="${r.id}" data-title="${esc(r.title)}">ردّ على الطلب</button></div>`:""}
   </div>`;
@@ -430,7 +435,7 @@ function openNewReq(){
   const opts = PROFILES.filter(p=>p.id!==ME.id).map(p=>`<option value="${p.id}">${esc(p.name)} — ${esc((DEPT_BY_KEY[p.dept]&&DEPT_BY_KEY[p.dept].name)||p.dept||"")}</option>`).join("");
   openSheet(`<h3>طلب جديد</h3>
     <div class="field"><label>لمين؟</label><select id="rTo"><option value="">📢 الكل (إعلان عام)</option>${opts}</select></div>
-    <div class="field"><label>نوع الطلب</label><select id="rKind"><option value="info">معلومة / استفسار</option><option value="approval">موافقة</option><option value="deadline">موعد تسليم</option><option value="task">مهمة</option><option value="other">أخرى</option></select></div>
+    <div class="field"><label>نوع الطلب</label><select id="rKind"><option value="info">معلومة / استفسار</option><option value="approval">موافقة</option><option value="deadline">موعد تسليم</option><option value="modify">طلب تعديل</option><option value="document">مستند</option></select></div>
     <div class="field"><label>العنوان</label><input id="rTitle" placeholder="مثلاً: تحديث دفعة مشروع زايد" /></div>
     <div class="field"><label>التفاصيل</label><textarea id="rDet" placeholder="اكتب التفاصيل…"></textarea></div>
     <div class="field"><label>الأولوية</label><select id="rPrio"><option value="normal">عادي</option><option value="high">عاجل</option><option value="low">منخفض</option></select></div>
@@ -444,7 +449,7 @@ function openNewReq(){
     closeSheet(); toast("اتبعت ✓","ok"); renderRequests();
   };
 }
-function kindLabel(k){ return ({info:"معلومة/استفسار",deadline:"موعد تسليم",approval:"طلب موافقة",task:"مهمة",other:"طلب"})[k]||"طلب"; }
+function kindLabel(k){ return ({info:"معلومة/استفسار",deadline:"موعد تسليم",approval:"طلب موافقة",modify:"طلب تعديل",document:"مستند"})[k]||"طلب"; }
 function openReply(id){
   const r=LAST_REQS[id]; if(!r) return;
   const isApproval=r.kind==="approval";
@@ -483,15 +488,25 @@ ${decision?("قرار "+PROFILE.name+": "+decision):""}
     if(!txt){ const n=$("repNotes").value.trim(); txt=(decision?decision+(n?"\n"+n:""):n); }
     if(!txt){ toast("اكتب الرد","bad"); return; }
     const btn=$("repSave"); btn.disabled=true; btn.textContent="…";
-    const { error }=await sb.from("os_requests").update({ response_text:txt, status:"done", responded_at:new Date().toISOString(), response_date:today() }).eq("id",id);
+    const newStatus = decision.includes("✅")?"approved" : decision.includes("❌")?"rejected" : "answered";
+    const { error }=await sb.from("os_requests").update({ response_text:txt, status:newStatus, responded_at:new Date().toISOString(), response_date:today() }).eq("id",id);
     if(error){ toast("معرفناش نحفظ: "+error.message,"bad"); btn.disabled=false; btn.textContent="إرسال الرد"; return; }
     closeSheet(); toast("اتبعت الرد ✓","ok"); renderRequests();
   };
 }
-async function reviewJoin(id,act){
-  const { error }=await sb.from("os_join_requests").update({ status:act, reviewed_by:ME.id, reviewed_at:new Date().toISOString() }).eq("id",id);
-  if(error){ toast("خطأ: "+error.message,"bad"); return; }
-  toast(act==="approved"?"اتقبل ✓":"اترفض","ok"); renderRequests();
+function openRejectJoin(id){
+  const j=LAST_JOINS[id]; if(!j) return;
+  openSheet(`<h3>رفض طلب ${esc(j.manager_name)}</h3>
+    <div class="field"><label>سبب الرفض (إجباري — بيتسجّل في الطلب)</label><textarea id="rjNote" placeholder="مثلاً: القسم ده ليه مدير حاليًا / البيانات ناقصة…"></textarea></div>
+    <div class="row-actions"><button class="btn danger" id="rjGo">تأكيد الرفض</button><button class="btn ghost" onclick="closeSheet()">رجوع</button></div>`);
+  $("rjGo").onclick=async()=>{
+    const note=$("rjNote").value.trim();
+    if(!note){ toast("سبب الرفض إجباري","bad"); return; }
+    const btn=$("rjGo"); btn.disabled=true; btn.textContent="…";
+    const { error }=await sb.from("os_join_requests").update({ status:"rejected", review_note:note, reviewed_by:ME.id, reviewed_at:new Date().toISOString() }).eq("id",id);
+    if(error){ toast("خطأ: "+error.message,"bad"); btn.disabled=false; btn.textContent="تأكيد الرفض"; return; }
+    closeSheet(); toast("اترفض وسبب الرفض اتسجّل","ok"); renderRequests();
+  };
 }
 
 /* ===================== JOIN (public) + APPROVAL (ops) ===================== */
@@ -611,7 +626,7 @@ function voiceSupported(){ return ("webkitSpeechRecognition" in window)||("Speec
 function renderContract(){
   const dep=DEPT_BY_KEY["legal"];
   $("v-contract").innerHTML=`<div class="page-h"><div><h2>إنشاء عقد بالصوت</h2><div class="sub">${esc((dep&&dep.name)||"القسم القانوني")}</div></div></div>
-    <div class="banner"><span>⚠️</span><span>المخرج <b>مسودة</b> اتعملت بمساعدة الذكاء — لازم مراجعة بشرية قانونية قبل الاعتماد أو التوقيع.</span></div>
+    <div class="banner"><span>⚠️</span><span>المخرج <b>مسودة بالذكاء الاصطناعي</b> — لازم مراجعة <b>محمد سعد (القانوني)</b> قبل الاعتماد أو التوقيع.</span></div>
     <div class="sec-h">نوع العقد (اختار بضغطة) <span class="ln"></span></div>
     <div class="qbtns" id="ctypes" style="margin-bottom:14px">${["مقاولة عامة","استشارة هندسية","رسومات هندسية","توريد مواد","تشطيبات","إدارة مشروع"].map(t=>`<button class="qbtn ${chosenCtype===t?'on':''}" data-ct="${t}">${t}</button>`).join("")}</div>
     <div class="mic-wrap">
@@ -774,10 +789,11 @@ function renderAsk(){
     `<select id="askDept" class="chip on" style="border:none;padding:8px 14px">${DEPTS.map(d=>`<option value="${d.key}" ${d.key===askDeptKey?"selected":""}>${esc(d.name)}</option>`).join("")}</select>`;
   const dep=DEPT_BY_KEY[askDeptKey];
   $("v-ask").innerHTML=`<div class="page-h"><div><h2>اسأل قسمك</h2><div class="sub">مساعد ذكي بيرد من معرفة ${esc((dep&&dep.name)||"القسم")}</div></div>${canWrite()?`<button class="btn ghost sm" id="addK">+ معلومة</button>`:""}</div>
-    ${picker?`<div style="margin-bottom:10px">${picker}</div>`:""}
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">${picker||""}<button class="deep-tg ${askDeep?'on':''}" id="deepTg">🧠 تحليل عميق</button></div>
     <div class="chat" id="chat"></div>
     <div class="composer"><input id="askIn" placeholder="اكتب سؤالك للقسم…" /><button class="send" id="askSend">➤</button></div>`;
   if(!fixed){ $("askDept").onchange=(e)=>{ askDeptKey=e.target.value; chatHistory=[]; renderAsk(); }; }
+  $("deepTg").onclick=()=>{ askDeep=!askDeep; $("deepTg").classList.toggle("on",askDeep); toast(askDeep?"🧠 التحليل العميق اتفعّل — الرد هياخد وقت أطول شوية":"رجعنا للوضع السريع","ok"); };
   const addK=$("addK"); if(addK) addK.onclick=openAddKnowledge;
   $("askSend").onclick=sendAsk;
   $("askIn").addEventListener("keydown",e=>{ if(e.key==="Enter") sendAsk(); });
@@ -786,15 +802,20 @@ function renderAsk(){
 function renderChat(){
   const c=$("chat"); if(!c) return;
   if(!chatHistory.length){ const dep=DEPT_BY_KEY[askDeptKey]; c.innerHTML=`<div class="msg ai">أهلاً 👋 أنا مساعد ${esc((dep&&dep.name)||"القسم")}. اسألني في أي حاجة تخص شغل القسم — وكل ما تضيف معلومات للقسم كل ما بقى أدق. (الردود للاسترشاد وممكن تحتاج مراجعة بشرية.)</div>`; return; }
-  c.innerHTML=chatHistory.map(m=>`<div class="msg ${m.r}">${m.r==="ai"?esc(m.t):esc(m.t)}</div>`).join("");
+  c.innerHTML=chatHistory.map(m=>{
+    const warn = m.r==="ai" && /مراجعة بشرية|محتاج(ة)? مراجعة|قبل الاعتماد|راجع مع|استشير محامي|مش متأكد/.test(m.t);
+    return `<div class="msg ${m.r}${warn?' warn':''}">${warn?'<div class="warn-tag">⚠️ الرد ده محتاج مراجعة بشرية قبل الاعتماد</div>':''}${esc(m.t)}</div>`;
+  }).join("");
   c.scrollTop=c.scrollHeight;
 }
 async function sendAsk(){
   const inp=$("askIn"); const q=inp.value.trim(); if(!q) return;
   inp.value=""; chatHistory.push({r:"me",t:q}); renderChat();
-  const c=$("chat"); const tp=document.createElement("div"); tp.className="msg ai"; tp.innerHTML='<div class="typing"><span></span><span></span><span></span></div>'; c.appendChild(tp); c.scrollTop=c.scrollHeight;
-  try{ const ans=await askAI({ prompt:q, dept:askDeptKey, max_tokens:900 }); tp.remove(); chatHistory.push({r:"ai",t:ans||"ممعرفش أرد دلوقتي."}); renderChat(); }
-  catch(e){ tp.remove(); chatHistory.push({r:"ai",t:"حصلت مشكلة في الرد. جرّب تاني."}); renderChat(); }
+  const c=$("chat"); const tp=document.createElement("div"); tp.className="msg ai";
+  tp.innerHTML=`<div style="display:flex;align-items:center;gap:9px"><div class="typing"><span></span><span></span><span></span></div><span class="muted" style="font-size:12.5px;font-weight:700">${askDeep?"بفكّر بعمق… ثواني":"بفكّر…"}</span></div>`;
+  c.appendChild(tp); c.scrollTop=c.scrollHeight;
+  try{ const ans=await askAI({ prompt:q, dept:askDeptKey, mode:askDeep?"deep":"fast", max_tokens:askDeep?1400:900 }); tp.remove(); chatHistory.push({r:"ai",t:ans||"ممعرفش أرد دلوقتي."}); renderChat(); }
+  catch(e){ tp.remove(); chatHistory.push({r:"ai",t:"النت أو السيرفر اتأخر علينا 🙏 جرّب تبعت السؤال تاني."}); renderChat(); }
 }
 function openAddKnowledge(){
   openSheet(`<h3>أضف معلومة لمعرفة القسم</h3>
