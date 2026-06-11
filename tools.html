@@ -3556,7 +3556,14 @@ function openTask(id,all){
     ${mine&&t.status==="review"&&!(isOwnerOps()||(PROFILE.role==="manager"&&t.dept===myDeptKey()))?`<div class="muted" style="margin-bottom:10px;font-size:12px">مستنية اعتماد المدير</div>`:""}
     ${mine&&t.status==="done"?`<button class="btn ghost sm" id="tReopen" style="margin-bottom:10px">رجّعها شغّالة</button>`:""}
     ${(isOwnerOps()||(PROFILE.role==="manager"&&t.dept===myDeptKey()))&&t.assignee_id&&t.assignee_id!==ME.id&&t.status!=="done"?`<button class="btn ghost sm" id="tNudge" style="margin-bottom:10px">نبّه ${esc(firstName(t.assignee_name||""))}</button>`:""}
-    <div class="row-actions" style="margin-bottom:10px;flex-wrap:wrap;gap:8px"><button class="btn ghost sm" id="tShare">ابعتها واتساب</button>${(isOwnerOps()||PROFILE.role==="manager")&&t.status==="done"?`<button class="btn ghost sm" id="tRepeat">كررها</button>`:""}</div>
+    <div class="row-actions" style="margin-bottom:10px;flex-wrap:wrap;gap:8px"><button class="btn ghost sm" id="tShare">ابعتها واتساب</button>${mine&&t.status!=="done"?`<button class="btn ghost sm" id="tHandoff">سلّم لقسم</button>`:""}${(isOwnerOps()||PROFILE.role==="manager")&&t.status==="done"?`<button class="btn ghost sm" id="tRepeat">كررها</button>`:""}</div>
+    <div id="hoPanel" class="card flat" style="display:none;border-color:#BFDBFE;background:#F4F8FF;margin-bottom:10px">
+      <b style="font-size:13px">تسليم المهمة لقسم تاني</b>
+      <div class="field" style="margin-top:8px"><label>القسم المستلم</label><select id="hoDept"></select></div>
+      <div class="field"><label>الشخص المستلم</label><select id="hoPerson"></select></div>
+      <div class="field"><label>ملاحظة سياق (اختياري)</label><input id="hoNote" placeholder="مثلاً: محتاجة مراجعة قانونية للبند 4"/></div>
+      <div class="row-actions"><button class="btn green sm" id="hoGo">سلّم</button><button class="btn ghost sm" id="hoCancel">إلغاء</button></div>
+    </div>
     ${(isOwnerOps()||(PROFILE.role==="manager"&&t.dept===myDeptKey()))?`<div class="field" id="pjLinkWrap" style="display:none"><label>اربطها بمشروع</label><select id="pjLink"><option value="">— من غير مشروع —</option></select></div>`:""}
     ${mine&&isOwnerOps()?`<div class="field"><label>الموعد النهائي — سريع</label><div class="qbtns" id="qd"><button class="qbtn" data-d="0">النهارده</button><button class="qbtn" data-d="1">بكرة</button><button class="qbtn" data-d="3">3 أيام</button><button class="qbtn" data-d="7">أسبوع</button></div></div>`:""}
     ${mine&&t.status!=="review"?`
@@ -3582,6 +3589,36 @@ function openTask(id,all){
       }catch(e){}
     })();
   }
+  /* فريق 12: تسليم المهمة لقسم تاني بسياقها */
+  const ho=$("tHandoff");
+  if(ho) ho.onclick=()=>{
+    const pn=$("hoPanel"); if(!pn) return;
+    if(pn.style.display==="block"){ pn.style.display="none"; return; }
+    const ds=$("hoDept");
+    ds.innerHTML=DEPTS.filter(d=>d.key!==t.dept).map(d=>'<option value="'+esc(d.key)+'">'+esc(d.name)+'</option>').join("");
+    const fillPeople=()=>{
+      const k=ds.value;
+      const ppl=PROFILES.filter(p=>p.dept===k);
+      ppl.sort((a,b)=>(a.role==="manager"?0:1)-(b.role==="manager"?0:1));
+      $("hoPerson").innerHTML=ppl.length?ppl.map(p=>'<option value="'+p.id+'">'+esc(p.name)+(p.role==="manager"?" (المدير)":"")+'</option>').join(""):'<option value="">— مفيش حد في القسم ده —</option>';
+    };
+    ds.onchange=fillPeople; fillPeople();
+    pn.style.display="block";
+    $("hoCancel").onclick=()=>{ pn.style.display="none"; };
+    $("hoGo").onclick=async()=>{
+      const newDept=ds.value, newP=$("hoPerson").value, note=($("hoNote").value||"").trim();
+      if(!newP){ toast("اختار شخص مستلم","bad"); return; }
+      const rec=PROFILES.find(p=>p.id===newP); if(!rec){ toast("الشخص مش موجود","bad"); return; }
+      const g=$("hoGo"); g.disabled=true; g.textContent="بيتسلّم…";
+      const { error }=await sb.from("os_tasks").update({ dept:newDept, assignee_id:rec.id, assignee_name:rec.name }).eq("id",id);
+      if(error){ toast("معرفناش نسلّم: "+error.message,"bad"); g.disabled=false; g.textContent="سلّم"; return; }
+      const fromD=(DEPT_BY_KEY[t.dept]&&DEPT_BY_KEY[t.dept].name)||t.dept||"—";
+      const toD=(DEPT_BY_KEY[newDept]&&DEPT_BY_KEY[newDept].name)||newDept;
+      try{ await sb.from("os_task_updates").insert({ task_id:id, by_id:ME.id, by_name:PROFILE.name, note:"سلّمها من "+fromD+" إلى "+toD+" — المستلم: "+rec.name+(note?" — "+note:""), percent:null }); }catch(e){}
+      try{ await sb.from("os_notifications").insert({ user_id:rec.id, kind:"task_new", title:"مهمة اتسلّمت ليك: "+(t.title||""), body:"من "+PROFILE.name+" ("+fromD+")"+(note?" — "+note:""), ref_entity:"os_tasks", ref_id:id }); }catch(e){}
+      closeSheet(); toast("اتسلّمت لـ"+firstName(rec.name)+" — "+toD,"ok"); renderTasks();
+    };
+  };
   const ap=$("tApprove");
   if(ap) ap.onclick=async()=>{
     ap.disabled=true;
