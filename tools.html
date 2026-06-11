@@ -1422,9 +1422,10 @@ async function paintDocs(){
     const KIND_BADGE={contract:["عقد","b-green"],license:["ترخيص","b-amber"],letter:["خطاب","b-blue"],report:["تقرير","b-grey"]};
     $("dvBox").innerHTML=rows.map(d=>{
       const exp=d.expires_at?new Date(d.expires_at).getTime():null;
-      const danger=exp&&exp<soon;
+      const win=(d.kind==="license"||d.kind==="contract")?60:30;
+      const danger=exp&&exp<Date.now()+win*86400000;
       const daysLeft=exp?Math.ceil((exp-Date.now())/86400000):null;
-      const expTxt= exp? (daysLeft<=0?"انتهى!":daysLeft<=30?"باقي "+daysLeft+" يوم":"تنتهي "+fmtDate(d.expires_at)) : "";
+      const expTxt= exp? (daysLeft<=0?"انتهى!":daysLeft<=win?"باقي "+daysLeft+" يوم":"تنتهي "+fmtDate(d.expires_at)) : "";
       const kb=KIND_BADGE[d.kind];
       return '<div class="card flat" data-doc="'+d.id+'"'+(danger?' style="border-right:4px solid var(--red);background:#FFF8F8"':'')+'><div style="display:flex;gap:8px;align-items:center"><b style="flex:1">'+esc(d.title)+'</b>'+(kb?'<span class="badge '+kb[1]+'">'+kb[0]+'</span>':'')+(d.locked?'<span class="badge b-grey">مقفول</span>':'')+'</div>'
         +'<div class="meta">'+(d.dept&&DEPT_BY_KEY[d.dept]?'<span>'+esc(DEPT_BY_KEY[d.dept].name)+'</span><span class="dot"></span>':'')+'<span>v'+(d.version||1)+'</span>'+(expTxt?'<span class="dot"></span><span'+(danger?' style="color:var(--red);font-weight:800"':'')+'>'+expTxt+'</span>':'')+'</div>'
@@ -2009,7 +2010,7 @@ async function renderRequests(){
   el.querySelectorAll("[data-totask]").forEach(b=>b.onclick=()=>openReqToTask(b.dataset.totask));
   el.querySelectorAll("[data-jr]").forEach(b=>b.onclick=()=>{ if(b.dataset.act==="approved") openApprove(b.dataset.jr); else openRejectJoin(b.dataset.jr); });
 }
-function kindBadge(k){ const m={info:["معلومة","b-blue"],deadline:["موعد","b-amber"],approval:["موافقة","b-green"],modify:["تعديل","b-blue"],document:["مستند","b-grey"]}; const x=m[k]||["طلب","b-grey"]; return `<span class="badge ${x[1]}">${x[0]}</span>`; }
+function kindBadge(k){ const m={info:["معلومة","b-blue"],deadline:["موعد","b-amber"],approval:["موافقة","b-green"],modify:["تعديل","b-blue"],document:["مستند","b-grey"],gov:["معاملة حكومية","b-amber"]}; const x=m[k]||["طلب","b-grey"]; return `<span class="badge ${x[1]}">${x[0]}</span>`; }
 function reqStatusBadge(s){ const m={pending:["مفتوح","b-amber"],answered:["تم الرد","b-green"],approved:["موافقة ✓","b-green"],rejected:["مرفوض","b-red"],cancelled:["ملغي","b-grey"]}; const x=m[s]||["تم الرد","b-green"]; return `<span class="badge ${x[1]}">${x[0]}</span>`; }
 function prioBadge(p){ if(p==="high")return `<span class="badge b-red">عاجل</span>`; if(p==="low")return `<span class="badge b-grey">عادي</span>`; return ""; }
 function reqCard(r){
@@ -2053,9 +2054,17 @@ const REQ_SCHEMAS={
     {id:"fTarget",label:"المطلوب تعديله",type:"text",ph:"مثلاً: رسمة الواجهة",req:true},
     {id:"fWhy",label:"سبب التعديل",type:"text",ph:"مثلاً: طلب العميل"}
   ],
+  gov:[
+    {id:"fEntity2",label:"الجهة الحكومية",type:"select",req:true,opts:[["zayed","جهاز الشيخ زايد"],["october","جهاز أكتوبر"],["district","الحي"],["commercial","السجل التجاري"],["tax","الضرائب"],["other","أخرى"]]},
+    {id:"fGovType",label:"نوع المعاملة",type:"select",req:true,opts:[["build_license","ترخيص بناء"],["renew_license","تجديد ترخيص"],["letter","خطاب رسمي"],["extract","استخراج مستند"],["other","أخرى"]]},
+    {id:"fRefNo",label:"رقم القيد / المعاملة (لو اتقدمت)",type:"text",ph:"مثلاً: 4521/2026"},
+    {id:"fStage",label:"المرحلة الحالية",type:"select",req:true,opts:[["prep","تجهيز أوراق"],["submitted","مقدمة للجهة"],["review","جاري المراجعة"],["need_docs","استيفاء مستندات"],["need_fees","استيفاء رسوم"],["tech_notes","ملاحظات فنية"],["ready","جاهزة للاستلام"],["received","مستلمة"]]},
+    {id:"fDue",label:"التاريخ المتوقع للإنجاز",type:"date",future:true},
+    {id:"fNeedDocs",label:"مستندات مطلوبة للتقديم",type:"text",ph:"مثلاً: توكيل + رسم مساحي + إيصال كهربا"}
+  ],
   info:[]
 };
-const REQ_FIELD_LABELS={fAmount:"المبلغ",fReason:"السبب",fDue:"الاستحقاق",fProj:"المشروع",fDocType:"نوع المستند",fEntity:"الجهة",fTarget:"المطلوب تعديله",fWhy:"السبب"};
+const REQ_FIELD_LABELS={fAmount:"المبلغ",fReason:"السبب",fDue:"الاستحقاق",fProj:"المشروع",fDocType:"نوع المستند",fEntity:"الجهة",fTarget:"المطلوب تعديله",fWhy:"السبب",fEntity2:"الجهة",fGovType:"نوع المعاملة",fRefNo:"رقم القيد",fStage:"المرحلة",fNeedDocs:"مستندات مطلوبة"};
 function renderReqFields(kind){
   const box=$("rDyn"); if(!box) return;
   const fs=REQ_SCHEMAS[kind]||[];
@@ -2106,7 +2115,7 @@ function openNewReq(){
   const opts = PROFILES.filter(p=>p.id!==ME.id).map(p=>`<option value="${p.id}">${esc(p.name)} — ${esc((DEPT_BY_KEY[p.dept]&&DEPT_BY_KEY[p.dept].name)||p.dept||"")}</option>`).join("");
   openSheet(`<h3>طلب جديد</h3>
     <div class="field"><label>لمين؟</label><select id="rTo"><option value="">الكل (إعلان عام)</option>${opts}</select></div>
-    <div class="field"><label>نوع الطلب</label><select id="rKind"><option value="info">معلومة / استفسار</option><option value="approval">موافقة</option><option value="deadline">موعد تسليم</option><option value="modify">طلب تعديل</option><option value="document">مستند</option></select></div>
+    <div class="field"><label>نوع الطلب</label><select id="rKind"><option value="info">معلومة / استفسار</option><option value="approval">موافقة</option><option value="deadline">موعد تسليم</option><option value="modify">طلب تعديل</option><option value="document">مستند</option><option value="gov">معاملة حكومية</option></select></div>
     <div id="rDyn"></div>
     <div class="field"><label>العنوان</label><input id="rTitle" placeholder="مثلاً: تحديث دفعة مشروع زايد" /></div>
     <div class="field"><label>التفاصيل</label><textarea id="rDet" placeholder="اكتب التفاصيل… أو سجّلها بصوتك"></textarea></div>
@@ -2157,6 +2166,7 @@ function openNewReq(){
         if(amt>100000){ const owner=PROFILES.find(p=>p.role==="owner"); if(owner) autoTo=owner.id; }
         else if(amt>5000){ const fin=PROFILES.find(p=>p.dept==="finance"&&p.role==="manager"); if(fin) autoTo=fin.id; }
       }
+      if(!autoTo&&k==="gov"){ const adm=PROFILES.find(p=>p.dept==="admin"&&p.role==="manager"); if(adm) autoTo=adm.id; }
       if(!autoTo&&(k==="document"||k==="approval")){ const legal=PROFILES.find(p=>p.dept==="legal"&&p.role==="manager"); if(legal) autoTo=legal.id; }
     }
     let det=$("rDet").value.trim();
@@ -2167,7 +2177,7 @@ function openNewReq(){
     window._reqSent=true; closeSheet(); toast("اتبعت ✓","ok"); renderRequests();
   };
 }
-function kindLabel(k){ return ({info:"معلومة/استفسار",deadline:"موعد تسليم",approval:"طلب موافقة",modify:"طلب تعديل",document:"مستند"})[k]||"طلب"; }
+function kindLabel(k){ return ({info:"معلومة/استفسار",deadline:"موعد تسليم",approval:"طلب موافقة",modify:"طلب تعديل",document:"مستند",gov:"معاملة حكومية"})[k]||"طلب"; }
 /* === فريق 9: تحويل الطلب المردود لمهمة مرتبطة === */
 function openReqToTask(id){
   const r=LAST_REQS[id]; if(!r) return;
