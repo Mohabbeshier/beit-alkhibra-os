@@ -248,6 +248,7 @@ button.stat,button.dept-card{font-family:inherit;cursor:pointer;}
     <div class="sp"></div>
     <div class="uchip">
       <div><div class="nm" id="uName">—</div><div class="rl" id="uRole">—</div></div>
+      <button id="globalSearchBtn" title="بحث" style="position:relative;background:var(--blue-l,#EAF2FB);border:none;border-radius:12px;width:38px;height:38px;cursor:pointer;margin-inline-end:6px"><span style="display:inline-flex;color:#64748b;vertical-align:middle"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg></span></button>
       <button id="notifBell" style="position:relative;background:var(--blue-l,#EAF2FB);border:none;border-radius:12px;width:38px;height:38px;font-size:17px;cursor:pointer"><span style="display:inline-flex;color:#64748b;vertical-align:middle"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></span><span id="connDot" style="position:absolute;top:3px;right:3px;width:8px;height:8px;border-radius:50%;background:#cbd5e1"></span><span id="notifBadge" style="display:none;position:absolute;top:-4px;left:-4px;background:var(--red);color:#fff;border-radius:50%;min-width:17px;height:17px;font-size:10px;font-weight:900;align-items:center;justify-content:center;padding:0 3px">0</span></button>
       <div class="avatar" id="uAvatar">ب</div>
     </div>
@@ -404,6 +405,7 @@ async function startApp(user){
   const av=$("uAvatar"); av.textContent=initials(PROFILE.name);
   av.style.cursor="pointer"; av.title="حسابي"; av.onclick=openMyAccount;
   const nb=$("notifBell"); if(nb) nb.onclick=()=>{ askNotifPermission(); openNotifications(); };
+  const gs=$("globalSearchBtn"); if(gs) gs.onclick=()=>openGlobalSearch();
   refreshNotifBadge();
   const col={owner:"#0D47A1",ops:"#1E88E5",manager:"#2E7D32",employee:"#6b7a8d"}[PROFILE.role]||"#1E88E5";
   av.style.background="linear-gradient(135deg,"+col+","+col+"cc)";
@@ -2492,6 +2494,38 @@ async function refreshNotifBadge(){
     if(count>0){ b.style.display="flex"; b.textContent=count>9?"9+":count; }
     else b.style.display="none";
   }catch(e){}
+}
+async function openGlobalSearch(){
+  openSheet('<h3>بحث موحّد</h3>'
+    +'<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">المهام · الطلبات · المستندات · المشاريع</div>'
+    +'<div class="field"><input id="gsIn" placeholder="اكتب كلمة ودوّر…" autocomplete="off"/></div>'
+    +'<div id="gsBox" style="margin-top:10px;min-height:120px"><div class="empty">اكتب حاجة للبحث.</div></div>'
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+  const inp=$("gsIn"); if(inp){ inp.focus(); inp.oninput=(e)=>{ const q=(e.target.value||"").trim(); clearTimeout(window._gsT); window._gsT=setTimeout(()=>runGlobalSearch(q),300); }; }
+}
+async function runGlobalSearch(q){
+  const box=$("gsBox"); if(!box) return;
+  if(!q||q.length<2){ box.innerHTML='<div class="empty">اكتب حرفين على الأقل.</div>'; return; }
+  box.innerHTML='<div class="skel"></div><div class="skel" style="width:70%"></div>';
+  const owner=isOwnerOps(); const myDept=myDeptKey();
+  try{
+    let tq=sb.from("os_tasks").select("id,title,assignee_name,dept,status").ilike("title","%"+q+"%").limit(8);
+    if(!owner&&myDept) tq=tq.eq("dept",myDept);
+    let rq=sb.from("os_requests").select("id,title,kind,status").ilike("title","%"+q+"%").limit(8);
+    let dq=sb.from("os_documents").select("id,title,kind").ilike("title","%"+q+"%").limit(8);
+    let pq=sb.from("os_projects").select("id,name,stage").ilike("name","%"+q+"%").limit(8);
+    const [t,r,d,p]=await Promise.all([tq,rq,dq,pq]);
+    const sections=[];
+    const mkSec=(label,items,render)=>{ if(items&&items.length){ sections.push('<div class="muted" style="font-size:11px;font-weight:800;margin:10px 2px 5px">'+label+' ('+items.length+')</div>'+items.map(render).join("")); } };
+    const card=(go,title,sub,color)=>'<div class="card flat gs-row" data-go="'+go+'" style="cursor:pointer;border-right:4px solid '+color+'"><b style="font-size:13.5px">'+esc(title)+'</b>'+(sub?'<div class="muted" style="font-size:11.5px;margin-top:2px">'+esc(sub)+'</div>':'')+'</div>';
+    mkSec("المهام",(t&&t.data),x=>card("tasks",x.title,(x.assignee_name||"")+" · "+(x.status||""),"var(--blue)"));
+    mkSec("الطلبات",(r&&r.data),x=>card("req",x.title,(kindLabel?kindLabel(x.kind):x.kind)+" · "+(x.status||""),"var(--blue-d)"));
+    mkSec("المستندات",(d&&d.data),x=>card("docs",x.title,x.kind||"","var(--green-d)"));
+    mkSec("المشاريع",(p&&p.data),x=>card("projects",x.name,x.stage||"","#F59E0B"));
+    if(!sections.length){ box.innerHTML='<div class="empty">مفيش نتايج لـ"'+esc(q)+'".</div>'; return; }
+    box.innerHTML=sections.join("");
+    box.querySelectorAll(".gs-row").forEach(el=>el.onclick=()=>{ const go=el.dataset.go; closeSheet(); if(go==="projects"){ if(typeof openProjects==="function") openProjects(); return; } if(go==="docs"){ if(typeof openDocsVault==="function"){ openDocsVault(); return; } } if(go==="tasks"){ taskFilter="all"; } switchTab(go); });
+  }catch(e){ box.innerHTML=failBox("معرفناش ندوّر دلوقتي.",()=>runGlobalSearch(q)); }
 }
 async function openNotifications(){
   openSheet('<h3>الإشعارات</h3><div id="ntfBox"><div class="skel"></div><div class="skel"></div></div><div class="row-actions" style="margin-top:10px"><button class="btn ghost sm" id="ntfAllRead">\u2713 علّم الكل مقروء</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
