@@ -1366,10 +1366,11 @@ let _dvSearch="", _dvFilter="all";
 async function openDocsVault(){
   openSheet('<h3>خزنة المستندات</h3>'
     +'<div class="field" style="margin-bottom:8px"><input id="dvSearch" placeholder="دوّر باسم المستند…" value="'+esc(_dvSearch)+'"/></div>'
-    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="dvFilters"><button class="chip on" data-df="all">الكل</button><button class="chip" data-df="expiring">بتنتهي</button><button class="chip" data-df="locked">مقفولة</button><button class="chip" data-df="mine">بتاعتي</button></div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="dvFilters"><button class="chip on" data-df="all">الكل</button><button class="chip" data-df="contract">عقود</button><button class="chip" data-df="license">تراخيص</button><button class="chip" data-df="expiring">بتنتهي</button><button class="chip" data-df="locked">مقفولة</button><button class="chip" data-df="mine">بتاعتي</button></div>'
     +'<div id="dvBox"><div class="skel"></div></div>'
     +(canWrite()?'<div class="sec-h">ضيف مستند <span class="ln"></span></div>'
     +'<div class="field"><label>الاسم</label><input id="dvTitle" placeholder="مثلًا: رخصة فيلا زايد — نسخة نهائية"/></div>'
+    +'<div class="field"><label>نوع المستند</label><select id="dvKind"><option value="general">عام</option><option value="contract">عقد</option><option value="license">ترخيص</option><option value="letter">خطاب رسمي</option><option value="report">تقرير</option></select></div>'
     +'<div class="field"><label>القسم</label><select id="dvDept"><option value="">— عام —</option>'+DEPTS.map(d=>'<option value="'+d.key+'">'+esc(d.name)+'</option>').join("")+'</select></div>'
     +'<div class="field"><label>ارفع ملف (PDF أو صورة — أقصى 20 ميجا)</label><input id="dvFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="font-size:12px"/><div id="dvUpStatus" class="muted" style="font-size:11px;margin-top:4px"></div></div>'
     +'<div class="field"><label>أو اكتب لينك جاهز (Drive…)</label><input id="dvUrl" placeholder="https://…"/></div>'
@@ -1394,7 +1395,11 @@ async function openDocsVault(){
         url=j.url; $("dvUpStatus").textContent="اترفع";
       }catch(e){ $("dvUpStatus").textContent=""+(e.message||"فشل الرفع"); toast("معرفناش نرفع الملف","bad"); go.disabled=false; return; }
     }
-    const { error }=await sb.from("os_documents").insert({ title, kind:"general", dept:$("dvDept")?($("dvDept").value||null):(PROFILE.dept||null), file_url:url, expires_at:$("dvExp").value||null, added_by:ME.id });
+    const dvKind=$("dvKind")?$("dvKind").value:"general";
+    if((dvKind==="contract"||dvKind==="license")&&!$("dvExp").value){
+      if(!confirm((dvKind==="contract"?"العقد":"الترخيص")+" من غير تاريخ انتهاء — مراقب الانتهاء مش هيقدر ينبّهك عليه. تكمل من غيره؟")) return;
+    }
+    const { error }=await sb.from("os_documents").insert({ title, kind:dvKind, dept:$("dvDept")?($("dvDept").value||null):(PROFILE.dept||null), file_url:url, expires_at:$("dvExp").value||null, added_by:ME.id });
     if(error){ toast("معرفناش نحفظ: "+error.message,"bad"); go.disabled=false; return; }
     track("action","doc_add");
     toast("المستند اتحفظ","ok"); paintDocs();
@@ -1412,13 +1417,16 @@ async function paintDocs(){
     if(_dvFilter==="expiring") rows=rows.filter(d=>d.expires_at&&new Date(d.expires_at).getTime()<soon);
     else if(_dvFilter==="locked") rows=rows.filter(d=>d.locked);
     else if(_dvFilter==="mine") rows=rows.filter(d=>d.added_by===ME.id);
+    else if(_dvFilter==="contract"||_dvFilter==="license") rows=rows.filter(d=>d.kind===_dvFilter);
     if(!rows.length){ $("dvBox").innerHTML='<div class="empty">'+(_dvSearch||_dvFilter!=="all"?"مفيش مستندات بالفلتر ده.":"الخزنة فاضية لسه.")+'</div>'; return; }
+    const KIND_BADGE={contract:["عقد","b-green"],license:["ترخيص","b-amber"],letter:["خطاب","b-blue"],report:["تقرير","b-grey"]};
     $("dvBox").innerHTML=rows.map(d=>{
       const exp=d.expires_at?new Date(d.expires_at).getTime():null;
       const danger=exp&&exp<soon;
       const daysLeft=exp?Math.ceil((exp-Date.now())/86400000):null;
       const expTxt= exp? (daysLeft<=0?"انتهى!":daysLeft<=30?"باقي "+daysLeft+" يوم":"تنتهي "+fmtDate(d.expires_at)) : "";
-      return '<div class="card flat" data-doc="'+d.id+'"'+(danger?' style="border-right:4px solid var(--red);background:#FFF8F8"':'')+'><div style="display:flex;gap:8px;align-items:center"><b style="flex:1">'+esc(d.title)+'</b>'+(d.locked?'<span title="مقفول نهائيًا"></span>':'')+'</div>'
+      const kb=KIND_BADGE[d.kind];
+      return '<div class="card flat" data-doc="'+d.id+'"'+(danger?' style="border-right:4px solid var(--red);background:#FFF8F8"':'')+'><div style="display:flex;gap:8px;align-items:center"><b style="flex:1">'+esc(d.title)+'</b>'+(kb?'<span class="badge '+kb[1]+'">'+kb[0]+'</span>':'')+(d.locked?'<span title="مقفول نهائيًا"></span>':'')+'</div>'
         +'<div class="meta">'+(d.dept&&DEPT_BY_KEY[d.dept]?'<span>'+esc(DEPT_BY_KEY[d.dept].name)+'</span><span class="dot"></span>':'')+'<span>v'+(d.version||1)+'</span>'+(expTxt?'<span class="dot"></span><span'+(danger?' style="color:var(--red);font-weight:800"':'')+'>'+expTxt+'</span>':'')+'</div>'
         +'<div style="margin-top:6px;display:flex;gap:10px;flex-wrap:wrap">'
         +(d.file_url?'<a href="'+esc(d.file_url)+'" target="_blank" class="lnk" style="font-size:12px">افتح</a><button class="lnk" data-dcopy="'+esc(d.file_url)+'" style="font-size:12px">انسخ اللينك</button>':'<span class="muted" style="font-size:11px">مفيش ملف مرفوع</span>')
