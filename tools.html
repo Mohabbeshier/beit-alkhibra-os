@@ -1940,6 +1940,7 @@ function wireHome(el){
       b.onclick=()=>openMyAccount();
       const h=document.querySelector("#v-home");
       if(h) h.insertBefore(b, h.firstChild);
+      if(!window._pwNudged){ window._pwNudged=true; setTimeout(()=>{ try{ openMyAccount(); toast("خطوة أمان: غيّر كلمة السر المؤقتة الأول","bad"); }catch(e){} },700); }
     }catch(e){}
   }
   el.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{ if(b.dataset.ev) taskFilter="events"; switchTab(b.dataset.go); });
