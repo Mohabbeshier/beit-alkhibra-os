@@ -1261,7 +1261,7 @@ async function openApprovals(){
     h.style.display="block";
     if(isNaN(v)||v<=0){ h.style.color="var(--red)"; h.textContent="المبلغ لازم يكون رقم موجب"; return; }
     h.style.color="var(--blue)";
-    if(v<=5000) h.textContent="هيتوجّه لمدير قسمك (ضمن حد المدير)";
+    if(v<=5000) h.textContent=(PROFILE.role==="manager"||PROFILE.role==="owner")?"هيتوجّه للمدير المالي (مفيش موافقة ذاتية)":"هيتوجّه لمدير قسمك (ضمن حد المدير)";
     else if(v<=100000) h.textContent="هيتوجّه للمدير المالي (فوق 5,000ج)";
     else h.textContent="هيتوجّه للمالك مباشرة (فوق 100,000ج)";
   };
