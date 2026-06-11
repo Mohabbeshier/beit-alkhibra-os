@@ -603,7 +603,7 @@ function renderOwnerHome(d){
       </div>
     </button>`).join("");
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
-    <div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn sm" data-quick="myday" style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button>${["owner","ops","manager"].includes(ME.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}<button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button><button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
+    <div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn sm" data-quick="myday" style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button>${["owner","ops","manager"].includes(ME.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}<button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button><button class="btn ghost sm" data-quick="projects">المشاريع</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}<button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button><button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
   if(d.evs.length){
     body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   }
@@ -631,7 +631,7 @@ function renderOpsHome(d){
   body+=`<div class="sec-h">اسأل أي قسم <span class="ln"></span></div>`;
   body+=DEPTS.map(dep=>deptChipHtml(dep)).join("");
   body+=`<div class="sec-h">تحركات سريعة <span class="ln"></span></div>
-    <div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn sm" data-quick="myday" style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn ghost sm" data-quick="event">موعد</button>${["owner","ops","manager"].includes(ME.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}<button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button><button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
+    <div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn sm" data-quick="myday" style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn ghost sm" data-quick="event">موعد</button>${["owner","ops","manager"].includes(ME.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}<button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button><button class="btn ghost sm" data-quick="projects">المشاريع</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}<button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button><button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   body+='<div id="presBox"></div><div id="wwBox"></div><div id="wlBox"></div><div id="activityBox"></div>';
   el.innerHTML=body;
@@ -1084,6 +1084,93 @@ async function paintProjects(){
         +'</div></div>';
     }).join("");
   }catch(e){ $("prjBox").innerHTML=failBox("معرفناش نجيب المشاريع.",paintProjects); }
+}
+/* ===================== STRUCTURAL ENGINEERING ===================== */
+const SE_STAGE={arch_received:"معماري مستلم",statical_system:"ستاتيكال سيستم",exported:"اتصدّر لـSAFE/ETABS",analysis_done:"التحليل (Run) خلص",design_done:"التصميم خلص",execution_ready:"لوحات تنفيذ جاهزة"};
+const SE_SW={SAFE:"SAFE",ETABS:"ETABS",both:"الاتنين"};
+function isStructUser(){ return isOwnerOps()||PROFILE.dept==="engineering"; }
+
+async function openStructEng(){
+  openSheet('<h3>الهندسة الإنشائية</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">دورة التصميم من المعماري للتنفيذ — مدخلات، تحليل SAFE/ETABS، وتشيكات العناصر</div>'
+    +'<div id="seBox"><div class="skel"></div><div class="skel"></div></div>'
+    +(isStructUser()?'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="seNew">مشروع إنشائي جديد</button></div>':"")
+    +'<button class="btn ghost" style="margin-top:8px" onclick="closeSheet()">قفل</button>');
+  if(isStructUser()) $("seNew").onclick=()=>openStructNew();
+  await paintStructProjects();
+}
+
+async function paintStructProjects(){
+  try{
+    const { data }=await sb.from("os_struct_overview").select("*").order("updated_at",{ascending:false});
+    const rows=data||[];
+    if(!rows.length){ $("seBox").innerHTML='<div class="empty">مفيش مشاريع إنشائية لسه. ابدأ بمشروع جديد.</div>'; return; }
+    const failed=rows.filter(r=>(r.failed_checks||0)>0);
+    let h="";
+    if(failed.length){
+      h+='<div class="sec-h" style="color:var(--red)">تشيكات فاشلة — محتاجة مراجعة <span class="ln"></span></div>';
+      h+=failed.map(seCard).join("");
+      const rest=rows.filter(r=>(r.failed_checks||0)===0);
+      if(rest.length){ h+='<div class="sec-h">باقي المشاريع <span class="ln"></span></div>'+rest.map(seCard).join(""); }
+    } else { h+=rows.map(seCard).join(""); }
+    $("seBox").innerHTML=h;
+  }catch(e){ $("seBox").innerHTML=failBox("معرفناش نجيب المشاريع الإنشائية.",paintStructProjects); }
+}
+
+function seCard(p){
+  const fail=(p.failed_checks||0);
+  const stale=(p.days_since_update||0)>=7;
+  return '<div class="card flat"'+(fail?' style="border-right:4px solid var(--red)"':'')+'>'
+    +'<div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(p.name)+'</b>'
+    +'<span class="badge b-blue">'+(SE_STAGE[p.stage]||esc(p.stage))+'</span></div>'
+    +'<div class="meta" style="margin-top:6px"><span>'+(SE_SW[p.software]||esc(p.software||""))+'</span>'
+    +(p.engineer_name?'<span class="dot"></span><span>'+esc(p.engineer_name)+'</span>':'')
+    +'<span class="dot"></span><span>'+(p.elements_total||0)+' عنصر</span>'
+    +(fail?'<span class="dot"></span><span style="color:var(--red);font-weight:800">'+fail+' تشيك فاشل</span>':'')
+    +(stale?'<span class="dot"></span><span style="color:#F59E0B">واقف '+p.days_since_update+' يوم</span>':'')
+    +'</div></div>';
+}
+
+function seNumField(id,label,ph,unitNote){
+  return '<div class="field"><label>'+label+(unitNote?' <span class="muted" style="font-size:10.5px">'+unitNote+'</span>':'')+'</label><input id="'+id+'" type="number" inputmode="decimal" placeholder="'+(ph||"")+'"/></div>';
+}
+
+async function openStructNew(){
+  openSheet('<h3>مشروع إنشائي جديد</h3>'
+    +'<div class="field"><label>اسم المشروع</label><input id="seName" placeholder="برج زايد — عميل X"/></div>'
+    +'<div class="field"><label>المعماري</label><input id="seArch" placeholder="مثلاً: دعاء"/></div>'
+    +'<div class="field"><label>المهندس الإنشائي</label><input id="seEng" value="'+esc(PROFILE.name||"")+'"/></div>'
+    +'<div class="field"><label>برنامج التحليل</label><select id="seSw"><option value="SAFE">SAFE</option><option value="ETABS">ETABS</option><option value="both">الاتنين</option></select></div>'
+    +'<div class="field"><label>وحدة الأحمال</label><select id="seUnits"><option value="ton/m2">طن/م²</option><option value="kN/m2">kN/m²</option><option value="kg/m2">كجم/م²</option></select></div>'
+    +'<div class="sec-h">المدخلات <span class="ln"></span></div>'
+    +seNumField("seLL","Live Load","0.25")
+    +seNumField("seSDL","Floor Cover (SDL)","0.15")
+    +seNumField("seWall","Wall Load","0.20")
+    +seNumField("seFc","رتبة الخرسانة fc","30","N/mm²")
+    +seNumField("seFy","رتبة الحديد fy","400","N/mm²")
+    +seNumField("seSoil","إجهاد التربة","1.5","حسب وحدتك")
+    +seNumField("seFloors","عدد الأدوار","10")
+    +seNumField("seFh","ارتفاع الدور","3.0","م")
+    +'<div class="field"><label>الرياح والزلازل (ملاحظة)</label><input id="seSeis" placeholder="مثلاً: ETABS من الكود المصري"/></div>'
+    +'<div class="field"><label>ملاحظات</label><textarea id="seNotes"></textarea></div>'
+    +'<div class="row-actions"><button class="btn green" id="seSave">أضف المشروع</button><button class="btn ghost" id="seBack">رجوع</button></div>');
+  addMicTo("seName");
+  $("seBack").onclick=()=>openStructEng();
+  $("seSave").onclick=async()=>{
+    const name=$("seName").value.trim(); if(!name){ toast("اكتب اسم المشروع","bad"); return; }
+    const num=(id)=>{ const v=parseFloat($(id).value); return isNaN(v)?null:v; };
+    const b=$("seSave"); b.disabled=true; b.textContent="بيحفظ…";
+    const { error }=await sb.from("os_struct_projects").insert({
+      name, architect_name:$("seArch").value.trim()||null, engineer_name:$("seEng").value.trim()||null,
+      software:$("seSw").value, load_units:$("seUnits").value,
+      live_load:num("seLL"), sdl:num("seSDL"), wall_load:num("seWall"),
+      fc:num("seFc"), fy:num("seFy"), soil_bearing:num("seSoil"),
+      num_floors:num("seFloors"), floor_height:num("seFh"),
+      seismic_wind:$("seSeis").value.trim()||null, notes:$("seNotes").value.trim()||null,
+      created_by:ME.id
+    });
+    if(error){ toast("معرفناش نضيف: "+error.message,"bad"); b.disabled=false; b.textContent="أضف المشروع"; return; }
+    toast("المشروع الإنشائي اتضاف","ok"); openStructEng();
+  };
 }
 async function openAdminHub(){
   let docsExp=0;
@@ -2051,6 +2138,7 @@ function wireHome(el){
     else if(q==="adminhub"){ openAdminHub(); }
     else if(q==="meeting"){ openMeetingReport(); }
     else if(q==="projects"){ openProjects(); }
+    else if(q==="structeng"){ openStructEng(); }
     else { taskFilter="events"; switchTab("tasks"); setTimeout(openNewEvent,90); }
   });
 }
