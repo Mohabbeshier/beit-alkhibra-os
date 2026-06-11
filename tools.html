@@ -3488,6 +3488,19 @@ async function renderTasks(){
   if(tsIn){ tsIn.oninput=(e)=>{ _taskSearch=(e.target.value||"").trim(); clearTimeout(window._tsT); window._tsT=setTimeout(()=>renderTasks(),350); };
     if(_taskSearch){ tsIn.focus(); const v=tsIn.value; tsIn.value=""; tsIn.value=v; } }
   $("taskList").querySelectorAll("[data-td]").forEach(b=>b.onclick=()=>{ _taskDept=b.dataset.td; renderTasks(); });
+  $("taskList").querySelectorAll(".tq-btn").forEach(b=>b.onclick=async(ev)=>{
+    ev.stopPropagation();
+    const id=b.dataset.tqid, act=b.dataset.tq;
+    b.disabled=true; b.textContent="…";
+    const map={ start:{ upd:{status:"in_progress"}, note:"بدأ الشغل", ok:"بدأت — بالتوفيق" },
+                submit:{ upd:{status:"review",progress:100}, note:"سلّم للمراجعة", ok:"اتسلّمت — مستنية الاعتماد" },
+                approve:{ upd:{status:"done",progress:100}, note:"اعتمد الإنجاز", ok:"اتعتمدت — خلصت رسمي" } };
+    const m=map[act]; if(!m){ b.disabled=false; return; }
+    const { error }=await sb.from("os_tasks").update(m.upd).eq("id",id);
+    if(error){ toast("معرفناش نحدّث: "+error.message,"bad"); b.disabled=false; b.textContent=act==="start"?"ابدأ":act==="submit"?"سلّم":"اعتمد"; return; }
+    try{ await sb.from("os_task_updates").insert({ task_id:id, by_id:ME.id, by_name:PROFILE.name, note:m.note, percent:m.upd.progress??null }); }catch(e){}
+    toast(m.ok,"ok"); renderTasks();
+  });
   $("taskList").querySelectorAll("[data-task]").forEach(c=>c.onclick=()=>openTask(c.dataset.task, data));
   if(window._openTaskAfter){ const _t=window._openTaskAfter; window._openTaskAfter=null; if((data||[]).find(x=>String(x.id)===String(_t))) openTask(_t,data); else toast("المهمة المرتبطة مش ظاهرة في قائمتك الحالية","bad"); }
 }
@@ -3501,10 +3514,18 @@ function isStale(t){
 function taskCard(t){
   const staleBadge = isStale(t)?'<span class="badge b-amber">راكدة</span>':"";
   const leadBadge = t.type==="lead" ? '<span class="badge" style="background:linear-gradient(135deg,#E8F5E9,#DCFCE7);color:#166534;border:1px solid #86EFAC">عميل من الموقع</span>' : "";
+  /* فريق 17: إجراء سريع بضغطة واحدة — يحترم فلو new→in_progress→review→done */
+  let quick="";
+  const mineTask=t.assignee_id===ME.id;
+  const canApprove=isOwnerOps()||(PROFILE.role==="manager"&&t.dept===myDeptKey());
+  if(mineTask&&t.status==="new") quick='<button class="btn sm tq-btn" data-tq="start" data-tqid="'+t.id+'" style="background:linear-gradient(135deg,var(--blue),var(--blue-d));color:#fff;padding:5px 13px;font-size:11.5px">ابدأ</button>';
+  else if(mineTask&&t.status==="in_progress") quick='<button class="btn sm tq-btn" data-tq="submit" data-tqid="'+t.id+'" style="background:linear-gradient(135deg,var(--green),var(--green-d));color:#fff;padding:5px 13px;font-size:11.5px">سلّم</button>';
+  else if(canApprove&&!mineTask&&t.status==="review") quick='<button class="btn sm tq-btn" data-tq="approve" data-tqid="'+t.id+'" style="background:linear-gradient(135deg,#7C3AED,#5B21B6);color:#fff;padding:5px 13px;font-size:11.5px">اعتمد</button>';
   return `<div class="card" data-task="${t.id}" style="cursor:pointer${t.type==='lead'?';border-right:4px solid var(--green-d)':''}">
     <div class="req-top"><div class="t">${esc(t.title)}</div><div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;justify-content:flex-end">${staleBadge}${leadBadge}${statusBadge(t.status)}</div></div>
     <div class="meta"><span>${esc(t.assignee_name||nameOf(t.assignee_id)||"غير محدد")}</span>${t.dept?`<span class="dot"></span><span>${esc((DEPT_BY_KEY[t.dept]&&DEPT_BY_KEY[t.dept].name)||t.dept)}</span>`:""}${t.deadline?`<span class="dot"></span><span>${fmtDate(t.deadline)}</span>`:""}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}</div>
     <div class="prog"><i style="width:${Math.max(0,Math.min(100,t.progress||0))}%"></i></div>
+    ${quick?'<div style="display:flex;justify-content:flex-end;margin-top:8px">'+quick+'</div>':''}
   </div>`;
 }
 function openTask(id,all){
