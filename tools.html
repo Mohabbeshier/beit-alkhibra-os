@@ -1987,6 +1987,7 @@ async function renderRequests(){
   h+= sent.length? sent.map(reqCard).join("") : `<div class="card flat muted">لسه مبعتش أي طلب. اضغط «+ طلب جديد».</div>`;
   $("reqList").innerHTML=h;
   el.querySelectorAll("[data-reply]").forEach(b=>b.onclick=()=>openReply(b.dataset.reply));
+  el.querySelectorAll("[data-totask]").forEach(b=>b.onclick=()=>openReqToTask(b.dataset.totask));
   el.querySelectorAll("[data-jr]").forEach(b=>b.onclick=()=>{ if(b.dataset.act==="approved") openApprove(b.dataset.jr); else openRejectJoin(b.dataset.jr); });
 }
 function kindBadge(k){ const m={info:["معلومة","b-blue"],deadline:["موعد","b-amber"],approval:["موافقة","b-green"],modify:["تعديل","b-blue"],document:["مستند","b-grey"]}; const x=m[k]||["طلب","b-grey"]; return `<span class="badge ${x[1]}">${x[0]}</span>`; }
@@ -2001,6 +2002,8 @@ function reqCard(r){
     <div class="meta"><span>${esc(who)}</span><span class="dot"></span><span>${timeAgo(r.created_at)}</span>${prioBadge(r.priority)?'<span class="dot"></span>'+prioBadge(r.priority):""}<span class="dot"></span>${reqStatusBadge(r.status)}${r.from_id===ME.id?(r.seen_at?`<span class="dot"></span><span style="color:var(--blue);font-weight:800;font-size:11px">\u2713\u2713 اتشاف ${timeAgo(r.seen_at)}</span>`:`<span class="dot"></span><span class="muted" style="font-size:11px">\u2713 لسه ما اتشافش</span>`):""}</div>
     ${r.response_text?`<div class="resp-box"><b>الرد:</b> ${esc(r.response_text)}</div>`:""}
     ${(!done && (r.to_id===ME.id||r.to_id==null) && r.from_id!==ME.id)?`<div class="row-actions"><button class="btn green sm" data-reply="${r.id}" data-title="${esc(r.title)}">ردّ على الطلب</button></div>`:""}
+    ${(done && r.status!=="rejected" && r.status!=="cancelled" && !r.related_task && (r.from_id===ME.id||r.to_id===ME.id))?`<div class="row-actions"><button class="btn ghost sm" data-totask="${r.id}">حوّل لمهمة</button></div>`:""}
+    ${r.related_task?`<div class="meta" style="margin-top:6px"><span style="color:var(--green);font-weight:800;font-size:12px">مرتبط بمهمة ✓</span></div>`:""}
   </div>`;
 }
 function joinCard(j){
@@ -2146,6 +2149,33 @@ function openNewReq(){
   };
 }
 function kindLabel(k){ return ({info:"معلومة/استفسار",deadline:"موعد تسليم",approval:"طلب موافقة",modify:"طلب تعديل",document:"مستند"})[k]||"طلب"; }
+/* === فريق 9: تحويل الطلب المردود لمهمة مرتبطة === */
+function openReqToTask(id){
+  const r=LAST_REQS[id]; if(!r) return;
+  if(r.related_task){ toast("الطلب ده مرتبط بمهمة بالفعل","bad"); return; }
+  const opts=PROFILES.map(p=>`<option value="${p.id}">${esc(p.name)} — ${esc((DEPT_BY_KEY[p.dept]&&DEPT_BY_KEY[p.dept].name)||p.dept||"")}</option>`).join("");
+  const defAss = (r.to_id&&r.to_id!==ME.id)?r.to_id:(r.from_id!==ME.id?r.from_id:ME.id);
+  const defDue = (r.form_data&&r.form_data.due)?r.form_data.due:"";
+  openSheet(`<h3>حوّل لمهمة: ${esc(r.title)}</h3>
+    ${r.details?`<div class="card flat" style="background:var(--soft);margin-bottom:14px"><div class="muted" style="font-size:13px">${esc(r.details)}</div></div>`:""}
+    <div class="field"><label>المسؤول عن التنفيذ</label><select id="rtAss">${opts}</select></div>
+    <div class="field"><label>الموعد النهائي</label><input id="rtDue" type="date" value="${defDue}"/><div class="muted" id="rtDueErr" style="color:var(--red);font-size:12px;display:none;margin-top:4px"></div></div>
+    <div class="row-actions"><button class="btn green" id="rtGo">إنشاء المهمة وربطها</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+  if($("rtAss").querySelector(`option[value="${defAss}"]`)) $("rtAss").value=defAss;
+  $("rtGo").onclick=async()=>{
+    const due=$("rtDue").value;
+    if(due&&due<today()){ const e=$("rtDueErr"); e.style.display="block"; e.textContent="التاريخ ده فات — اختار تاريخ جاي"; $("rtDue").style.borderColor="var(--red)"; setTimeout(()=>$("rtDue").style.borderColor="",2500); return; }
+    const assId=$("rtAss").value; const ap=BY_ID[assId];
+    const btn=$("rtGo"); btn.disabled=true; btn.textContent="بيتحوّل…";
+    const prio = r.priority==="high"?"high":(r.priority==="low"?"low":"medium");
+    const payload={ title:r.title, assignee_id:assId, assignee_name:ap?ap.name:PROFILE.name, dept:ap?ap.dept:PROFILE.dept, deadline:due||null, priority:prio, type:"task", status:"new", progress:0, created_by:ME.id, created_by_name:PROFILE.name };
+    const { data:task, error }=await sb.from("os_tasks").insert(payload).select("id").single();
+    if(error||!task){ toast("معرفناش ننشئ المهمة: "+(error?error.message:""),"bad"); btn.disabled=false; btn.textContent="إنشاء المهمة وربطها"; return; }
+    const { error:e2 }=await sb.from("os_requests").update({ related_task:task.id }).eq("id",r.id);
+    if(e2){ toast("المهمة اتعملت بس الربط فشل: "+e2.message,"bad"); }
+    closeSheet(); toast("اتحوّلت لمهمة وارتبطت ✓","ok"); renderRequests();
+  };
+}
 function openReply(id){
   const r=LAST_REQS[id]; if(!r) return;
   const isApproval=r.kind==="approval";
