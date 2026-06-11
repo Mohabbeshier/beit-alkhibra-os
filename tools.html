@@ -2218,14 +2218,50 @@ function openReply(id){
     ${r.details?`<div class="card flat" style="background:var(--soft);margin-bottom:14px"><div class="muted" style="font-size:13px"><b>الطلب:</b> ${esc(r.details)}</div></div>`:""}
     ${isApproval?`<div class="field"><label>قرارك (بضغطة)</label><div class="qbtns" id="decBtns">${decisions.map(d=>`<button class="qbtn" data-dec="${d}">${d}</button>`).join("")}</div></div>`:""}
     <div class="field"><label>ملاحظاتك على بنود الطلب — اكتبها أو قولها بصوتك</label><textarea id="repNotes" placeholder="مثلاً: الرسومات تمام، بس واجهة قطاع أ محتاجة تعديل قبل التسليم، وقول لدعاء تراجع المقاسات…"></textarea></div>
-    <div class="row-actions" style="margin:-6px 0 12px"><button class="btn ghost sm" id="repMic">سجّل بصوتك</button></div>
+    <div class="row-actions" style="margin:-6px 0 12px"><button class="btn ghost sm" id="repMic">سجّل بصوتك</button><button class="btn ghost sm" id="repTpl">قوالب جاهزة</button></div>
+    <div id="tplPanel" style="display:none;margin-bottom:12px"></div>
     <button class="btn ghost" id="repAI" style="margin-bottom:12px">نظّم الرد بالذكاء — بنود وتوجيهات</button>
     <div class="field"><label>الرد النهائي (تقدر تعدّله)</label><textarea id="repTxt" style="min-height:140px" placeholder="هيتكتب هنا بعد التنظيم — أو اكتبه بإيدك"></textarea></div>
-    <div class="row-actions"><button class="btn green" id="repSave">إرسال الرد</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+    <div class="row-actions"><button class="btn green" id="repSave">إرسال الرد</button><button class="btn ghost sm" id="repSaveTpl">احفظ كقالب</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
   let decision="";
   const db=$("decBtns");
   if(db) db.querySelectorAll("[data-dec]").forEach(b=>b.onclick=()=>{ decision=(decision===b.dataset.dec?"":b.dataset.dec); db.querySelectorAll("[data-dec]").forEach(x=>x.classList.toggle("on",x.dataset.dec===decision)); });
   bindSheetMic("repMic","repNotes");
+  /* فريق 11: قوالب جاهزة — عرض وإدراج بضغطة + حفظ الرد المكتوب كقالب */
+  $("repTpl").onclick=async()=>{
+    const pn=$("tplPanel");
+    if(pn.style.display==="block"){ pn.style.display="none"; return; }
+    pn.style.display="block";
+    pn.innerHTML='<div class="skel"></div>';
+    try{
+      const { data }=await sb.from("os_templates").select("*").eq("kind","reply").order("created_at",{ascending:false}).limit(20);
+      const rows=data||[];
+      if(!rows.length){ pn.innerHTML='<div class="empty" style="padding:14px">مفيش قوالب لسه — اكتب رد واضغط "احفظ كقالب" وهيبقى موجود المرة الجاية.</div>'; return; }
+      pn.innerHTML=rows.map(tp=>'<div class="card flat" style="display:flex;gap:8px;align-items:center"><div style="flex:1;cursor:pointer" data-tpl="'+tp.id+'"><b style="font-size:13px">'+esc(tp.title)+'</b><div class="muted" style="font-size:11.5px;margin-top:2px">'+esc(String(tp.body||"").slice(0,70))+'…</div></div>'+((tp.created_by===ME.id||isOwnerOps())?'<button class="lnk" data-tpldel="'+tp.id+'" style="color:var(--red);font-size:11px">حذف</button>':'')+'</div>').join("");
+      window._tplCache={}; rows.forEach(tp=>window._tplCache[tp.id]=tp.body);
+      pn.querySelectorAll("[data-tpl]").forEach(el=>el.onclick=()=>{
+        const body=window._tplCache[el.dataset.tpl]||"";
+        const ta=$("repTxt"); ta.value=(ta.value.trim()?ta.value+"\n":"")+body;
+        pn.style.display="none"; toast("القالب اتدرج — عدّله براحتك","ok"); ta.focus();
+      });
+      pn.querySelectorAll("[data-tpldel]").forEach(b=>b.onclick=(ev)=>{ ev.stopPropagation(); confirmDlg("تحذف القالب ده؟",async()=>{
+        const { error }=await sb.from("os_templates").delete().eq("id",b.dataset.tpldel);
+        if(error){ toast("معرفناش نحذف","bad"); return; }
+        toast("اتحذف","ok"); pn.style.display="none";
+      }); });
+    }catch(e){ pn.innerHTML=failBox("معرفناش نجيب القوالب.",()=>{ pn.style.display="none"; $("repTpl").click(); }); }
+  };
+  $("repSaveTpl").onclick=async()=>{
+    const txt=$("repTxt").value.trim();
+    if(!txt){ toast("اكتب الرد الأول وبعدين احفظه كقالب","bad"); return; }
+    const name=prompt("اسم القالب (قصير وواضح):")||"";
+    if(!name.trim()) return;
+    const b=$("repSaveTpl"); b.disabled=true;
+    const { error }=await sb.from("os_templates").insert({ dept:PROFILE.dept||null, kind:"reply", title:name.trim().slice(0,80), body:txt, created_by:ME.id });
+    b.disabled=false;
+    if(error){ toast("معرفناش نحفظ القالب: "+error.message,"bad"); return; }
+    toast("اتحفظ — هتلاقيه في القوالب الجاهزة","ok");
+  };
   $("repAI").onclick=async()=>{ await stopSheetMic();
     const notes=$("repNotes").value.trim();
     if(!notes && !decision){ toast("اختار قرار أو اكتب ملاحظة الأول","bad"); return; }
