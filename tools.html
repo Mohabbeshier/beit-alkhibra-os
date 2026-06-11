@@ -3821,7 +3821,8 @@ function openTask(id,all){
     ${mine&&t.status==="review"&&!(isOwnerOps()||(PROFILE.role==="manager"&&t.dept===myDeptKey()))?`<div class="muted" style="margin-bottom:10px;font-size:12px">مستنية اعتماد المدير</div>`:""}
     ${mine&&t.status==="done"?`<button class="btn ghost sm" id="tReopen" style="margin-bottom:10px">رجّعها شغّالة</button>`:""}
     ${(isOwnerOps()||(PROFILE.role==="manager"&&t.dept===myDeptKey()))&&t.assignee_id&&t.assignee_id!==ME.id&&t.status!=="done"?`<button class="btn ghost sm" id="tNudge" style="margin-bottom:10px">نبّه ${esc(firstName(t.assignee_name||""))}</button>`:""}
-    <div class="row-actions" style="margin-bottom:10px;flex-wrap:wrap;gap:8px"><button class="btn ghost sm" id="tShare">ابعتها واتساب</button>${mine&&t.status!=="done"?`<button class="btn ghost sm" id="tHandoff">سلّم لقسم</button>`:""}${(isOwnerOps()||PROFILE.role==="manager")&&t.status==="done"?`<button class="btn ghost sm" id="tRepeat">كررها</button>`:""}</div>
+    <div class="row-actions" style="margin-bottom:10px;flex-wrap:wrap;gap:8px"><button class="btn ghost sm" id="tShare">ابعتها واتساب</button>${mine&&t.status!=="done"?`<button class="btn ghost sm" id="tHandoff">سلّم لقسم</button>`:""}${mine&&t.status!=="done"?`<button class="btn ghost sm" id="tNext" style="color:#7C3AED;border-color:#D8B4FE">اقترح الخطوة الجاية</button>`:""}${(isOwnerOps()||PROFILE.role==="manager")&&t.status==="done"?`<button class="btn ghost sm" id="tRepeat">كررها</button>`:""}</div>
+    <div id="tNextBox"></div>
     <div id="hoPanel" class="card flat" style="display:none;border-color:#BFDBFE;background:#F4F8FF;margin-bottom:10px">
       <b style="font-size:13px">تسليم المهمة لقسم تاني</b>
       <div class="field" style="margin-top:8px"><label>القسم المستلم</label><select id="hoDept"></select></div>
@@ -3854,6 +3855,20 @@ function openTask(id,all){
       }catch(e){}
     })();
   }
+  /* فريق 14: ذكاء داخل الشاشة — اقترح الخطوة الجاية بسياق المهمة وتخصص قسمها */
+  const nx=$("tNext");
+  if(nx) nx.onclick=async()=>{
+    nx.disabled=true; nx.textContent="بيفكر…";
+    try{
+      const { data:ups }=await sb.from("os_task_updates").select("by_name,note,percent,created_at").eq("task_id",id).order("created_at",{ascending:false}).limit(5);
+      const hist=(ups||[]).reverse().map(u=>"- "+u.by_name+": "+u.note+(u.percent!=null?" ("+u.percent+"%)":"")).join("\n")||"— مفيش تحديثات لسه";
+      const late=t.deadline&&new Date(t.deadline).getTime()<Date.now()&&t.status!=="done";
+      const prompt="مهمة شغل في شركة بيت الخبرة الهندسية:\nالعنوان: "+(t.title||"")+"\nالحالة: "+(t.status||"")+" · التقدّم: "+(t.progress||0)+"%"+(t.deadline?" · الموعد: "+t.deadline+(late?" (فات!)":""):"")+"\nالمسؤول: "+(t.assignee_name||"")+"\nآخر التحديثات:\n"+hist+"\n\nاقترح الخطوة العملية الجاية بالظبط (خطوة واحدة محددة قابلة للتنفيذ النهارده)، وجملة واحدة ليه هي الأهم دلوقتي. من غير مقدمات.";
+      const out=await askAI({ prompt, dept:t.dept||null, mode:"fast", max_tokens:300 });
+      $("tNextBox").innerHTML='<div class="card flat" style="border-right:4px solid #7C3AED;background:#FAF7FF;margin-bottom:10px;white-space:pre-wrap;font-size:13px;line-height:1.9"><b style="color:#5B21B6">الخطوة الجاية:</b>\n'+esc(out||"—")+'</div>';
+    }catch(e){ toast("معرفناش نقترح دلوقتي","bad"); }
+    nx.disabled=false; nx.textContent="اقترح الخطوة الجاية";
+  };
   /* فريق 12: تسليم المهمة لقسم تاني بسياقها */
   const ho=$("tHandoff");
   if(ho) ho.onclick=()=>{
