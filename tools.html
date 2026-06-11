@@ -2693,12 +2693,67 @@ function paintDecBoard(){
   }).join("");
   $("dbBox").querySelectorAll("[data-dbt]").forEach(b=>b.onclick=()=>openLinkedTask(b.dataset.dbt));
 }
+/* فريق 19: قرارات UX بأرقام — تحليل os_ui_events */
+const UB_SCREENS={home:"الرئيسية",tasks:"المهام",req:"الطلبات",ask:"اسأل"};
+const UB_QUICKS={smart:"مهمة ذكية",ask:"اسأل",newreq:"طلب جديد",hr:"كفاءة الفريق",roadmap:"خطة التطوير",myday:"يومي",syshealth:"صحة النظام",decisions:"القرارات",sales:"المبيعات",adminhub:"الإدارية",meeting:"تقرير اجتماع",projects:"المشاريع"};
+async function openUsageBoard(){
+  openSheet('<h3>استخدام النظام</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">آخر 30 يوم — قرارات الواجهة بأرقام حقيقية مش انطباعات</div><div id="ubBox"><div class="skel"></div><div class="skel"></div></div><div class="row-actions" style="margin-top:10px"><button class="btn ghost sm" id="ubBack">رجوع لصحة النظام</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+  $("ubBack").onclick=()=>openSysHealth();
+  try{
+    const since=new Date(Date.now()-30*86400000).toISOString();
+    const { data }=await sb.from("os_ui_events").select("kind,name,user_name,at").gte("at",since).order("at",{ascending:false}).limit(2000);
+    const rows=data||[];
+    const days=new Set(), users={}, counts={}, errs=[];
+    rows.forEach(r=>{
+      days.add((r.at||"").slice(0,10));
+      users[r.user_name||"؟"]=(users[r.user_name||"؟"]||0)+1;
+      if(r.kind==="error"){ errs.push(r); return; }
+      const key=r.kind+":"+r.name;
+      counts[key]=(counts[key]||0)+1;
+    });
+    const label=(key)=>{
+      const [k,n]=key.split(/:(.+)/);
+      if(k==="screen") return "شاشة: "+(UB_SCREENS[n]||n);
+      if(n&&n.startsWith("quick:")) return "شاشة: "+(UB_QUICKS[n.slice(6)]||n.slice(6));
+      if(k==="voice") return "صوت: "+n;
+      return "زرار: "+n;
+    };
+    let h='<div class="stats">'
+      +'<div class="stat"><div class="n">'+rows.length+'</div><div class="l">حدث مسجّل</div></div>'
+      +'<div class="stat"><div class="n">'+Object.keys(users).length+'</div><div class="l">مستخدم نشط</div></div>'
+      +'<div class="stat"><div class="n">'+days.size+'</div><div class="l">يوم فيه نشاط</div></div>'
+      +'<div class="stat'+(errs.length?' stat-hot':'')+'"><div class="n">'+errs.length+'</div><div class="l">خطأ واجهة</div></div></div>';
+    if(!rows.length){
+      h+='<div class="empty">لسه مفيش أحداث كفاية — التتبع شغال ومع استخدام الفريق الأرقام هتتجمع هنا لوحدها.</div>';
+      $("ubBox").innerHTML=h; return;
+    }
+    const top=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    const mx=Math.max(1,(top[0]&&top[0][1])||1);
+    if(top.length){
+      h+='<div class="sec-h">الأكتر استخدامًا <span class="ln"></span></div><div class="card flat">'
+        +top.map(([k,n])=>'<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:3px"><span>'+esc(label(k))+'</span><b style="color:var(--blue)">'+n+'</b></div><div style="background:#eef2f7;border-radius:99px;height:8px;overflow:hidden"><div style="width:'+Math.round(n/mx*100)+'%;height:100%;border-radius:99px;background:var(--blue)"></div></div></div>').join("")+'</div>';
+    }
+    const seen=new Set();
+    Object.keys(counts).forEach(k=>{
+      const [kk,n]=k.split(/:(.+)/);
+      if(kk==="screen") seen.add(n);
+      if(n&&n.startsWith("quick:")) seen.add(n.slice(6));
+    });
+    const ghost=[...Object.entries(UB_SCREENS),...Object.entries(UB_QUICKS)].filter(([k])=>!seen.has(k)).map(([,v])=>v);
+    if(ghost.length) h+='<div class="sec-h">شاشات محدش فتحها (30 يوم) <span class="ln"></span></div><div class="card flat" style="border-color:#FCD34D;background:#FFFBEB"><div class="muted" style="font-size:12.5px;line-height:2">'+ghost.map(esc).join(" · ")+'</div><div class="muted" style="font-size:11px;margin-top:4px">لو الشاشة مهجورة فترة طويلة: يا بتتحسّن يا بتتشال.</div></div>';
+    const ua=Object.entries(users).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    h+='<div class="sec-h">أنشط المستخدمين <span class="ln"></span></div><div class="card flat">'+ua.map(([u,n])=>'<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:3px 0"><span>'+esc(u)+'</span><b>'+n+'</b></div>').join("")+'</div>';
+    if(errs.length) h+='<div class="sec-h">آخر أخطاء الواجهة <span class="ln"></span></div>'+errs.slice(0,5).map(e=>'<div class="card flat" style="border-color:#FCA5A5"><b style="font-size:12.5px">'+esc(e.name||"")+'</b><div class="muted" style="font-size:11px;margin-top:2px">'+esc(e.user_name||"")+' · '+fmtDate(e.at)+'</div></div>').join("");
+    $("ubBox").innerHTML=h;
+  }catch(e){ $("ubBox").innerHTML=failBox("معرفناش نجيب بيانات الاستخدام.",openUsageBoard); }
+}
 async function openSysHealth(){
   openSheet('<h3>صحة النظام</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">فحوصات حية · المهام المجدولة · تشخيصات الذكاء</div>'
     +'<div id="shChecks"><div class="skel"></div></div>'
     +'<div class="sec-h" style="margin-top:12px">المهام المجدولة <span class="ln"></span></div><div id="shCron"><div class="skel"></div></div>'
     +'<div class="sec-h" style="margin-top:12px">تشخيصات الذكاء <span class="ln"></span></div><div id="shDiag"><div class="skel"></div></div>'
-    +'<div class="row-actions" style="margin-top:12px"><button class="btn sm" id="shSelftest" style="background:linear-gradient(135deg,#7C3AED,#5B21B6);color:#fff">افحص الذكاء دلوقتي</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+    +'<div class="row-actions" style="margin-top:12px"><button class="btn sm" id="shSelftest" style="background:linear-gradient(135deg,#7C3AED,#5B21B6);color:#fff">افحص الذكاء دلوقتي</button><button class="btn ghost sm" id="shUsage">استخدام النظام</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+  $("shUsage").onclick=()=>openUsageBoard();
   $("shSelftest").onclick=async()=>{
     const b=$("shSelftest"); b.disabled=true; b.textContent="بيفحص…";
     try{
