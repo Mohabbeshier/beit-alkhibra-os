@@ -1752,9 +1752,54 @@ async function loadActivity(){
       +'</div>';
   }catch(e){ box.innerHTML=""; }
 }
+function wireHRActions(){
+  const fz=$("hrFreeze");
+  if(fz) fz.onclick=()=>{
+    const period=new Date().toISOString().slice(0,7);
+    confirmDlg("تعتمد تقييم شهر "+period+"؟ الأرقام الحالية هتتجمّد كلقطة رسمية لكل الفريق.",async()=>{
+      fz.disabled=true; fz.textContent="بيعتمد…";
+      try{
+        const { count }=await sb.from("os_monthly_reviews").select("id",{count:"exact",head:true}).eq("period",period);
+        if(count>0){ toast("شهر "+period+" متقيّم قبل كده — شوف التقييمات السابقة","bad"); fz.disabled=false; fz.textContent="اعتمد تقييم الشهر"; return; }
+        const { data:scores }=await sb.from("os_hr_scores").select("*");
+        const rows=(scores||[]).map(r=>({ user_id:r.id, user_name:r.name, dept:r.dept, period,
+          snapshot:{ score:r.score, tasks_done:r.tasks_done, tasks_total:r.tasks_total, tasks_overdue:r.tasks_overdue, requests_answered:r.requests_answered, requests_received:r.requests_received, avg_response_hours:r.avg_response_hours, updates_count:r.updates_count },
+          approved_by:ME.id }));
+        if(!rows.length){ toast("مفيش بيانات تتقيّم","bad"); fz.disabled=false; fz.textContent="اعتمد تقييم الشهر"; return; }
+        const { error }=await sb.from("os_monthly_reviews").insert(rows);
+        if(error) throw error;
+        toast("اتعتمد تقييم "+period+" لـ"+rows.length+" عضو","ok");
+        fz.textContent="اتعتمد ✓";
+      }catch(e){ toast("معرفناش نعتمد: "+(e.message||""),"bad"); fz.disabled=false; fz.textContent="اعتمد تقييم الشهر"; }
+    });
+  };
+  const hs=$("hrHistory");
+  if(hs) hs.onclick=async()=>{
+    openSheet('<h3>التقييمات السابقة</h3><div id="hrhBox"><div class="skel"></div></div><div class="row-actions" style="margin-top:10px"><button class="btn ghost sm" id="hrhBack">رجوع</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+    $("hrhBack").onclick=()=>openHRBoard();
+    try{
+      const { data }=await sb.from("os_monthly_reviews").select("*").order("created_at",{ascending:false}).limit(60);
+      const rows=data||[];
+      if(!rows.length){ $("hrhBox").innerHTML='<div class="empty">مفيش تقييمات معتمدة لسه — اعتمد أول شهر من شاشة الكفاءة.</div>'; return; }
+      const byP={}; const order=[];
+      rows.forEach(r=>{ if(!byP[r.period]){ byP[r.period]=[]; order.push(r.period); } byP[r.period].push(r); });
+      $("hrhBox").innerHTML=order.map(p=>{
+        const g=byP[p]; g.sort((a,b)=>((b.snapshot&&b.snapshot.score)||0)-((a.snapshot&&a.snapshot.score)||0));
+        return '<div class="sec-h">'+esc(p)+' <span class="ln"></span></div>'
+          +g.map(r=>{
+            const sn=r.snapshot||{};
+            const sc=Math.max(0,Math.min(100,sn.score||0));
+            const col=sc>=70?"var(--green-d)":sc>=40?"var(--blue)":"#F59E0B";
+            return '<div class="card flat" style="display:flex;gap:10px;align-items:center"><b style="flex:1;font-size:13px">'+esc(r.user_name||"")+'</b><span class="muted" style="font-size:11px">'+(sn.tasks_done||0)+'/'+(sn.tasks_total||0)+' مهام</span><b style="color:'+col+'">'+sc+'</b></div>';
+          }).join("");
+      }).join("");
+    }catch(e){ $("hrhBox").innerHTML=failBox("معرفناش نجيب التقييمات.",()=>hs.onclick()); }
+  };
+}
 async function openHRBoard(){
   if(!["owner","ops","manager"].includes(ME.role)){ toast("الشاشة دي للإدارة بس","bad"); return; }
-  openSheet('<h3>كفاءة الفريق</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">درجة من 100 بتتحسب تلقائيًا من الشغل الفعلي (إنجاز 55% + ردود 30% + التزام بالمواعيد 15%)</div><div id="hrBox"><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
+  openSheet('<h3>كفاءة الفريق</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">درجة من 100 بتتحسب تلقائيًا من الشغل الفعلي (إنجاز 55% + ردود 30% + التزام بالمواعيد 15%)</div><div id="hrBox"><div class="skel"></div><div class="skel"></div></div><div class="row-actions" style="margin-top:10px">'+((isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="hr"))?'<button class="btn green sm" id="hrFreeze">اعتمد تقييم الشهر</button>':'')+'<button class="btn ghost sm" id="hrHistory">تقييمات سابقة</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+  wireHRActions();
   try{
     const { data }=await sb.from("os_hr_scores").select("*").order("score",{ascending:false});
     const rows=data||[];
@@ -1767,7 +1812,7 @@ async function openHRBoard(){
       const col= sc>=70?"var(--green-d)" : sc>=40?"var(--blue)" : "#F59E0B";
       const resp=(r.avg_response_hours==null)?"\u2014":(Math.round(r.avg_response_hours*10)/10+" ساعة");
       return '<details class="card flat" style="padding:12px 14px"><summary style="list-style:none;cursor:pointer">'
-        +'<div style="display:flex;align-items:center;gap:10px"><b style="flex:1">'+(r._crown?"\\ud83d\\udc51 ":"")+esc(r.name)+'</b><b style="color:'+col+'">'+sc+'</b></div>'
+        +'<div style="display:flex;align-items:center;gap:10px"><b style="flex:1">'+(r._crown?"\\ud83d\\udc51 ":"")+esc(r.name)+((r.tasks_overdue||0)>0?' <span class="badge b-amber" style="font-size:10px">محتاج دعم</span>':'')+'</b><b style="color:'+col+'">'+sc+'</b></div>'
         +'<div style="background:#eef2f7;border-radius:99px;height:9px;margin-top:7px;overflow:hidden"><div style="width:'+sc+'%;height:100%;border-radius:99px;background:'+col+'"></div></div>'
         +'</summary>'
         +'<div class="muted" style="font-size:12.5px;margin-top:10px;line-height:2">'
