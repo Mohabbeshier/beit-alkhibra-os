@@ -1251,10 +1251,20 @@ async function openApprovals(){
     +'<div class="sec-h">اطلب موافقة <span class="ln"></span></div>'
     +'<div class="field"><label>النوع</label><select id="apKind">'+APPROVAL_KINDS.map(k=>'<option value="'+k[0]+'">'+k[1]+'</option>').join("")+'</select></div>'
     +'<div class="field"><label>العنوان</label><input id="apTitle" placeholder="مثلًا: شراء طابعة للقسم"/></div>'
-    +'<div class="field"><label>المبلغ (اختياري — بالجنيه)</label><input id="apAmt" type="number" inputmode="numeric" placeholder="0"/></div>'
+    +'<div class="field"><label>المبلغ (اختياري — بالجنيه)</label><input id="apAmt" type="number" inputmode="numeric" placeholder="0"/><div class="muted" id="apAmtHint" style="font-size:12px;display:none;margin-top:4px"></div></div>'
     +'<div class="field"><label>تفاصيل</label><textarea id="apDet" placeholder="ليه محتاجها؟"></textarea></div>'
     +'<div class="row-actions"><button class="btn green" id="apGo">ابعت للموافقة</button><button class="btn ghost" onclick="closeSheet()">قفل</button></div>');
   addMicTo("apDet");
+  $("apAmt").oninput=()=>{
+    const h=$("apAmtHint"); const v=parseFloat($("apAmt").value);
+    if(!$("apAmt").value){ h.style.display="none"; return; }
+    h.style.display="block";
+    if(isNaN(v)||v<=0){ h.style.color="var(--red)"; h.textContent="المبلغ لازم يكون رقم موجب"; return; }
+    h.style.color="var(--blue)";
+    if(v<=5000) h.textContent="هيتوجّه لمدير قسمك (ضمن حد المدير)";
+    else if(v<=100000) h.textContent="هيتوجّه للمدير المالي (فوق 5,000ج)";
+    else h.textContent="هيتوجّه للمالك مباشرة (فوق 100,000ج)";
+  };
   $("apGo").onclick=async()=>{
     const title=$("apTitle").value.trim(); if(!title){ toast("اكتب عنوان","bad"); return; }
     const amtRaw=parseFloat($("apAmt").value)||null;
@@ -1276,9 +1286,10 @@ async function paintApprovals(){
     const stb=(st)=> st==="approved"?'<span class="badge b-green">اتوافق \u2713</span>': st==="rejected"?'<span class="badge b-red">اترفض</span>':'<span class="badge b-amber">مستنية</span>';
     $("apBox").innerHTML=rows.map(a=>{
       const kn=(APPROVAL_KINDS.find(k=>k[0]===a.kind)||["","طلب"])[1];
-      const canDecide=isOwnerOps()&&a.status==="pending";
+      const canDecide=a.status==="pending"&&(isOwnerOps()||a.approver_id===ME.id);
+      const atWho=a.status==="pending"?({manager:"عند المدير",finance:"عند المالي",owner:"عند المالك"})[a.approver_role]||null:null;
       return '<div class="card flat"><div style="display:flex;gap:8px;align-items:center"><b style="flex:1">'+esc(a.title)+'</b>'+stb(a.status)+'</div>'
-        +'<div class="meta"><span>'+esc(kn)+'</span><span class="dot"></span><span>'+esc(a.requester_name||"")+'</span>'+(a.amount?'<span class="dot"></span><span>'+Number(a.amount).toLocaleString("ar-EG")+' ج</span>':'')+'<span class="dot"></span><span>'+relativeTime(a.created_at)+'</span></div>'
+        +'<div class="meta"><span>'+esc(kn)+'</span><span class="dot"></span><span>'+esc(a.requester_name||"")+'</span>'+(a.amount?'<span class="dot"></span><span>'+Number(a.amount).toLocaleString("ar-EG")+' ج</span>':'')+(atWho?'<span class="dot"></span><span style="color:var(--blue);font-weight:800;font-size:11px">'+atWho+'</span>':'')+'<span class="dot"></span><span>'+relativeTime(a.created_at)+'</span></div>'
         +(a.decision_note?'<div class="muted" style="font-size:12px;margin-top:4px">'+esc(a.decision_note)+'</div>':'')
         +(canDecide?'<div class="row-actions" style="margin-top:8px"><button class="btn green sm" data-apok="'+a.id+'">وافق \u2713</button><button class="btn ghost sm" data-apno="'+a.id+'" style="color:var(--red)">ارفض</button></div>':'')
         +'</div>';
@@ -3495,7 +3506,7 @@ function openTask(id,all){
   if(rp) rp.onclick=()=>{
     confirmDlg("ننسخها كمهمة جديدة بموعد بكرة؟",async()=>{
       const d=new Date(); d.setDate(d.getDate()+1); d.setHours(17,0,0,0);
-      const { error }=await sb.from("os_tasks").insert({ title:t.title, details:t.details||null, assignee_id:t.assignee_id, assignee_name:t.assignee_name, dept:t.dept, priority:t.priority||"normal", status:"new", progress:0, deadline:d.toISOString(), created_by:ME.id, created_by_name:PROFILE.name });
+      const { error }=await sb.from("os_tasks").insert({ title:t.title, assignee_id:t.assignee_id, assignee_name:t.assignee_name, dept:t.dept, priority:t.priority||"medium", status:"new", progress:0, deadline:d.toISOString(), created_by:ME.id, created_by_name:PROFILE.name });
       if(error){ toast("معرفناش نكررها: "+error.message,"bad"); return; }
       closeSheet(); toast("اتكررت بموعد بكرة","ok"); renderTasks();
     });
