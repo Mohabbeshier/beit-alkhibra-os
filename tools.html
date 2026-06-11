@@ -2178,9 +2178,11 @@ function openReqToTask(id){
   openSheet(`<h3>حوّل لمهمة: ${esc(r.title)}</h3>
     ${r.details?`<div class="card flat" style="background:var(--soft);margin-bottom:14px"><div class="muted" style="font-size:13px">${esc(r.details)}</div></div>`:""}
     <div class="field"><label>المسؤول عن التنفيذ</label><select id="rtAss">${opts}</select></div>
-    <div class="field"><label>الموعد النهائي</label><input id="rtDue" type="date" value="${defDue}"/><div class="muted" id="rtDueErr" style="color:var(--red);font-size:12px;display:none;margin-top:4px"></div></div>
+    <div class="field"><label>الموعد النهائي</label><input id="rtDue" type="date" value="${defDue}"/><div class="muted" id="rtDueErr" style="color:var(--red);font-size:12px;display:none;margin-top:4px"></div><div class="muted" id="rtDueHint" style="font-size:12px;display:none;margin-top:4px"></div></div>
     <div class="row-actions"><button class="btn green" id="rtGo">إنشاء المهمة وربطها</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
   if($("rtAss").querySelector(`option[value="${defAss}"]`)) $("rtAss").value=defAss;
+  const _rtConf=()=>loadConflictHint($("rtAss").value,$("rtDue").value,$("rtDueHint"));
+  $("rtDue").onchange=_rtConf; $("rtAss").onchange=_rtConf; if(defDue) _rtConf();
   $("rtGo").onclick=async()=>{
     const due=$("rtDue").value;
     if(due&&due<today()){ const e=$("rtDueErr"); e.style.display="block"; e.textContent="التاريخ ده فات — اختار تاريخ جاي"; $("rtDue").style.borderColor="var(--red)"; setTimeout(()=>$("rtDue").style.borderColor="",2500); return; }
@@ -3714,14 +3716,33 @@ async function saveSmartTasks(){
   if(error){ toast("معرفناش نحفظ: "+error.message,"bad"); btn.disabled=false; btn.textContent="احفظ المهام ✓"; return; }
   closeSheet(); toast("اتحفظت "+payloads.length+" مهمة ✓","ok"); renderTasks();
 }
+/* === فريق 3: كاشف تعارض المواعيد — حمل اليوم للمسؤول === */
+async function loadConflictHint(assId, dateStr, hintEl){
+  if(!hintEl) return;
+  if(!assId||!dateStr){ hintEl.style.display="none"; return; }
+  try{
+    const start=dateStr+"T00:00:00", end=dateStr+"T23:59:59";
+    const { count }=await sb.from("os_tasks").select("id",{count:"exact",head:true})
+      .eq("assignee_id",assId).neq("status","done").neq("status","archived")
+      .gte("deadline",start).lte("deadline",end);
+    const n=count||0;
+    if(n===0){ hintEl.style.display="none"; return; }
+    const who=BY_ID[assId]?BY_ID[assId].name:"المسؤول";
+    hintEl.style.display="block";
+    hintEl.style.color = n>=3 ? "var(--red)" : "var(--amber, #B7791F)";
+    hintEl.textContent = who+" عنده "+n+(n===1?" تسليمة":" تسليمات")+" تانية نفس اليوم"+(n>=3?" — اليوم محمّل، فكّر في موعد تاني":"");
+  }catch(e){ hintEl.style.display="none"; }
+}
 function openNewTask(){
   const opts=PROFILES.map(p=>`<option value="${p.id}">${esc(p.name)} — ${esc((DEPT_BY_KEY[p.dept]&&DEPT_BY_KEY[p.dept].name)||p.dept||"")}</option>`).join("");
   openSheet(`<h3>مهمة جديدة</h3>
     <div class="field"><label>العنوان</label><input id="tTitle" placeholder="اكتب المهمة…"/></div>
     <div class="field"><label>مسندة لمين؟</label><select id="tAss"><option value="${ME.id}">أنا (${esc(PROFILE.name)})</option>${opts}</select></div>
-    <div class="field"><label>الموعد النهائي</label><input id="tDue" type="date"/></div>
+    <div class="field"><label>الموعد النهائي</label><input id="tDue" type="date"/><div class="muted" id="tDueHint" style="font-size:12px;display:none;margin-top:4px"></div></div>
     <div class="field"><label>الأولوية</label><select id="tPrio"><option value="medium">عادي</option><option value="high">عاجل</option><option value="low">منخفض</option></select></div>
     <div class="row-actions"><button class="btn green" id="tCreate">إنشاء المهمة</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+  const _tConf=()=>loadConflictHint($("tAss").value,$("tDue").value,$("tDueHint"));
+  $("tDue").onchange=_tConf; $("tAss").onchange=_tConf;
   $("tCreate").onclick=async()=>{
     const title=$("tTitle").value.trim(); if(!title){ toast("اكتب عنوان المهمة","bad"); return; }
     const assId=$("tAss").value; const ap=BY_ID[assId];
