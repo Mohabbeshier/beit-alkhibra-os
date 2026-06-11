@@ -1552,8 +1552,51 @@ async function openSalesFunnel(){
       +(broken?'<div style="color:var(--red);font-weight:800;font-size:12.5px;margin-top:8px;text-align:center">في عملاء اتأخرنا عليهم — افتح مهام الليدز فورًا</div>':'')
       +'</div>';
     h+='<div class="row-actions" style="margin-top:6px"><button class="btn green sm" id="sfLeads">افتح مهام الليدز</button></div>';
+    h+='<div id="sfHot"></div>';
     $("sfBox").innerHTML=h;
     $("sfLeads").onclick=()=>{ closeSheet(); _taskSearch=""; _taskDept="all"; taskFilter="all"; switchTab("tasks"); };
+    /* فريق 6: الساخن دلوقتي + كاشف الفرص النايمة + ابدأ متابعة بضغطة */
+    if(isOwnerOps()){
+      (async()=>{
+        try{
+          const [hotR, staleR, openR]=await Promise.all([
+            sb.from("organizations").select("id,name,whatsapp,phone,area").eq("lead_tier","hot").order("lead_score",{ascending:false}).limit(9),
+            sb.from("opportunities").select("id",{count:"exact",head:true}).not("stage","in",'("won","lost")').lt("last_activity_at", new Date(Date.now()-7*86400000).toISOString()),
+            sb.from("os_tasks").select("title").eq("type","lead").neq("status","done")
+          ]);
+          const hot=hotR.data||[];
+          const stale=staleR.count||0;
+          const openTitles=new Set((openR.data||[]).map(t=>t.title));
+          let hh="";
+          if(stale) hh+='<div class="card flat" style="border-color:#FCA5A5;background:#FFF5F5;margin-top:10px"><b style="font-size:13px;color:var(--red)">'+stale+' فرصة نايمة</b><div class="muted" style="font-size:11.5px;margin-top:2px">مفيش عليها أي حركة من 7 أيام أو أكتر — ابدأ بالساخن تحت</div></div>';
+          if(hot.length){
+            hh+='<div class="sec-h" style="margin-top:10px">الساخن دلوقتي — كلّمهم النهارده <span class="ln"></span></div>';
+            hh+=hot.map(o=>{
+              const wa=(o.whatsapp||o.phone||"").replace(/[^0-9+]/g,"");
+              const taskTitle="متابعة ليد: "+(o.name||"");
+              const already=openTitles.has(taskTitle);
+              return '<div class="card flat" style="display:flex;gap:9px;align-items:center;border-right:4px solid var(--red)">'
+                +'<div style="flex:1"><b style="font-size:13px">'+esc(o.name||"")+'</b><div class="muted" style="font-size:11px;margin-top:2px">'+esc(o.area||"")+(wa?' · '+esc(wa):'')+'</div></div>'
+                +(wa?'<a class="lnk" href="https://wa.me/'+esc(wa.replace(/^\+/,""))+'" target="_blank" rel="noopener" style="font-size:11.5px;white-space:nowrap">واتساب</a>':'')
+                +(already?'<span class="badge b-blue" style="white-space:nowrap">في المتابعة</span>'
+                         :'<button class="btn green sm sfFollow" data-oid="'+esc(o.id)+'" data-oname="'+esc(o.name||"")+'" style="padding:5px 12px;font-size:11.5px;white-space:nowrap">ابدأ متابعة</button>')
+                +'</div>';
+            }).join("");
+          }
+          $("sfHot").innerHTML=hh;
+          $("sfHot").querySelectorAll(".sfFollow").forEach(b=>b.onclick=async()=>{
+            b.disabled=true; b.textContent="…";
+            const tTitle="متابعة ليد: "+b.dataset.oname;
+            const tomorrow=new Date(Date.now()+86400000).toISOString().slice(0,10);
+            const { error }=await sb.from("os_tasks").insert({ title:tTitle, assignee_id:ME.id, assignee_name:PROFILE.name, dept:PROFILE.dept||"ops_marketing", deadline:tomorrow, status:"new", type:"lead", priority:"high", created_by:ME.id, created_by_name:PROFILE.name });
+            if(error){ toast("معرفناش نبدأ المتابعة: "+error.message,"bad"); b.disabled=false; b.textContent="ابدأ متابعة"; return; }
+            try{ await sb.from("opportunities").update({ last_activity_at:new Date().toISOString(), next_action:"متابعة مجدولة — مهمة في المنظومة" }).eq("organization_id",b.dataset.oid); }catch(e){}
+            b.outerHTML='<span class="badge b-blue" style="white-space:nowrap">في المتابعة</span>';
+            toast("اتعملت مهمة متابعة بموعد بكرة","ok");
+          });
+        }catch(e){}
+      })();
+    }
   }catch(e){ $("sfBox").innerHTML=failBox("معرفناش نجيب بيانات المبيعات.",openSalesFunnel); }
 }
 async function openMyDay(){
