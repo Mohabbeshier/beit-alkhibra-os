@@ -603,7 +603,7 @@ function renderOwnerHome(d){
       </div>
     </button>`).join("");
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
-    <div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn sm" data-quick="myday" style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button>${["owner","ops","manager"].includes(ME.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}<button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button><button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button></div>`;
+    <div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn sm" data-quick="myday" style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button>${["owner","ops","manager"].includes(ME.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}<button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button><button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
   if(d.evs.length){
     body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   }
@@ -631,7 +631,7 @@ function renderOpsHome(d){
   body+=`<div class="sec-h">اسأل أي قسم <span class="ln"></span></div>`;
   body+=DEPTS.map(dep=>deptChipHtml(dep)).join("");
   body+=`<div class="sec-h">تحركات سريعة <span class="ln"></span></div>
-    <div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn sm" data-quick="myday" style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn ghost sm" data-quick="event">موعد</button>${["owner","ops","manager"].includes(ME.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}<button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button><button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button></div>`;
+    <div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn sm" data-quick="myday" style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn ghost sm" data-quick="event">موعد</button>${["owner","ops","manager"].includes(ME.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}<button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button><button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   body+='<div id="presBox"></div><div id="wwBox"></div><div id="wlBox"></div><div id="activityBox"></div>';
   el.innerHTML=body;
@@ -1957,6 +1957,7 @@ function wireHome(el){
     else if(q==="hr"){ openHRBoard(); }
     else if(q==="roadmap"){ openRoadmap(); }
     else if(q==="myday"){ openMyDay(); }
+    else if(q==="syshealth"){ openSysHealth(); }
     else if(q==="sales"){ openSalesFunnel(); }
     else if(q==="adminhub"){ openAdminHub(); }
     else if(q==="meeting"){ openMeetingReport(); }
@@ -2530,6 +2531,73 @@ async function refreshNotifBadge(){
     if(count>0){ b.style.display="flex"; b.textContent=count>9?"9+":count; }
     else b.style.display="none";
   }catch(e){}
+}
+async function openSysHealth(){
+  openSheet('<h3>صحة النظام</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">فحوصات حية · المهام المجدولة · تشخيصات الذكاء</div>'
+    +'<div id="shChecks"><div class="skel"></div></div>'
+    +'<div class="sec-h" style="margin-top:12px">المهام المجدولة <span class="ln"></span></div><div id="shCron"><div class="skel"></div></div>'
+    +'<div class="sec-h" style="margin-top:12px">تشخيصات الذكاء <span class="ln"></span></div><div id="shDiag"><div class="skel"></div></div>'
+    +'<div class="row-actions" style="margin-top:12px"><button class="btn sm" id="shSelftest" style="background:linear-gradient(135deg,#7C3AED,#5B21B6);color:#fff">افحص الذكاء دلوقتي</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+  $("shSelftest").onclick=async()=>{
+    const b=$("shSelftest"); b.disabled=true; b.textContent="بيفحص…";
+    try{
+      const { data, error }=await sb.functions.invoke("os-ai",{ body:{ selftest:true, models:["gemini-2.5-flash","gemini-2.5-flash-lite"] } });
+      if(error) throw error;
+      const probes=(data&&data.selftest&&data.selftest.probes)||[];
+      const ok=probes.filter(p=>p.ok).length;
+      toast(probes.length?("الذكاء: "+ok+" من "+probes.length+" موديل شغّال"):"معرفناش نفحص","ok");
+      paintSysDiag();
+    }catch(e){ toast("الفحص فشل — شوف التشخيصات","bad"); }
+    b.disabled=false; b.textContent="افحص الذكاء دلوقتي";
+  };
+  /* فحوصات النظام */
+  try{
+    const { data }=await sb.from("os_health_checks").select("*").order("at",{ascending:false}).limit(5);
+    const rows=data||[];
+    if(!rows.length){ $("shChecks").innerHTML='<div class="empty">مفيش فحوصات لسه.</div>'; }
+    else{
+      const last=rows[0];
+      const d=last.details||{};
+      $("shChecks").innerHTML='<div class="stats">'
+        +['database','storage','ai'].map(k=>{
+          const v=d[k]||"؟"; const good=v==="ok";
+          return '<div class="stat'+(good?'':' stat-hot')+'"><div class="n" style="font-size:15px">'+(good?'سليم':'مشكلة')+'</div><div class="l">'+(k==="database"?"قاعدة البيانات":k==="storage"?"التخزين":"الذكاء")+'</div></div>';
+        }).join("")
+        +'</div><div class="muted" style="font-size:11px;margin-top:4px">آخر فحص: '+relativeTime(last.at)+'</div>';
+    }
+  }catch(e){ $("shChecks").innerHTML=failBox("معرفناش نجيب الفحوصات.",openSysHealth); }
+  /* الكرونات */
+  try{
+    const { data }=await sb.from("os_cron_health").select("*").order("jobname");
+    const rows=data||[];
+    if(!rows.length){ $("shCron").innerHTML='<div class="empty">مفيش بيانات.</div>'; }
+    else $("shCron").innerHTML=rows.map(c=>{
+      const st=c.last_status;
+      const col=st==="succeeded"?"var(--green-d)":st==="failed"?"var(--red)":"#94a3b8";
+      const lbl=st==="succeeded"?"نجح":st==="failed"?"فشل":"لسه ما اشتغلش";
+      return '<div class="card flat" style="display:flex;gap:9px;align-items:center;border-right:4px solid '+col+'"><span style="width:9px;height:9px;border-radius:50%;background:'+col+';flex-shrink:0"></span><div style="flex:1"><b style="font-size:12.5px">'+esc(c.jobname)+'</b>'+(c.last_run?'<div class="muted" style="font-size:11px">'+relativeTime(c.last_run)+'</div>':'')+'</div><span class="muted" style="font-size:11px;font-weight:800;color:'+col+'">'+lbl+'</span></div>';
+    }).join("");
+  }catch(e){ $("shCron").innerHTML=failBox("معرفناش نجيب المهام المجدولة.",openSysHealth); }
+  paintSysDiag();
+}
+async function paintSysDiag(){
+  const box=$("shDiag"); if(!box) return;
+  try{
+    const { data }=await sb.from("os_ai_diag").select("*").order("ts",{ascending:false}).limit(5);
+    const rows=data||[];
+    if(!rows.length){ box.innerHTML='<div class="empty">مفيش تشخيصات — الذكاء شغّال من غير أعطال مسجّلة.</div>'; return; }
+    box.innerHTML=rows.map(r=>{
+      const inf=r.info||{};
+      const kind=inf.selftest?"فحص ذاتي":inf.reviewer_failed?"فشل مراجع":inf.exception?"استثناء":"محاولات فاشلة";
+      const isBad=!inf.selftest;
+      let summary="";
+      if(inf.selftest){ const p=inf.selftest.probes||[]; summary=p.filter(x=>x.ok).length+" من "+p.length+" شغّال"; }
+      else if(inf.reviewer_failed){ summary=(inf.reviewer_failed[0]&&inf.reviewer_failed[0].err||"").slice(0,90); }
+      else if(inf.exception){ summary=String(inf.exception).slice(0,90); }
+      else if(inf.tried){ summary=(inf.tried.filter(x=>!x.ok)[0]||{}).err||""; summary=String(summary).slice(0,90); }
+      return '<div class="card flat" style="border-right:4px solid '+(isBad?'var(--red)':'var(--green-d)')+'"><b style="font-size:12.5px">'+kind+'</b>'+(summary?'<div class="muted" style="font-size:11px;margin-top:2px;direction:ltr;text-align:left">'+esc(summary)+'</div>':'')+'<div class="muted" style="font-size:10.5px;margin-top:3px">'+relativeTime(r.ts)+'</div></div>';
+    }).join("");
+  }catch(e){ box.innerHTML='<div class="empty">القراءة متاحة للإدارة وفريق التطوير بس.</div>'; }
 }
 async function openGlobalSearch(){
   openSheet('<h3>بحث موحّد</h3>'
