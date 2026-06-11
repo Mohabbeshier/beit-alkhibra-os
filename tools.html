@@ -2013,17 +2013,87 @@ function joinCard(j){
     <div class="row-actions"><button class="btn green sm" data-jr="${j.id}" data-act="approved">قبول</button><button class="btn ghost sm" data-jr="${j.id}" data-act="rejected">رفض</button></div>
   </div>`;
 }
+/* === فورمات ديناميكية حسب نوع الطلب (فريق 10) + تحقق لحظي (فريق 13) === */
+const REQ_SCHEMAS={
+  approval:[
+    {id:"fAmount",label:"المبلغ (جنيه) — لو الموافقة مالية",type:"number",ph:"مثلاً: 15000",min:1},
+    {id:"fReason",label:"سبب الطلب",type:"text",ph:"مثلاً: دفعة مورد حديد",req:true}
+  ],
+  deadline:[
+    {id:"fDue",label:"تاريخ الاستحقاق",type:"date",req:true,future:true},
+    {id:"fProj",label:"المشروع / الشغلانة",type:"text",ph:"مثلاً: فيلا زايد ٣"}
+  ],
+  document:[
+    {id:"fDocType",label:"نوع المستند",type:"select",req:true,opts:[["contract","عقد"],["license","ترخيص"],["letter","خطاب رسمي"],["report","تقرير"],["other","أخرى"]]},
+    {id:"fEntity",label:"الجهة / الطرف",type:"text",ph:"مثلاً: جهاز الشيخ زايد"}
+  ],
+  modify:[
+    {id:"fTarget",label:"المطلوب تعديله",type:"text",ph:"مثلاً: رسمة الواجهة",req:true},
+    {id:"fWhy",label:"سبب التعديل",type:"text",ph:"مثلاً: طلب العميل"}
+  ],
+  info:[]
+};
+const REQ_FIELD_LABELS={fAmount:"المبلغ",fReason:"السبب",fDue:"الاستحقاق",fProj:"المشروع",fDocType:"نوع المستند",fEntity:"الجهة",fTarget:"المطلوب تعديله",fWhy:"السبب"};
+function renderReqFields(kind){
+  const box=$("rDyn"); if(!box) return;
+  const fs=REQ_SCHEMAS[kind]||[];
+  box.innerHTML=fs.map(f=>{
+    if(f.type==="select") return `<div class="field"><label>${f.label}${f.req?" *":""}</label><select id="${f.id}"><option value="">— اختار —</option>${f.opts.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join("")}</select></div>`;
+    return `<div class="field"><label>${f.label}${f.req?" *":""}</label><input id="${f.id}" type="${f.type}" placeholder="${f.ph||""}" ${f.min!=null?`min="${f.min}"`:""} /><div class="muted" id="${f.id}Err" style="color:var(--red);font-size:12px;display:none;margin-top:4px"></div></div>`;
+  }).join("");
+  const amt=$("fAmount");
+  if(amt){ amt.oninput=()=>{
+    const v=parseFloat(amt.value); const hint=$("fAmountErr");
+    if(!hint) return;
+    if(!amt.value){ hint.style.display="none"; return; }
+    hint.style.display="block";
+    if(isNaN(v)||v<=0){ hint.style.color="var(--red)"; hint.textContent="المبلغ لازم يكون رقم موجب"; return; }
+    hint.style.color="var(--blue)";
+    if(v<=5000) hint.textContent="ضمن حد المدير (حتى 5,000ج)";
+    else if(v<=100000) hint.textContent="هيتوجّه للمدير المالي (فوق 5,000ج)";
+    else hint.textContent="هيتوجّه للمالك (فوق 100,000ج)";
+  }; }
+}
+function validateReqFields(kind){
+  const fs=REQ_SCHEMAS[kind]||[]; let ok=true;
+  for(const f of fs){
+    const el=$(f.id); if(!el) continue;
+    const err=$(f.id+"Err"); const v=el.value.trim();
+    const fail=(msg)=>{ ok=false; el.style.borderColor="var(--red)"; if(err){ err.style.display="block"; err.style.color="var(--red)"; err.textContent=msg; } setTimeout(()=>el.style.borderColor="",2500); };
+    if(f.req&&!v){ fail("الحقل ده مطلوب"); continue; }
+    if(!v) continue;
+    if(f.type==="number"){ const n=parseFloat(v); if(isNaN(n)||n<=0){ fail("لازم رقم موجب"); continue; } }
+    if(f.type==="date"&&f.future){ if(v<today()){ fail("التاريخ ده فات — اختار تاريخ جاي"); continue; } }
+    if(err) err.style.display="none";
+  }
+  return ok;
+}
+function collectReqFields(kind){
+  const fs=REQ_SCHEMAS[kind]||[]; const data={}; const parts=[];
+  for(const f of fs){
+    const el=$(f.id); if(!el) continue; const v=el.value.trim(); if(!v) continue;
+    let disp=v;
+    if(f.type==="select"){ const o=f.opts.find(x=>x[0]===v); if(o) disp=o[1]; }
+    if(f.id==="fAmount") disp=parseFloat(v).toLocaleString("ar-EG")+" ج";
+    data[f.id.slice(1).toLowerCase()]=v;
+    parts.push(REQ_FIELD_LABELS[f.id]+": "+disp);
+  }
+  return { data: Object.keys(data).length?data:null, summary: parts.join(" · ") };
+}
 function openNewReq(){
   const opts = PROFILES.filter(p=>p.id!==ME.id).map(p=>`<option value="${p.id}">${esc(p.name)} — ${esc((DEPT_BY_KEY[p.dept]&&DEPT_BY_KEY[p.dept].name)||p.dept||"")}</option>`).join("");
   openSheet(`<h3>طلب جديد</h3>
     <div class="field"><label>لمين؟</label><select id="rTo"><option value="">الكل (إعلان عام)</option>${opts}</select></div>
     <div class="field"><label>نوع الطلب</label><select id="rKind"><option value="info">معلومة / استفسار</option><option value="approval">موافقة</option><option value="deadline">موعد تسليم</option><option value="modify">طلب تعديل</option><option value="document">مستند</option></select></div>
+    <div id="rDyn"></div>
     <div class="field"><label>العنوان</label><input id="rTitle" placeholder="مثلاً: تحديث دفعة مشروع زايد" /></div>
     <div class="field"><label>التفاصيل</label><textarea id="rDet" placeholder="اكتب التفاصيل… أو سجّلها بصوتك"></textarea></div>
     <div class="row-actions" style="margin:-6px 0 12px;flex-wrap:wrap;gap:8px"><button class="btn ghost sm" id="rMic">سجّل بصوتك</button><button class="btn sm" id="rSmartFill" style="background:linear-gradient(135deg,#7C3AED,#5B21B6);color:#fff">حلّل واملى</button></div>
     <div class="field"><label>الأولوية</label><select id="rPrio"><option value="normal">عادي</option><option value="high">عاجل</option><option value="low">منخفض</option></select></div>
     <div class="row-actions"><button class="btn green" id="rSave">إرسال الطلب</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
   if(_reqDraft&&(_reqDraft.t||_reqDraft.d)){ $("rTitle").value=_reqDraft.t||""; $("rDet").value=_reqDraft.d||""; toast("رجعنالك مسودتك","ok"); _reqDraft=null; }
+  renderReqFields($("rKind").value);
+  $("rKind").onchange=()=>renderReqFields($("rKind").value);
   bindSheetMic("rMic","rDet");
   $("rSmartFill").onclick=async()=>{
     const raw=$("rDet").value.trim();
@@ -2051,15 +2121,25 @@ function openNewReq(){
     if(!$("rTitle").value.trim()&&$("rDet").value.trim()) $("rTitle").value=$("rDet").value.trim().slice(0,40);
     const rTitleEl=$("rTitle"); const title=rTitleEl.value.trim();
     if(!title){ rTitleEl.style.borderColor="var(--red)"; rTitleEl.focus(); toast("اكتب عنوان الطلب","bad"); setTimeout(()=>rTitleEl.style.borderColor="",2000); return; }
+    const kind=$("rKind").value;
+    if(!validateReqFields(kind)){ toast("راجع الحقول المعلّمة بالأحمر","bad"); return; }
+    const fx=collectReqFields(kind);
     const btn=$("rSave"); btn.disabled=true; btn.textContent="بيتبعت…";
     const rTo=$("rTo").value||null;
     // AUTOMATION: auto-route to dept manager if kind matches
     let autoTo=rTo;
     if(!autoTo){
-      const k=$("rKind").value;
-      if(k==="document"||k==="approval"){ const legal=PROFILES.find(p=>p.dept==="legal"&&p.role==="manager"); if(legal) autoTo=legal.id; }
+      const k=kind;
+      if(k==="approval"&&fx.data&&fx.data.amount){
+        const amt=parseFloat(fx.data.amount);
+        if(amt>100000){ const owner=PROFILES.find(p=>p.role==="owner"); if(owner) autoTo=owner.id; }
+        else if(amt>5000){ const fin=PROFILES.find(p=>p.dept==="finance"&&p.role==="manager"); if(fin) autoTo=fin.id; }
+      }
+      if(!autoTo&&(k==="document"||k==="approval")){ const legal=PROFILES.find(p=>p.dept==="legal"&&p.role==="manager"); if(legal) autoTo=legal.id; }
     }
-    const payload={ from_id:ME.id, to_id:autoTo, kind:$("rKind").value, title, details:$("rDet").value.trim()||null, priority:$("rPrio").value, status:"pending" };
+    let det=$("rDet").value.trim();
+    if(fx.summary) det = det ? (fx.summary+"\n"+det) : fx.summary;
+    const payload={ from_id:ME.id, to_id:autoTo, kind, title, details:det||null, priority:$("rPrio").value, status:"pending", form_data:fx.data };
     const { error }=await sb.from("os_requests").insert(payload);
     if(error){ toast("معرفناش نحفظ: "+error.message,"bad"); btn.disabled=false; btn.textContent="إرسال الطلب"; return; }
     window._reqSent=true; closeSheet(); toast("اتبعت ✓","ok"); renderRequests();
