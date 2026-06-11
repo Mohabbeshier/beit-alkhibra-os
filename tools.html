@@ -603,7 +603,7 @@ function renderOwnerHome(d){
       </div>
     </button>`).join("");
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
-    <div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn sm" data-quick="myday" style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button>${["owner","ops","manager"].includes(ME.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}<button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button><button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
+    <div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn sm" data-quick="myday" style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button>${["owner","ops","manager"].includes(ME.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}<button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button><button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
   if(d.evs.length){
     body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   }
@@ -631,7 +631,7 @@ function renderOpsHome(d){
   body+=`<div class="sec-h">اسأل أي قسم <span class="ln"></span></div>`;
   body+=DEPTS.map(dep=>deptChipHtml(dep)).join("");
   body+=`<div class="sec-h">تحركات سريعة <span class="ln"></span></div>
-    <div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn sm" data-quick="myday" style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn ghost sm" data-quick="event">موعد</button>${["owner","ops","manager"].includes(ME.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}<button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button><button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
+    <div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn sm" data-quick="myday" style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn ghost sm" data-quick="event">موعد</button>${["owner","ops","manager"].includes(ME.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}<button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button><button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   body+='<div id="presBox"></div><div id="wwBox"></div><div id="wlBox"></div><div id="activityBox"></div>';
   el.innerHTML=body;
@@ -1958,6 +1958,7 @@ function wireHome(el){
     else if(q==="roadmap"){ openRoadmap(); }
     else if(q==="myday"){ openMyDay(); }
     else if(q==="syshealth"){ openSysHealth(); }
+    else if(q==="decisions"){ openDecisionsBoard(); }
     else if(q==="sales"){ openSalesFunnel(); }
     else if(q==="adminhub"){ openAdminHub(); }
     else if(q==="meeting"){ openMeetingReport(); }
@@ -2531,6 +2532,78 @@ async function refreshNotifBadge(){
     if(count>0){ b.style.display="flex"; b.textContent=count>9?"9+":count; }
     else b.style.display="none";
   }catch(e){}
+}
+async function openDecisionsBoard(){
+  openSheet('<h3>القرارات التنفيذية</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">كل قرار اتاخد — وحالة تنفيذه دلوقتي</div>'
+    +'<div id="dbStats"></div>'
+    +'<div class="chips" id="dbChips"><button class="chip on" data-dbf="all">الكل</button><button class="chip" data-dbf="late">متأخرة</button><button class="chip" data-dbf="open">شغّالة</button><button class="chip" data-dbf="noowner">بلا مسؤول</button></div>'
+    +'<div id="dbBox"><div class="skel"></div><div class="skel" style="width:75%"></div></div>'
+    +'<div class="muted" style="font-size:11px;margin-top:8px">تسجيل قرار جديد بيتم من "تقرير الاجتماع" — وبيظهر هنا فوراً</div>'
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+  window._dbFilter="all";
+  $("dbChips").querySelectorAll("[data-dbf]").forEach(b=>b.onclick=()=>{
+    window._dbFilter=b.dataset.dbf;
+    $("dbChips").querySelectorAll(".chip").forEach(x=>x.classList.toggle("on",x===b));
+    paintDecBoard();
+  });
+  try{
+    const [dR, mR]=await Promise.all([
+      sb.from("os_minute_decisions").select("*").order("created_at",{ascending:false}).limit(60),
+      sb.from("os_minutes").select("id,title").order("created_at",{ascending:false}).limit(40)
+    ]);
+    const decs=dR.data||[];
+    const minName={}; (mR.data||[]).forEach(m=>minName[m.id]=m.title);
+    let tasks={};
+    const tids=decs.map(d=>d.task_id).filter(Boolean);
+    if(tids.length){
+      const tR=await sb.from("os_tasks").select("id,status,deadline,progress,assignee_name").in("id",tids);
+      (tR.data||[]).forEach(t=>tasks[t.id]=t);
+    }
+    window._dbDecs=decs; window._dbTasks=tasks; window._dbMin=minName;
+    paintDecBoard();
+  }catch(e){ $("dbBox").innerHTML=failBox("معرفناش نجيب القرارات.",openDecisionsBoard); }
+}
+function decState(d,tasks){
+  const t=d.task_id?tasks[d.task_id]:null;
+  if(t){
+    const late=t.status!=="done"&&t.deadline&&new Date(t.deadline).getTime()<Date.now();
+    if(t.status==="done") return ["done","اتنفذ","var(--green-d)"];
+    if(late) return ["late","متأخر","var(--red)"];
+    if(t.status==="review") return ["open","في المراجعة","#7C3AED"];
+    return ["open","شغّال","var(--blue)"];
+  }
+  if(!d.owner_id) return ["noowner","بلا مسؤول","#F59E0B"];
+  return ["open","مسجّل","#94a3b8"];
+}
+function paintDecBoard(){
+  const decs=window._dbDecs||[], tasks=window._dbTasks||{}, minName=window._dbMin||{};
+  const f=window._dbFilter||"all";
+  const counts={all:decs.length,done:0,late:0,open:0,noowner:0};
+  decs.forEach(d=>{ const s=decState(d,tasks)[0]; counts[s]=(counts[s]||0)+1; });
+  $("dbStats").innerHTML='<div class="stats">'
+    +'<div class="stat"><div class="n">'+counts.all+'</div><div class="l">قرار</div></div>'
+    +'<div class="stat"><div class="n">'+counts.done+'</div><div class="l">اتنفذ</div></div>'
+    +'<div class="stat'+(counts.late?' stat-hot':'')+'"><div class="n">'+counts.late+'</div><div class="l">متأخر</div></div>'
+    +'<div class="stat'+(counts.noowner?' stat-hot':'')+'"><div class="n">'+counts.noowner+'</div><div class="l">بلا مسؤول</div></div></div>';
+  let list=decs;
+  if(f!=="all") list=decs.filter(d=>decState(d,tasks)[0]===f);
+  if(!list.length){ $("dbBox").innerHTML='<div class="empty">'+(decs.length?"مفيش قرارات بالفلتر ده.":"مفيش قرارات لسه — سجّل أول قرار من تقرير الاجتماع.")+'</div>'; return; }
+  $("dbBox").innerHTML=list.map(d=>{
+    const s=decState(d,tasks);
+    const t=d.task_id?tasks[d.task_id]:null;
+    return '<div class="card flat" style="border-right:4px solid '+s[2]+'">'
+      +'<div style="display:flex;gap:8px;align-items:flex-start"><div style="flex:1"><b style="font-size:13.5px">'+esc(d.decision||"")+'</b>'
+      +'<div class="muted" style="font-size:11.5px;margin-top:3px">'
+      +(d.owner_name?esc(d.owner_name):"—")
+      +(d.deadline?' · '+fmtDate(d.deadline):'')
+      +(minName[d.minute_id]?' · من: '+esc(String(minName[d.minute_id]).slice(0,30)):'')
+      +'</div>'
+      +(t?'<div class="prog" style="margin-top:6px"><i style="width:'+Math.max(0,Math.min(100,t.progress||0))+'%"></i></div>':'')
+      +'</div><span class="badge" style="background:'+s[2]+'22;color:'+s[2]+';border:1px solid '+s[2]+'55;white-space:nowrap">'+s[1]+'</span></div>'
+      +(d.task_id?'<button class="lnk" data-dbt="'+esc(d.task_id)+'" style="font-size:11.5px;margin-top:6px">افتح المهمة ↗</button>':'')
+      +'</div>';
+  }).join("");
+  $("dbBox").querySelectorAll("[data-dbt]").forEach(b=>b.onclick=()=>openLinkedTask(b.dataset.dbt));
 }
 async function openSysHealth(){
   openSheet('<h3>صحة النظام</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">فحوصات حية · المهام المجدولة · تشخيصات الذكاء</div>'
