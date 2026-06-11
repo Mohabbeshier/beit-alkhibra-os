@@ -1251,7 +1251,7 @@ async function openApprovals(){
     +'<div class="sec-h">اطلب موافقة <span class="ln"></span></div>'
     +'<div class="field"><label>النوع</label><select id="apKind">'+APPROVAL_KINDS.map(k=>'<option value="'+k[0]+'">'+k[1]+'</option>').join("")+'</select></div>'
     +'<div class="field"><label>العنوان</label><input id="apTitle" placeholder="مثلًا: شراء طابعة للقسم"/></div>'
-    +'<div class="field"><label>المبلغ (اختياري — بالجنيه)</label><input id="apAmt" type="number" inputmode="numeric" placeholder="0"/><div class="muted" id="apAmtHint" style="font-size:12px;display:none;margin-top:4px"></div></div>'
+    +'<div class="field"><label>المبلغ (بالجنيه) *</label><input id="apAmt" type="number" inputmode="numeric" placeholder="مثلاً: 3500"/><div class="muted" id="apAmtHint" style="font-size:12px;display:none;margin-top:4px"></div></div>'
     +'<div class="field"><label>تفاصيل</label><textarea id="apDet" placeholder="ليه محتاجها؟"></textarea></div>'
     +'<div class="row-actions"><button class="btn green" id="apGo">ابعت للموافقة</button><button class="btn ghost" onclick="closeSheet()">قفل</button></div>');
   addMicTo("apDet");
@@ -1267,8 +1267,8 @@ async function openApprovals(){
   };
   $("apGo").onclick=async()=>{
     const title=$("apTitle").value.trim(); if(!title){ toast("اكتب عنوان","bad"); return; }
-    const amtRaw=parseFloat($("apAmt").value)||null;
-    if(amtRaw!==null&&amtRaw<=0){ toast("المبلغ لازم يكون أكتر من صفر","bad"); return; }
+    const amtRaw=parseFloat($("apAmt").value);
+    if(isNaN(amtRaw)||amtRaw<=0){ $("apAmt").style.borderColor="var(--red)"; toast("اكتب المبلغ — الموافقات هنا مالية. لو طلبك مش مالي ابعته من شاشة الطلبات","bad"); setTimeout(()=>$("apAmt").style.borderColor="",2500); return; }
     const amt=amtRaw;
     const { error }=await sb.from("os_approvals").insert({ kind:$("apKind").value, title, details:$("apDet").value.trim()||null, amount:amt, requester_id:ME.id, requester_name:PROFILE.name, status:"pending" });
     if(error){ toast("معرفناش نبعت: "+error.message,"bad"); return; }
@@ -1426,7 +1426,7 @@ async function paintDocs(){
       const daysLeft=exp?Math.ceil((exp-Date.now())/86400000):null;
       const expTxt= exp? (daysLeft<=0?"انتهى!":daysLeft<=30?"باقي "+daysLeft+" يوم":"تنتهي "+fmtDate(d.expires_at)) : "";
       const kb=KIND_BADGE[d.kind];
-      return '<div class="card flat" data-doc="'+d.id+'"'+(danger?' style="border-right:4px solid var(--red);background:#FFF8F8"':'')+'><div style="display:flex;gap:8px;align-items:center"><b style="flex:1">'+esc(d.title)+'</b>'+(kb?'<span class="badge '+kb[1]+'">'+kb[0]+'</span>':'')+(d.locked?'<span title="مقفول نهائيًا"></span>':'')+'</div>'
+      return '<div class="card flat" data-doc="'+d.id+'"'+(danger?' style="border-right:4px solid var(--red);background:#FFF8F8"':'')+'><div style="display:flex;gap:8px;align-items:center"><b style="flex:1">'+esc(d.title)+'</b>'+(kb?'<span class="badge '+kb[1]+'">'+kb[0]+'</span>':'')+(d.locked?'<span class="badge b-grey">مقفول</span>':'')+'</div>'
         +'<div class="meta">'+(d.dept&&DEPT_BY_KEY[d.dept]?'<span>'+esc(DEPT_BY_KEY[d.dept].name)+'</span><span class="dot"></span>':'')+'<span>v'+(d.version||1)+'</span>'+(expTxt?'<span class="dot"></span><span'+(danger?' style="color:var(--red);font-weight:800"':'')+'>'+expTxt+'</span>':'')+'</div>'
         +'<div style="margin-top:6px;display:flex;gap:10px;flex-wrap:wrap">'
         +(d.file_url?'<a href="'+esc(d.file_url)+'" target="_blank" class="lnk" style="font-size:12px">افتح</a><button class="lnk" data-dcopy="'+esc(d.file_url)+'" style="font-size:12px">انسخ اللينك</button>':'<span class="muted" style="font-size:11px">مفيش ملف مرفوع</span>')
@@ -2060,7 +2060,7 @@ function renderReqFields(kind){
   const box=$("rDyn"); if(!box) return;
   const fs=REQ_SCHEMAS[kind]||[];
   box.innerHTML=fs.map(f=>{
-    if(f.type==="select") return `<div class="field"><label>${f.label}${f.req?" *":""}</label><select id="${f.id}"><option value="">— اختار —</option>${f.opts.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join("")}</select></div>`;
+    if(f.type==="select") return `<div class="field"><label>${f.label}${f.req?" *":""}</label><select id="${f.id}"><option value="">— اختار —</option>${f.opts.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join("")}</select><div class="muted" id="${f.id}Err" style="color:var(--red);font-size:12px;display:none;margin-top:4px"></div></div>`;
     return `<div class="field"><label>${f.label}${f.req?" *":""}</label><input id="${f.id}" type="${f.type}" placeholder="${f.ph||""}" ${f.min!=null?`min="${f.min}"`:""} /><div class="muted" id="${f.id}Err" style="color:var(--red);font-size:12px;display:none;margin-top:4px"></div></div>`;
   }).join("");
   const amt=$("fAmount");
@@ -2132,7 +2132,7 @@ function openNewReq(){
       const d=JSON.parse(clean);
       if(d.title) $("rTitle").value=d.title;
       if(d.details) $("rDet").value=d.details;
-      if(d.kind&&$("rKind")) $("rKind").value=d.kind;
+      if(d.kind&&$("rKind")){ $("rKind").value=d.kind; renderReqFields(d.kind); }
       if(d.priority&&$("rPrio")) $("rPrio").value=d.priority;
       if(d.to_name){ const p=PROFILES.find(x=>x.name===d.to_name||x.name.includes(d.to_name.split(" ")[0])); if(p&&$("rTo")) $("rTo").value=p.id; }
       toast("النموذج اتملى تلقائيًا ✓ — راجعه وعدّل لو محتاج","ok");
