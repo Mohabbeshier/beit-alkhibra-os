@@ -4158,7 +4158,7 @@ async function loadClientJourney(taskId){
     card.innerHTML='<b style="font-size:13.5px">ملف العميل — '+esc(data.name||"\u2014")+'</b>'
       +'<div class="muted" style="font-size:12.5px;margin-top:6px;line-height:2">'
       +(data.phone?''+esc(data.phone)+' <button class="lnk" id="cjCall" style="font-size:11px">اتصل</button> <button class="lnk" id="cjWa" style="font-size:11px;color:var(--green-d)">واتساب</button><br>':'')
-      +(data.city?''+esc(data.city)+' \u00b7 ':'')+(data.service?''+esc(data.service):'')
+      +(data.city?''+esc(data.city)+' \u00b7 ':'')+(data.service?''+esc(data.service):'')+(data.details?'<br>تفاصيل: '+esc(data.details):'')
       +'<br>دخل من الموقع: '+relativeTime(data.entered_at)
       +' \u00b7 لمسات: '+(data.touches||0)
       +(data.last_touch?' \u00b7 آخر لمسة: '+relativeTime(data.last_touch):'')
@@ -4167,6 +4167,7 @@ async function loadClientJourney(taskId){
     tl.parentNode.insertBefore(card,tl);
     const c1=card.querySelector("#cjCall"); if(c1) c1.onclick=()=>{ location.href="tel:"+phoneClean; };
     const c2=card.querySelector("#cjWa"); if(c2) c2.onclick=()=>{ window.open("https://wa.me/"+phoneClean.replace("+",""),"_blank"); };
+    if(data.file_url){ const fb=document.createElement("button"); fb.type="button"; fb.textContent="\ud83d\udcce افتح الملف المرفق"; fb.style.cssText="margin-top:8px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#0D2538;background:#EAF2FB;border:1px solid #CFE0F3;border-radius:8px;padding:7px 12px;cursor:pointer"; fb.onclick=()=>{ window.open(data.file_url,"_blank","noopener"); }; card.appendChild(fb); }
   }catch(e){}
 }
 async function loadTaskTimeline(taskId){
