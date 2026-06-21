@@ -376,7 +376,9 @@ $("modal").addEventListener("click",(e)=>{ if(e.target.id==="modal") closeSheet(
 
 /* ===================== BOOT ===================== */
 async function boot(){
+  var _bootSafety = setTimeout(function(){ try{ var b=$("boot"), a=$("app"); if(b && b.style.display!=="none" && (!a || a.style.display!=="block")){ showLogin(); } }catch(_e){} }, 12000);
   if(!window.supabase || !window.supabase.createClient){
+    clearTimeout(_bootSafety);
     $("boot").innerHTML='<div style="color:var(--red);font-weight:700">معرفناش نحمّل مكتبة Supabase. اتأكد إن النت شغّال وجرّب تاني.</div>';
     return;
   }
@@ -384,9 +386,12 @@ async function boot(){
     auth:{ storage:safeStorage, persistSession:true, autoRefreshToken:true, detectSessionInUrl:false }
   });
   let session=null;
-  try{ const r=await sb.auth.getSession(); session=r.data.session; }catch(e){}
-  if(session && session.user){ await startApp(session.user); }
-  else{ showLogin(); }
+  try{ const r=await Promise.race([ sb.auth.getSession(), new Promise(function(res){ setTimeout(function(){ res({data:{session:null}}); },5000); }) ]); session=r.data.session; }catch(e){}
+  try{
+    if(session && session.user){ await startApp(session.user); }
+    else{ showLogin(); }
+  }catch(_e){ showLogin(); }
+  clearTimeout(_bootSafety);
 }
 function showLogin(){ $("boot").style.display="none"; $("app").style.display="none"; $("login").style.display="flex"; }
 
@@ -409,10 +414,13 @@ async function startApp(user){
   ME=user;
   // load profile + lookups
   try{
-    const [{data:prof}, {data:profs}, {data:depts}] = await Promise.all([
-      sb.from("os_profiles").select("*").eq("id",user.id).maybeSingle(),
-      sb.from("os_profiles").select("id,name,email,role,dept,manager_id,position"),
-      sb.from("os_departments").select("*").order("sort_order",{ascending:true}).order("name"),
+    const [{data:prof}, {data:profs}, {data:depts}] = await Promise.race([
+      Promise.all([
+        sb.from("os_profiles").select("*").eq("id",user.id).maybeSingle(),
+        sb.from("os_profiles").select("id,name,email,role,dept,manager_id,position"),
+        sb.from("os_departments").select("*").order("sort_order",{ascending:true}).order("name"),
+      ]),
+      new Promise(function(res){ setTimeout(function(){ res([{data:null},{data:null},{data:null}]); },6000); })
     ]);
     PROFILE = prof || { id:user.id, name:(user.email||"مستخدم").split("@")[0], role:"employee", dept:null, email:user.email };
     PROFILES = profs || [];
