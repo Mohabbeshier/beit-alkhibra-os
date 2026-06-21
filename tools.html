@@ -1131,20 +1131,82 @@ async function openProjects(){
 const PRJ_STAGE={design:"تصميم",license:"ترخيص",execution:"تنفيذ",handover:"تسليم"};
 async function paintProjects(){
   try{
-    const { data }=await sb.from("os_project_overview").select("*").order("name");
+    const [{ data },{ data:meta },{ data:fls }]=await Promise.all([
+      sb.from("os_project_overview").select("*").order("name"),
+      sb.from("os_projects").select("id,code,status"),
+      sb.from("os_files").select("project_id").not("project_id","is",null)
+    ]);
     const rows=data||[];
+    const M={}; (meta||[]).forEach(m=>{ M[m.id]=m; });
+    const FC={}; (fls||[]).forEach(f=>{ if(f.project_id) FC[f.project_id]=(FC[f.project_id]||0)+1; });
     if(!rows.length){ $("prjBox").innerHTML='<div class="empty">مفيش مشاريع متسجلة لسه.</div>'; return; }
     $("prjBox").innerHTML=rows.map(p=>{
-      const pr=Math.max(0,Math.min(100,p.progress||0));
-      return '<div class="card flat"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(p.name)+'</b><span class="badge b-blue">'+(PRJ_STAGE[p.stage]||esc(p.stage||"\u2014"))+'</span></div>'
+      const pr=Math.max(0,Math.min(100,p.progress||0)); const mm=M[p.id]||{}; const nf=FC[p.id]||0;
+      return '<div class="card flat" data-prj="'+p.id+'" style="cursor:pointer">'
+        +'<div style="display:flex;align-items:center;gap:8px">'+(mm.code?'<span class="badge" style="background:#eef2f7;color:#0D47A1;font-weight:800;letter-spacing:.3px">'+esc(mm.code)+'</span>':'')+'<b style="flex:1">'+esc(p.name)+'</b><span class="badge b-blue">'+(PRJ_STAGE[p.stage]||esc(p.stage||"\u2014"))+'</span></div>'
         +'<div class="prog" style="margin:8px 0 4px"><i style="width:'+pr+'%"></i></div>'
         +'<div class="meta"><span>'+pr+'%</span><span class="dot"></span><span>'+(p.tasks_done||0)+'/'+(p.tasks_total||0)+' مهمة</span>'
         +((p.tasks_overdue||0)?'<span class="dot"></span><span style="color:var(--red);font-weight:800">'+p.tasks_overdue+' متأخرة</span>':'')
         +(p.value_egp?'<span class="dot"></span><span>'+Number(p.value_egp).toLocaleString("en")+' ج</span>':'')
         +((DEPT_BY_KEY[p.dept]&&'<span class="dot"></span><span>'+esc(DEPT_BY_KEY[p.dept].name)+'</span>')||'')
+        +'<span class="dot"></span><span style="color:var(--green-d);font-weight:800">📎 '+nf+' • افتح للملفات ›</span>'
         +'</div></div>';
     }).join("");
+    $("prjBox").querySelectorAll("[data-prj]").forEach(el=>el.onclick=()=>openProjectDetail(el.getAttribute("data-prj")));
   }catch(e){ $("prjBox").innerHTML=failBox("معرفناش نجيب المشاريع.",paintProjects); }
+}
+async function openProjectDetail(id){
+  openSheet('<h3>تفاصيل المشروع</h3><div id="pdBox"><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="openProjects()">رجوع للمشاريع</button>');
+  await paintProjectDetail(id);
+}
+async function paintProjectDetail(id){
+  try{
+    const { data:prj, error }=await sb.from("os_projects").select("*").eq("id",id).single();
+    if(error||!prj){ $("pdBox").innerHTML=failBox("معرفناش نجيب المشروع.",()=>paintProjectDetail(id)); return; }
+    const canUp = isOwnerOps() || PROFILE.dept===prj.dept || PROFILE.dept==="engineering";
+    const { data:files }=await sb.from("os_files").select("*").eq("project_id",id).eq("archived",false).order("created_at",{ascending:false});
+    const fl=files||[];
+    const dt=prj.created_at?new Date(prj.created_at).toLocaleDateString("ar-EG"):"";
+    let h='<div class="card">'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+(prj.code?'<span class="badge" style="background:#eef2f7;color:#0D47A1;font-weight:800">'+esc(prj.code)+'</span>':'')
+      +'<span class="badge" style="'+(prj.status==="open"?"background:#E3F2FD;color:#0D47A1":"background:#E8F5E9;color:#2E7D32")+'">'+esc(prj.status==="open"?"مفتوح":(prj.status||"—"))+'</span></div>'
+      +'<b style="display:block;margin-top:8px;font-size:15px">'+esc(prj.name)+'</b>'
+      +'<div class="meta" style="margin-top:6px">'+(PRJ_STAGE[prj.stage]?'<span>'+PRJ_STAGE[prj.stage]+'</span><span class="dot"></span>':'')
+      +((DEPT_BY_KEY[prj.dept]&&'<span>'+esc(DEPT_BY_KEY[prj.dept].name)+'</span>')||'')
+      +(prj.value_egp?'<span class="dot"></span><span>'+Number(prj.value_egp).toLocaleString("en")+' ج</span>':'')
+      +(dt?'<span class="dot"></span><span>'+dt+'</span>':'')+'</div></div>';
+    h+='<div class="sec-h">مرفقات المشروع <span class="ln"></span></div>';
+    if(canUp){
+      h+='<div class="card flat"><div class="field"><label>اسم المرفق</label><input id="pdTitle" placeholder="مثلًا: رسمة معمارية — الدور الأرضي"/></div>'
+        +'<div class="field"><label>اختار ملف (أقصى 20 ميجا)</label><input id="pdFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx" style="font-size:12px"/></div>'
+        +'<div id="pdStatus" class="muted" style="font-size:12px;margin-bottom:8px"></div>'
+        +'<div class="row-actions"><button class="btn green sm" id="pdUp">ارفع للمشروع</button></div></div>';
+    }
+    h+='<div id="pdFiles" style="margin-top:8px">';
+    if(!fl.length){ h+='<div class="empty">مفيش مرفقات للمشروع ده لسه.</div>'; }
+    else { h+=fl.map(f=>{
+      const isLink=f.kind==="link"; const sz=f.size_bytes?(" · "+fmtBytes(f.size_bytes)):"";
+      return '<div class="card flat"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:13px">'+esc(f.title||"ملف")+'</b>'
+        +(f.url?'<a class="btn sm" href="'+esc(f.url)+'" target="_blank" rel="noopener" style="background:var(--blue);color:#fff">فتح</a>':'')+'</div>'
+        +'<div class="meta"><span>'+(isLink?"لينك":"ملف")+sz+'</span>'+((f.uploaded_name)?'<span class="dot"></span><span>'+esc(f.uploaded_name)+'</span>':'')+'</div></div>';
+    }).join(""); }
+    h+='</div>';
+    $("pdBox").innerHTML=h;
+    if(canUp){
+      addMicTo("pdTitle");
+      $("pdUp").onclick=async()=>{
+        const title=$("pdTitle").value.trim(); const fe=$("pdFile");
+        if(!title){ toast("اكتب اسم المرفق","bad"); return; }
+        if(!fe.files||!fe.files[0]){ toast("اختار ملف الأول","bad"); return; }
+        const b=$("pdUp"); b.disabled=true; $("pdStatus").textContent="بيترفع…";
+        try{
+          const up=await uploadEmployeeFile(fe.files[0]);
+          await registerFile({ title, kind:"file", project_id:id, dept:prj.dept||null, url:up.url, storage_path:up.path, size_bytes:up.size, mime:up.mime });
+          toast("اترفع واتربط بالمشروع","ok"); paintProjectDetail(id);
+        }catch(e){ $("pdStatus").textContent=""+(e.message||"فشل"); toast(e.message||"فشل الرفع","bad"); b.disabled=false; }
+      };
+    }
+  }catch(e){ $("pdBox").innerHTML=failBox("حصل خطأ.",()=>paintProjectDetail(id)); }
 }
 /* ===================== STRUCTURAL ENGINEERING ===================== */
 const SE_STAGE={arch_received:"معماري مستلم",statical_system:"ستاتيكال سيستم",exported:"اتصدّر لـSAFE/ETABS",analysis_done:"التحليل (Run) خلص",design_done:"التصميم خلص",execution_ready:"لوحات تنفيذ جاهزة"};
