@@ -817,7 +817,7 @@ async function openMyFiles(){
     +'<div class="muted" style="margin:-6px 0 10px;font-size:12px">ارفع ملفات أو احفظ لينكات — كله بيتأرشف وبيتربط بقسمك</div>'
     +'<div class="row-actions" style="margin-bottom:10px"><button class="btn green sm" id="fUpFile">ارفع ملف</button><button class="btn sm" id="fAddLink" style="background:var(--blue);color:#fff">احفظ لينك</button></div>'
     +'<div class="field" style="margin-bottom:8px"><input id="fSearch" placeholder="دوّر باسم الملف…"/></div>'
-    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="fViewTabs"><button class="chip on" data-fv="active">النشطة</button><button class="chip" data-fv="archive">الأرشيف</button></div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="fViewTabs"><button class="chip on" data-fv="active">النشطة</button><button class="chip" data-fv="incoming">واردة لقسمي</button><button class="chip" data-fv="archive">الأرشيف</button></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="fCats"><button class="chip on" data-fc="all">الكل</button>'+FILE_CATS.map(c=>'<button class="chip" data-fc="'+c[0]+'">'+c[1]+'</button>').join("")+'</div>'
     +'<div id="fBox"><div class="skel"></div><div class="skel"></div></div>'
     +'<button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
@@ -832,14 +832,14 @@ async function openMyFiles(){
 function catName(c){ const f=FILE_CATS.find(x=>x[0]===c); return f?f[1]:c; }
 async function paintMyFiles(){
   try{
-    const src=_filesView==="archive"?"os_files_archive":"os_my_files";
-    let q=sb.from(src).select("*");
-    if(src==="os_my_files") q=q.eq("uploaded_by",ME.id);
+    let q;
+    if(_filesView==="incoming"){ q=sb.from("os_files").select("*").eq("to_dept",myDeptKey()).eq("archived",false); }
+    else { const src=_filesView==="archive"?"os_files_archive":"os_my_files"; q=sb.from(src).select("*"); if(src==="os_my_files") q=q.eq("uploaded_by",ME.id); }
     const { data }=await q.order("created_at",{ascending:false}).limit(100);
     let rows=data||[];
     if(_filesCat!=="all") rows=rows.filter(f=>f.category===_filesCat);
     if(_filesSearch.trim()){ const q=_filesSearch.trim(); rows=rows.filter(f=>(f.title||"").includes(q)||(f.note||"").includes(q)); }
-    if(!rows.length){ $("fBox").innerHTML='<div class="empty">'+(_filesView==="archive"?"الأرشيف فاضي.":"مفيش ملفات لسه — ارفع أول ملف!")+'</div>'; return; }
+    if(!rows.length){ $("fBox").innerHTML='<div class="empty">'+(_filesView==="incoming"?"مفيش ملفات واردة لقسمك من أقسام تانية.":(_filesView==="archive"?"الأرشيف فاضي.":"مفيش ملفات لسه — ارفع أول ملف!"))+'</div>'; return; }
     const _mineCount=rows.filter(f=>f.uploaded_by===ME.id).length;
     const _bulk=(_filesView==="active"&&_mineCount>1)?'<button class="lnk" id="fBulkArch" style="font-size:11.5px;color:#B45309">أرشفة كل بتاعتي ('+_mineCount+')</button>':'';
     const _cnt='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span class="muted" style="font-size:11.5px">'+rows.length+' '+(rows.length===1?"ملف":"ملف/لينك")+(_filesView==="archive"?" في الأرشيف":"")+'</span>'+_bulk+'</div>';
@@ -884,6 +884,7 @@ function openFileUploadForm(){
     +'<div class="field"><label>النوع</label><select id="ufCat">'+FILE_CATS.map(c=>'<option value="'+c[0]+'">'+c[1]+'</option>').join("")+'</select></div>'
     +'<div class="field"><label>اختار الملف (أقصى 20 ميجا)</label><input id="ufFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx" style="font-size:12px"/></div>'
     +'<div class="field"><label>اربطه بمهمة (اختياري)</label><select id="ufTask"><option value="">— من غير —</option></select></div>'
+    +'<div class="field"><label>إرسال لقسم (اختياري)</label><select id="ufToDept"><option value="">— من غير —</option>'+DEPTS.map(d=>'<option value="'+d.key+'">'+esc(d.name)+'</option>').join("")+'</select><div class="muted" style="font-size:11px;margin-top:3px">لو اخترت قسم، مدير القسم هيتبعتله إشعار إن فيه ملف وارد</div></div>'
     +'<div class="field"><label>ملاحظة (اختياري)</label><input id="ufNote" placeholder=""/></div>'
     +'<div id="ufStatus" class="muted" style="font-size:12px;margin-bottom:8px"></div>'
     +'<div class="row-actions"><button class="btn green" id="ufGo">ارفع واحفظ</button><button class="btn ghost" onclick="openMyFiles()">رجوع</button></div>');
@@ -899,7 +900,7 @@ function openFileUploadForm(){
     const go=$("ufGo"); go.disabled=true; $("ufStatus").textContent="بيترفع…";
     try{
       const up=await uploadEmployeeFile(fileEl.files[0]);
-      await registerFile({ title, kind:"file", category:$("ufCat").value, url:up.url, storage_path:up.path, size_bytes:up.size, mime:up.mime, task_id:($("ufTask")&&$("ufTask").value)||null, note:$("ufNote").value.trim()||null });
+      await registerFile({ title, kind:"file", category:$("ufCat").value, url:up.url, storage_path:up.path, size_bytes:up.size, mime:up.mime, task_id:($("ufTask")&&$("ufTask").value)||null, to_dept:($("ufToDept")&&$("ufToDept").value)||null, note:$("ufNote").value.trim()||null });
       toast("اترفع واتأرشف","ok"); openMyFiles();
     }catch(e){ $("ufStatus").textContent=""+(e.message||"فشل"); toast(e.message||"فشل الرفع","bad"); go.disabled=false; }
   };
