@@ -439,6 +439,7 @@ async function startApp(user){
 }
 
 function isOwnerOps(){ return PROFILE.role==="owner"||PROFILE.role==="ops"; }
+function canSeeClients(){ return isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="hr"); }
 function userTitle(p){
   if(p.role==="owner") return "المالك · الإدارة العليا";
   if(p.role==="ops") return p.dept||"إدارة التشغيل";
@@ -683,7 +684,7 @@ function renderManagerHome(d){
     body+=myDeptTasks.slice(0,5).map(t=>`<div class="card flat"${t.deadline&&new Date(t.deadline)<new Date()?' style="border-right:4px solid var(--red)"':''}><b>${esc(t.title)}</b><div class="meta"><span>${esc(t.assignee_name||nameOf(t.assignee_id)||"—")}</span>${t.deadline?`<span class="dot"></span><span>${fmtDate(t.deadline)}</span>`:""}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}</div></div>`).join("");
   } else body+=`<div class="empty" style="padding:18px">مفيش مهام بالقسم لسه.</div>`;
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
-    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button><button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
+    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="hr"?'<button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}<button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   el.innerHTML=body;
   HOME_SUMMARY=`${d.greet} يا ${PROFILE.name}. قسم ${(dep&&dep.name)||""} عنده ${myDeptTasks.length} مهمة شغّالة، منهم ${overdue.length} متأخرة. عندك ${d.pendIn.length} طلب مستني ردك. ${d.evTxt}`;
@@ -1687,7 +1688,7 @@ async function openSalesFunnel(){
     $("sfBox").innerHTML=h;
     $("sfLeads").onclick=()=>{ closeSheet(); _taskSearch=""; _taskDept="all"; taskFilter="all"; switchTab("tasks"); };
     /* فريق 6: الساخن دلوقتي + كاشف الفرص النايمة + ابدأ متابعة بضغطة */
-    if(isOwnerOps()){
+    if(canSeeClients()){
       (async()=>{
         try{
           const [hotR, staleR, openR]=await Promise.all([
