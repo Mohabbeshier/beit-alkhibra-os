@@ -88,9 +88,9 @@ a{color:var(--blue-d);}
 .view.active{display:block;}
 @keyframes rise{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
 
-.page-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:4px 2px 14px;}
-.page-h h2{font-size:19px;font-weight:800;color:var(--ink);}
-.page-h .sub{font-size:12.5px;color:var(--muted);}
+.page-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:4px 2px 16px;}
+.page-h h2{font-size:19px;font-weight:800;color:var(--ink);letter-spacing:-.2px;}
+.page-h .sub{font-size:12.5px;color:var(--muted);margin-top:2px;}
 
 .sec-h{display:flex;align-items:center;gap:8px;margin:24px 2px 10px;font-size:12px;font-weight:800;letter-spacing:.4px;color:var(--muted);}
 .sec-h .ln{flex:1;height:1px;background:var(--line);}
@@ -144,7 +144,11 @@ a{color:var(--blue-d);}
 .contract-out{white-space:pre-wrap;background:#fff;border:1px dashed #b9c9da;border-radius:14px;padding:16px;font-size:13.5px;line-height:1.9;margin-top:6px;}
 
 /* ask / chat */
-.chat{display:flex;flex-direction:column;gap:10px;min-height:42vh;padding:6px 2px 8px;}
+.chat{display:flex;flex-direction:column;gap:13px;min-height:42vh;padding:6px 2px 8px;}
+#chBox{padding-bottom:84px;overflow-y:auto;}
+#chBox .msg .lnk{color:var(--muted);font-weight:600;opacity:.78;}
+#chBox .msg.me .lnk{color:rgba(255,255,255,.85);}
+#chBox .msg .lnk:active{opacity:1;}
 .msg{max-width:88%;padding:11px 14px;border-radius:16px;font-size:14px;line-height:1.7;white-space:pre-wrap;word-wrap:break-word;box-shadow:var(--shadow-sm);}
 .msg.ai{background:#fff;border:1px solid var(--line);align-self:flex-start;border-bottom-right-radius:5px;}
 .msg.me{background:linear-gradient(135deg,var(--blue),var(--blue-d));color:#fff;align-self:flex-end;border-bottom-left-radius:5px;}
@@ -196,6 +200,9 @@ button.stat,button.dept-card{font-family:inherit;cursor:pointer;}
 .composer input:focus{border-color:var(--blue);}
 .composer .send{width:46px;height:46px;flex-shrink:0;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--green-d));color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(76,175,80,.3);}
 .composer .send:disabled{opacity:.5;}
+.composer .send.sendmsg{background:linear-gradient(135deg,var(--blue),var(--blue-d));box-shadow:0 6px 16px rgba(30,136,229,.32);}
+.composer .send.sendmsg:active{transform:scale(.93);}
+.composer .send.sendmsg svg{margin-right:-2px;}
 
 /* tab bar */
 .tabbar{position:fixed;bottom:0;left:0;right:0;z-index:30;display:flex;background:rgba(255,255,255,.94);backdrop-filter:blur(12px);border-top:1px solid var(--line);height:calc(var(--tabh) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);}
@@ -342,7 +349,8 @@ const ICONS={
  smile:_icoWrap('<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14a4.5 4.5 0 0 0 7 0"/><line x1="9" y1="10" x2="9.01" y2="10"/><line x1="15" y1="10" x2="15.01" y2="10"/></svg>'),
  link:_icoWrap('<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>'),
  doc:_icoWrap('<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>'),
- search:_icoWrap('<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>')
+ search:_icoWrap('<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>'),
+ send:'<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:scaleX(-1)"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2" fill="#fff" stroke="none"/></svg>'
 };
 const MIC_BTN_SVG='<svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></svg>';
 const STOP_BTN_SVG='<svg viewBox="0 0 24 24" width="34" height="34" fill="#fff"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
@@ -3598,7 +3606,7 @@ function renderAsk(){
     ${modeChips}
     ${askMode==='board'?boardChipsHtml():""}
     <div class="chat" id="chat"></div>
-    <div class="composer"><button class="send" id="askMic" style="background:linear-gradient(135deg,var(--blue),var(--blue-d));box-shadow:0 6px 16px rgba(30,136,229,.3)">${ICONS.mic.replace(/#94a3b8/g,"#fff")}</button><input id="askIn" placeholder="${askMode==='manager'?'اكتب سؤالك للمدير… أو اتكلم':'اكتب سؤالك… أو دوس المايك واتكلم'}" /><button class="send" id="askSend">\u27a4</button></div>`;
+    <div class="composer"><button class="send" id="askMic" style="background:linear-gradient(135deg,var(--blue),var(--blue-d));box-shadow:0 6px 16px rgba(30,136,229,.3)">${ICONS.mic.replace(/#94a3b8/g,"#fff")}</button><input id="askIn" placeholder="${askMode==='manager'?'اكتب سؤالك للمدير… أو اتكلم':'اكتب سؤالك… أو دوس المايك واتكلم'}" /><button class="send sendmsg" id="askSend">${ICONS.send}</button></div>`;
   if(!fixed){ $("askDept").onchange=(e)=>{ askDeptKey=e.target.value; chatHistory=[]; renderAsk(); }; }
   const dt=$("deepTg"); if(dt) dt.onclick=()=>{ askDeep=!askDeep; dt.classList.toggle("on",askDeep); toast(askDeep?"التحليل العميق اتفعّل":"رجعنا للوضع السريع","ok"); };
   $("v-ask").querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>{ askMode=b.dataset.mode; chatHistory=[]; renderAsk(); });
@@ -3749,27 +3757,14 @@ function highlightMentions(escaped){
   return escaped.replace(/@([\u0600-\u06FF\w]+)/g,'<b style="color:var(--blue-d);background:#EAF2FB;border-radius:5px;padding:0 4px">@$1</b>');
 }
 function chatChannels(){
-  const isOff=k=>!!k&&k.indexOf("off_")===0;
-  const offLabel=(key,name)=>(DEPT_EMOJI[key]||"")+" "+name+" + الهندسة";
-  const offices=DEPTS.filter(d=>isOff(d.key)), others=DEPTS.filter(d=>!isOff(d.key));
-  const list=[];
-  if(isOwnerOps()){
-    list.push(["company","الشركة كلها"]);
-    offices.forEach(d=>list.push(["dept:"+d.key,offLabel(d.key,d.name)]));
-    others.forEach(d=>list.push(["dept:"+d.key,(DEPT_EMOJI[d.key]||"")+" "+d.name]));
-  } else if(myDeptKey()==="engineering"){
-    offices.forEach(d=>list.push(["dept:"+d.key,offLabel(d.key,d.name)]));
-    var e=DEPT_BY_KEY["engineering"]; if(e) list.push(["dept:engineering",(DEPT_EMOJI["engineering"]||"")+" "+e.name]);
-  } else {
-    var k=myDeptKey();
-    if(k&&DEPT_BY_KEY[k]) list.push(["dept:"+k, isOff(k)?offLabel(k,DEPT_BY_KEY[k].name):((DEPT_EMOJI[k]||"")+" "+DEPT_BY_KEY[k].name)]);
-  }
-  if(!list.length) list.push(["company","الشركة كلها"]);
+  const list=[["company","الشركة كلها"]];
+  if(isOwnerOps()){ DEPTS.forEach(d=>list.push(["dept:"+d.key,(DEPT_EMOJI[d.key]||"")+" "+d.name])); }
+  else { const k=myDeptKey(); if(k&&DEPT_BY_KEY[k]) list.push(["dept:"+k,(DEPT_EMOJI[k]||"")+" "+DEPT_BY_KEY[k].name]); }
   return list;
 }
 async function renderChatRoom(){
   const chans=chatChannels();
-  if(!chans.find(c=>c[0]===chatChannel)) chatChannel=(chans[0]&&chans[0][0])||"company";
+  if(!chans.find(c=>c[0]===chatChannel)) chatChannel="company";
   chatReplyTo=null; chatSearchQ=""; chatOldestAt=null; chatHasMore=false;
   $("v-chat").innerHTML=`<div class="page-h"><div><h2>الدردشة</h2><div class="sub">رسائل الفريق — لحظية</div></div><div style="display:flex;gap:6px"><button class="btn ghost sm" id="chSumBtn">لخّصلي</button><button class="btn ghost sm" id="chSearchBtn">${ICONS.search}</button></div></div>
     <div id="chSearchRow" style="display:none;margin-bottom:8px"><input id="chSearchIn" placeholder="دوّر في الرسائل…" style="width:100%;padding:9px 13px;border:1.5px solid var(--line);border-radius:12px;font-family:inherit;font-size:13px"/></div>
@@ -3779,7 +3774,7 @@ async function renderChatRoom(){
     <div id="chTyping" class="muted" style="font-size:11.5px;min-height:16px;padding:2px 6px"></div>
     <div id="chReplyBar" style="display:none;background:#EAF2FB;border-radius:10px;padding:6px 12px;margin-bottom:6px;font-size:12px;align-items:center;gap:8px"></div>
     <div id="chMention" style="display:none;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:6px;margin-bottom:6px;max-height:140px;overflow-y:auto"></div>
-    <div class="composer"><button class="send" id="chMic" style="background:linear-gradient(135deg,var(--blue),var(--blue-d))">${ICONS.mic.replace(/#94a3b8/g,"#fff")}</button><input id="chIn" placeholder="اكتب رسالة… أو اتكلم" /><button class="send" id="chSend">\u27a4</button></div>`;
+    <div class="composer"><button class="send" id="chMic" style="background:linear-gradient(135deg,var(--blue),var(--blue-d))">${ICONS.mic.replace(/#94a3b8/g,"#fff")}</button><input id="chIn" placeholder="اكتب رسالة… أو اتكلم" /><button class="send sendmsg" id="chSend">${ICONS.send}</button></div>`;
   $("chChips").querySelectorAll("[data-ch]").forEach(b=>b.onclick=()=>{ chatChannel=b.dataset.ch; renderChatRoom(); });
   $("chSend").onclick=sendChat;
   bindSheetMic("chMic","chIn",{idle:ICONS.mic,rec:ICONS.stop,recDict:ICONS.stop,busy:"…",onDone:()=>{ if(($("chIn").value||"").trim()){ toast("اتبعتت صوتيًا","ok"); sendChat(); } }});
