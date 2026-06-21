@@ -2967,7 +2967,8 @@ async function runGlobalSearch(q){
     let rq=sb.from("os_requests").select("id,title,kind,status").ilike("title","%"+q+"%").limit(8);
     let dq=sb.from("os_documents").select("id,title,kind").ilike("title","%"+q+"%").limit(8);
     let pq=sb.from("os_projects").select("id,name,stage").ilike("name","%"+q+"%").limit(8);
-    const [t,r,d,p]=await Promise.all([tq,rq,dq,pq]);
+    let cq=owner?sb.from("clients").select("id,name,service,city").ilike("name","%"+q+"%").limit(8):Promise.resolve({data:[]});
+    const [t,r,d,p,c]=await Promise.all([tq,rq,dq,pq,cq]);
     const sections=[];
     const mkSec=(label,items,render)=>{ if(items&&items.length){ sections.push('<div class="muted" style="font-size:11px;font-weight:800;margin:10px 2px 5px">'+label+' ('+items.length+')</div>'+items.map(render).join("")); } };
     const card=(go,title,sub,color)=>'<div class="card flat gs-row" data-go="'+go+'" style="cursor:pointer;border-right:4px solid '+color+'"><b style="font-size:13.5px">'+esc(title)+'</b>'+(sub?'<div class="muted" style="font-size:11.5px;margin-top:2px">'+esc(sub)+'</div>':'')+'</div>';
@@ -2975,9 +2976,10 @@ async function runGlobalSearch(q){
     mkSec("الطلبات",(r&&r.data),x=>card("req",x.title,(kindLabel?kindLabel(x.kind):x.kind)+" · "+(x.status||""),"var(--blue-d)"));
     mkSec("المستندات",(d&&d.data),x=>card("docs",x.title,x.kind||"","var(--green-d)"));
     mkSec("المشاريع",(p&&p.data),x=>card("projects",x.name,x.stage||"","#F59E0B"));
+    mkSec("عملاء الموقع",(c&&c.data),x=>card("clients",x.name,[x.service,x.city].filter(Boolean).join(" · "),"var(--green-d)"));
     if(!sections.length){ box.innerHTML='<div class="empty">مفيش نتايج لـ"'+esc(q)+'".</div>'; return; }
     box.innerHTML=sections.join("");
-    box.querySelectorAll(".gs-row").forEach(el=>el.onclick=()=>{ const go=el.dataset.go; closeSheet(); if(go==="projects"){ if(typeof openProjects==="function") openProjects(); return; } if(go==="docs"){ if(typeof openDocsVault==="function"){ openDocsVault(); return; } } if(go==="tasks"){ taskFilter="all"; } switchTab(go); });
+    box.querySelectorAll(".gs-row").forEach(el=>el.onclick=()=>{ const go=el.dataset.go; closeSheet(); if(go==="projects"){ if(typeof openProjects==="function") openProjects(); return; } if(go==="docs"){ if(typeof openDocsVault==="function"){ openDocsVault(); return; } } if(go==="clients"){ if(typeof openSalesFunnel==="function"){ openSalesFunnel(); return; } } if(go==="tasks"){ taskFilter="all"; } switchTab(go); });
   }catch(e){ box.innerHTML=failBox("معرفناش ندوّر دلوقتي.",()=>runGlobalSearch(q)); }
 }
 async function openNotifications(){
@@ -3091,7 +3093,7 @@ function initPullRefresh(){
   ind.textContent="اسحب للتحديث…";
   document.body.appendChild(ind);
   document.addEventListener("touchstart",(e)=>{
-    if(activeTab!=="home"||window.scrollY>2||$("modal").classList.contains("open")) return;
+    if(window.scrollY>2||$("modal").classList.contains("open")) return;
     sy=e.touches[0].clientY; pulling=true; fired=false;
   },{passive:true});
   document.addEventListener("touchmove",(e)=>{
@@ -3102,7 +3104,7 @@ function initPullRefresh(){
   },{passive:true});
   document.addEventListener("touchend",()=>{
     if(!pulling) return; pulling=false;
-    if(fired){ ind.textContent="بنحدّث…"; renderHome(); setTimeout(()=>{ ind.style.top="-46px"; },700); }
+    if(fired){ ind.textContent="بنحدّث…"; try{ switchTab(activeTab); }catch(_e){ renderHome(); } setTimeout(()=>{ ind.style.top="-46px"; },700); }
     else ind.style.top="-46px";
     fired=false;
   },{passive:true});
@@ -3914,6 +3916,10 @@ async function renderTasks(){
   if(taskFilter==="archive"){ renderArchive(); return; }
   let data; try{ const r=await sb.from("os_tasks").select("*").order("created_at",{ascending:false}); data=r.data||[]; }
   catch(e){ $("taskList").innerHTML=failBox("معرفناش نجيب المهام. "+esc(e.message||""),renderTasks); return; }
+  try{ const cMine=data.filter(t=>t.assignee_id===ME.id).length, cAll=data.length;
+    const chM=$("v-tasks").querySelector('[data-f="mine"]'); if(chM) chM.textContent="مهامي ("+cMine+")";
+    const chA=$("v-tasks").querySelector('[data-f="all"]'); if(chA) chA.textContent="الكل ("+cAll+")";
+  }catch(e){}
   let list = taskFilter==="mine" ? data.filter(t=>t.assignee_id===ME.id) : data;
   /* فرز ذكي: المتأخر أولًا، بعدين العاجل، بعدين الأحدث — والمخلَّصة آخر حاجة */
   const now=Date.now();
