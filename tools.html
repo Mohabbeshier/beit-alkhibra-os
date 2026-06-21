@@ -589,6 +589,7 @@ function renderOwnerHome(d){
     body+=`<div class="sec-h" style="color:var(--red)">مهام متأخرة محتاجة متابعة <span class="ln"></span></div>`;
     body+=overdue.slice(0,4).map(t=>`<div class="card flat" style="border-right:4px solid var(--red)"><b>${esc(t.title)}</b><div class="meta"><span>${esc(t.assignee_name||nameOf(t.assignee_id)||"—")}</span><span class="dot"></span><span>${fmtDate(t.deadline)}</span></div></div>`).join("");
   }
+  body+=myTasksSection(d);
   body+=`<div class="sec-h">الأقسام — متابعة حيّة <span class="ln"></span></div>`;
   body+=deptStats.map(x=>`<button class="card dept-card" data-dept="${x.dep.key}" style="width:100%;text-align:right;cursor:pointer">
       <div class="avatar" style="width:34px;height:34px;font-size:14px;flex-shrink:0">${(x.dep.name||"")[0]||""}</div>
@@ -603,7 +604,11 @@ function renderOwnerHome(d){
       </div>
     </button>`).join("");
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
-    <div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn sm" data-quick="myday" style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button>${["owner","ops","manager"].includes(ME.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}<button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button><button class="btn ghost sm" data-quick="projects">المشاريع</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}<button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button><button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
+    <div class="row-actions"><button class="btn sm" data-quick="myday" style="flex:1;background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button></div>
+    <div class="muted" style="font-size:10.5px;font-weight:800;margin:10px 2px 3px;opacity:.85">أنشئ بسرعة</div>
+    <div class="row-actions" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button></div>
+    <div class="muted" style="font-size:10.5px;font-weight:800;margin:11px 2px 3px;opacity:.85">روح لـ</div>
+    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${["owner","ops","manager"].includes(ME.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
   if(d.evs.length){
     body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   }
@@ -628,10 +633,15 @@ function renderOpsHome(d){
   if(d.pendIn.length){
     body+=`<div class="sec-h">طلبات مستنية ردّك <span class="ln"></span></div>`+d.pendIn.slice(0,4).map(r=>reqMiniHtml(r)).join("");
   }
+  body+=myTasksSection(d);
   body+=`<div class="sec-h">اسأل أي قسم <span class="ln"></span></div>`;
-  body+=DEPTS.map(dep=>deptChipHtml(dep)).join("");
+  body+=`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:11px">`+DEPTS.map(dep=>deptChipHtml(dep)).join("")+`</div>`;
   body+=`<div class="sec-h">تحركات سريعة <span class="ln"></span></div>
-    <div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn sm" data-quick="myday" style="background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn ghost sm" data-quick="event">موعد</button>${["owner","ops","manager"].includes(ME.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}<button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button><button class="btn ghost sm" data-quick="projects">المشاريع</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}<button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button><button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
+    <div class="row-actions"><button class="btn sm" data-quick="myday" style="flex:1;background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button></div>
+    <div class="muted" style="font-size:10.5px;font-weight:800;margin:10px 2px 3px;opacity:.85">أنشئ بسرعة</div>
+    <div class="row-actions" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn ghost sm" data-quick="event">موعد</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button></div>
+    <div class="muted" style="font-size:10.5px;font-weight:800;margin:11px 2px 3px;opacity:.85">روح لـ</div>
+    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${["owner","ops","manager"].includes(ME.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   body+='<div id="presBox"></div><div id="wwBox"></div><div id="wlBox"></div><div id="activityBox"></div>';
   el.innerHTML=body;
@@ -701,9 +711,19 @@ function renderEmployeeHome(d){
   HOME_SUMMARY=`${d.greet} يا ${PROFILE.name}. عليك ${myTasks.length} مهمة${myOverdue.length?("، منهم "+myOverdue.length+" متأخرة"):""}. ${d.evTxt} لو محتاج حاجة، دوس اسأل قسمك واتكلم.`;
 }
 
+/* ---------- my own tasks (home, owner/ops) ---------- */
+function myTasksSection(d){
+  const mine=(d.openTasks||[]).filter(t=>t.assignee_id===ME.id);
+  if(!mine.length) return "";
+  const late=mine.filter(t=>t.deadline&&new Date(t.deadline)<new Date()).length;
+  let h=`<div class="sec-h">مهامي أنا${late?` <span class="badge b-red" style="font-size:10px">${late} متأخرة</span>`:""} <span class="ln"></span></div>`;
+  h+=mine.slice(0,5).map(t=>`<button class="card flat" data-task="${t.id}" style="width:100%;text-align:right;cursor:pointer${t.deadline&&new Date(t.deadline)<new Date()?';border-right:4px solid var(--red)':''}"><b>${esc(t.title)}</b><div class="meta">${t.deadline?`<span>${fmtDate(t.deadline)}</span>`:`<span class="muted">من غير موعد</span>`}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}<span class="dot"></span><span class="muted">${t.progress||0}%</span></div></button>`).join("");
+  if(mine.length>5) h+=`<button class="btn ghost sm" data-task="more" style="margin-top:6px">شوف كل مهامي (${mine.length})</button>`;
+  return h;
+}
 /* ---------- shared html bits ---------- */
-function deptChipHtml(dep){ const mgr=PROFILES.find(p=>p.email===dep.manager_email);
-  return `<button class="card dept-card" data-dept="${dep.key}" style="width:100%;text-align:right;cursor:pointer"><div class="avatar" style="width:34px;height:34px;font-size:14px;flex-shrink:0">${(dep.name||"")[0]||""}</div><div style="flex:1"><div style="font-weight:800">${esc(dep.name)}</div><div class="muted" style="font-size:12px">${mgr?("المدير: "+esc(mgr.name)):(dep.manager_name?("المدير: "+esc(dep.manager_name)):"\u2014")}</div></div><span class="badge b-blue">اسأل</span></button>`;
+function deptChipHtml(dep){
+  return `<button class="dept-chip" data-dept="${dep.key}" style="cursor:pointer;font-family:inherit;font-weight:700;font-size:13px;padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:var(--soft);color:var(--ink);white-space:nowrap">${esc(dep.name)}</button>`;
 }
 function reqMiniHtml(r){ return `<button class="card flat" data-go="req" style="width:100%;text-align:right;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px;align-items:start"><b>${esc(r.title||"طلب")}</b>${r.priority==="high"?prioBadge("high"):""}</div><div class="meta"><span>من ${esc(r.from_name||nameOf(r.from_id)||"زميل")}</span><span class="dot"></span><span class="muted">${relativeTime(r.created_at)}</span></div></button>`; }
 function evCardHtml(e){ return `<div class="card flat" style="background:var(--soft)"><b>${esc(e.title)}</b><div class="meta"><span>${e.at_time?new Date(e.at_time).toLocaleString("ar-EG",{weekday:"long",day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"}):"\u2014"}</span>${e.with_who?`<span class="dot"></span><span>مع ${esc(e.with_who)}</span>`:""}</div></div>`; }
@@ -1875,8 +1895,10 @@ async function loadWorkload(){
 async function loadActivity(){
   const box=$("activityBox"); if(!box) return;
   try{
-    const { data }=await sb.from("os_activity_log").select("actor_name,summary,action,at").order("at",{ascending:false}).limit(6);
-    if(!data||!data.length){ box.innerHTML=""; return; }
+    const { data:raw }=await sb.from("os_activity_log").select("actor_name,summary,action,at").order("at",{ascending:false}).limit(40);
+    const HIDE_ACT=["backup_done"], HIDE_PFX=["🤖","تعلّم النظام","بيانات العميل"];
+    const data=(raw||[]).filter(a=> !HIDE_ACT.includes(a.action) && !HIDE_PFX.some(p=>String(a.summary||"").startsWith(p)) ).slice(0,6);
+    if(!data.length){ box.innerHTML=""; return; }
     box.innerHTML='<div class="sec-h">آخر نشاط <span class="ln"></span></div><div class="card flat" style="padding:10px 14px">'
       +data.map(a=>'<div style="display:flex;gap:8px;align-items:baseline;padding:5px 0;border-bottom:1px dashed var(--line);font-size:13px"><b style="white-space:nowrap">'+esc(a.actor_name||"\u2014")+'</b><span style="flex:1">'+esc(a.summary||a.action||"")+'</span><span class="muted" style="font-size:11px;white-space:nowrap">'+relativeTime(a.at)+'</span></div>').join("")
       +'</div>';
