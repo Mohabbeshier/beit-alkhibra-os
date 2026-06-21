@@ -3822,10 +3822,11 @@ async function renderChatRoom(){
     <div id="chTyping" class="muted" style="font-size:11.5px;min-height:16px;padding:2px 6px"></div>
     <div id="chReplyBar" style="display:none;background:#EAF2FB;border-radius:10px;padding:6px 12px;margin-bottom:6px;font-size:12px;align-items:center;gap:8px"></div>
     <div id="chMention" style="display:none;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:6px;margin-bottom:6px;max-height:140px;overflow-y:auto"></div>
-    <div class="composer"><button class="send mic-sec" id="chMic" aria-label="سجّل بصوتك">${ICONS.mic.replace(/#94a3b8/g,"var(--blue)")}</button><input id="chIn" placeholder="اكتب رسالة… أو اتكلم" /><button class="send sendmsg" id="chSend">${ICONS.send}</button></div>`;
+    <div class="composer"><button class="send" id="chAttach" aria-label="إرفاق" style="background:#EEF3F9;color:var(--blue-d);box-shadow:none"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.19 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/></svg></button><button class="send mic-sec" id="chMic" aria-label="سجّل بصوتك">${ICONS.mic.replace(/#94a3b8/g,"var(--blue)")}</button><input id="chIn" placeholder="اكتب رسالة… أو اتكلم" /><button class="send sendmsg" id="chSend">${ICONS.send}</button></div>`;
   $("chChips").querySelectorAll("[data-ch]").forEach(b=>b.onclick=()=>{ chatChannel=b.dataset.ch; renderChatRoom(); });
   $("chSend").onclick=sendChat;
   bindSheetMic("chMic","chIn",{idle:ICONS.mic,rec:ICONS.stop,recDict:ICONS.stop,busy:"…",onDone:()=>{ if(($("chIn").value||"").trim()){ toast("اتبعتت صوتيًا","ok"); sendChat(); } }});
+    var _atb=$("chAttach"); if(_atb) _atb.onclick=openChatAttachSheet;
   if(_chatDraft){ $("chIn").value=_chatDraft; }
   $("chIn").addEventListener("blur",()=>{ _chatDraft=$("chIn")?($("chIn").value||""):""; });
   $("chIn").addEventListener("keydown",e=>{ if(e.key==="Enter") sendChat(); });
@@ -3926,7 +3927,7 @@ function paintChat(keepScroll){
     return sep+'<div class="msg '+(mine?'me':'ai')+'" style="max-width:86%">'
       +(!mine?'<div style="font-weight:800;font-size:12px;color:var(--blue-d);margin-bottom:3px">'+esc(m.by_name||"")+(m.by_role==='owner'?'':'')+(m.pinned?' '+ICONS.pin:'')+'</div>':(m.pinned?'<div style="font-size:11px;margin-bottom:2px">'+ICONS.pin+' مثبتة</div>':''))
       +quote
-      +highlightMentions(esc(m.body))
+      +highlightMentions(esc(m.body))+attachHtml(m)
       +rxHtml
       +(function(){
           let tick="";
@@ -3982,6 +3983,74 @@ async function toggleReaction(msgId,emoji){
   }catch(e){ toast("معرفناش نسجل التفاعل","bad"); }
 }
 let _chatDraft="", _reqDraft=null;
+/* ===== مرفقات الشات: صور/ملفات/فويس نوت — كل القنوات ===== */
+const CHATMEDIA_MAX=25*1048576;
+function _fmtBytes(b){ b=+b||0; if(b<1024) return b+" ب"; if(b<1048576) return Math.round(b/1024)+" ك.ب"; return (b/1048576).toFixed(1)+" م.ب"; }
+const _IMG_SVG='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>';
+async function uploadChatMedia(file, kind, dur){
+  if(file.size>CHATMEDIA_MAX){ toast("الملف أكبر من 25 ميجا","bad"); return null; }
+  var nm=file.name||((kind==="audio")?("voice."+((recMime()&&recMime().indexOf("mp4")>=0)?"m4a":"webm")):(kind+".bin"));
+  var ext=(nm.split(".").pop()||"bin").toLowerCase();
+  var safe=nm.replace(/[^\w.\-]+/g,"_").slice(-50);
+  var path=String(chatChannel).replace(/[^\w\-]+/g,"_")+"/"+ME.id+"/"+Date.now()+"-"+Math.random().toString(36).slice(2)+"-"+ext;
+  var up=await sb.storage.from("chat-media").upload(path, file, { upsert:false, contentType:file.type||undefined });
+  if(up.error){ toast("فشل الرفع: "+(up.error.message||""),"bad"); return null; }
+  var s=await sb.storage.from("chat-media").createSignedUrl(path, 315360000);
+  return { url:(s.data&&s.data.signedUrl)||"", name:(kind==="audio"?"فويس نوت":(file.name||"ملف")), type:file.type||"", size:file.size, kind:kind, dur:dur||0 };
+}
+async function sendChatAttachment(file, kind, dur){
+  toast("بيترفع…","ok");
+  var att=await uploadChatMedia(file, kind, dur); if(!att) return;
+  var payload={ channel:chatChannel, body:"", by_id:ME.id, by_name:PROFILE.name, by_role:PROFILE.role, attachments:[att] };
+  if(chatReplyTo){ payload.reply_to_id=chatReplyTo.id; payload.reply_preview=chatReplyTo.name+": "+chatReplyTo.preview; }
+  var r=await sb.from("os_messages").insert(payload);
+  if(r.error){ toast("معرفناش نبعت المرفق","bad"); return; }
+  setReply(null); loadChat();
+}
+function attachHtml(m){
+  var a=(m.attachments&&m.attachments[0])||null; if(!a||!a.url) return "";
+  if(a.kind==="image") return '<a href="'+esc(a.url)+'" target="_blank" rel="noopener" style="display:block;margin-top:6px"><img src="'+esc(a.url)+'" alt="" loading="lazy" style="max-width:220px;max-height:240px;border-radius:12px;display:block"/></a>';
+  if(a.kind==="audio") return '<audio controls preload="none" src="'+esc(a.url)+'" style="margin-top:6px;width:230px;max-width:100%;height:40px"></audio>';
+  return '<a href="'+esc(a.url)+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;margin-top:6px;background:#F1F5F9;border-radius:10px;padding:8px 12px;font-size:12.5px;font-weight:800;color:var(--blue-d);text-decoration:none">'+ICONS.doc+'<span>'+esc(a.name||"ملف")+' · '+_fmtBytes(a.size)+'</span></a>';
+}
+function pickChatFile(accept, kind){
+  var inp=document.createElement("input"); inp.type="file"; if(accept) inp.accept=accept;
+  inp.onchange=function(){ var f=inp.files&&inp.files[0]; if(f){ var k=(kind==="image"||String(f.type).indexOf("image/")===0)?"image":"file"; sendChatAttachment(f,k,0); } };
+  inp.click();
+}
+function openChatAttachSheet(){
+  openSheet('<div style="padding:4px 2px"><h3 style="margin:2px 0 12px;font-size:16px">إرفاق للشات</h3>'
+    +'<button class="btn" id="atImg" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px">'+_IMG_SVG+' صورة</button>'
+    +'<button class="btn" id="atFile" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px">'+ICONS.doc+' ملف</button>'
+    +'<button class="btn" id="atVoice" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px">'+ICONS.mic+' فويس نوت</button></div>');
+  var ai=$("atImg"); if(ai) ai.onclick=function(){ closeSheet(); pickChatFile("image/*","image"); };
+  var af=$("atFile"); if(af) af.onclick=function(){ closeSheet(); pickChatFile("","file"); };
+  var av=$("atVoice"); if(av) av.onclick=function(){ openVoiceRecorder(); };
+}
+let _vnRec=null,_vnStream=null,_vnChunks=[],_vnT0=0,_vnTimer=null;
+function _vnStop(){ try{ if(_vnStream){ _vnStream.getTracks().forEach(function(t){t.stop();}); _vnStream=null; } }catch(e){} }
+function openVoiceRecorder(){
+  if(!hasMediaRec()){ toast("التسجيل مش متاح هنا","bad"); return; }
+  openSheet('<div class="mic-wrap"><div class="mic" id="vnMic">'+ICONS.mic+'</div><div class="mic-hint" id="vnHint">دوس عشان تسجّل</div><div style="display:flex;gap:10px;margin-top:8px"><button class="btn ghost sm" id="vnCancel">إلغاء</button><button class="btn sm" id="vnSend" style="display:none">ابعت</button></div></div>');
+  var blob=null, dur=0;
+  var mic=$("vnMic"), hint=$("vnHint"), sendB=$("vnSend"), cancelB=$("vnCancel");
+  cancelB.onclick=function(){ try{ if(_vnRec&&_vnRec.state==="recording") _vnRec.stop(); }catch(e){} _vnStop(); clearInterval(_vnTimer); closeSheet(); };
+  mic.onclick=async function(){
+    if(_vnRec&&_vnRec.state==="recording"){ _vnRec.stop(); return; }
+    if(blob){ blob=null; sendB.style.display="none"; mic.classList.remove("rec"); hint.textContent="دوس عشان تسجّل"; return; }
+    try{
+      _vnStream=await navigator.mediaDevices.getUserMedia({audio:true});
+      _vnRec=new MediaRecorder(_vnStream, recMime()?{mimeType:recMime()}:undefined);
+      _vnChunks=[]; _vnRec.ondataavailable=function(e){ if(e.data&&e.data.size) _vnChunks.push(e.data); };
+      _vnRec.onstop=function(){ dur=Math.round((performance.now()-_vnT0)/1000); blob=new Blob(_vnChunks,{type:(_vnRec.mimeType||"audio/webm")}); _vnStop(); clearInterval(_vnTimer); mic.classList.remove("rec"); hint.textContent="مدة "+dur+"ث — دوس ابعت"; sendB.style.display="inline-flex"; };
+      _vnRec.start(); _vnT0=performance.now(); mic.classList.add("rec"); hint.textContent="بيسجّل… دوس عشان توقف";
+      _vnTimer=setInterval(function(){ hint.textContent="بيسجّل… "+Math.round((performance.now()-_vnT0)/1000)+"ث (دوس توقف)"; },500);
+      setTimeout(function(){ if(_vnRec&&_vnRec.state==="recording") _vnRec.stop(); },180000);
+    }catch(e){ toast((e&&e.name==="NotAllowedError")?"لازم تسمح بالميكروفون":"معرفناش نسجّل","bad"); }
+  };
+  sendB.onclick=function(){ if(!blob) return; var f=new File([blob],"voice."+((recMime()&&recMime().indexOf("mp4")>=0)?"m4a":"webm"),{type:blob.type||"audio/webm"}); closeSheet(); sendChatAttachment(f,"audio",dur); };
+}
+
 async function sendChat(){
   track("action","chat_send");
   const inp=$("chIn"); const t=(inp.value||"").trim(); if(!t) return;
