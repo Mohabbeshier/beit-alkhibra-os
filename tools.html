@@ -4170,6 +4170,19 @@ async function loadClientJourney(taskId){
     if(data.file_url){ const fb=document.createElement("button"); fb.type="button"; fb.textContent="\ud83d\udcce افتح الملف المرفق"; fb.style.cssText="margin-top:8px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#0D2538;background:#EAF2FB;border:1px solid #CFE0F3;border-radius:8px;padding:7px 12px;cursor:pointer"; fb.onclick=()=>{ window.open(data.file_url,"_blank","noopener"); }; card.appendChild(fb); }
   }catch(e){}
 }
+function tlNote(note){
+  if(!note) return "";
+  var m=note.match(/https?:\/\/\S+/);
+  if(!m) return esc(note);
+  var url=m[0];
+  var pre=note.slice(0,m.index).replace(/\s*[:：]\s*$/,"");
+  var post=note.slice(m.index+url.length);
+  var isWa=/wa\.me|whatsapp/i.test(url);
+  var label=isWa?"📲 رد عبر واتساب":"🔗 افتح الرابط";
+  var col=isWa?"#166534":"#0D2538",bg=isWa?"#E8F5E9":"#EAF2FB",bd=isWa?"#86EFAC":"#CFE0F3";
+  var a='<a href="'+url.replace(/"/g,"%22")+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:'+col+';background:'+bg+';border:1px solid '+bd+';border-radius:7px;padding:3px 9px;text-decoration:none">'+label+'</a>';
+  return (pre?esc(pre)+" ":"")+a+(post?" "+esc(post):"");
+}
 async function loadTaskTimeline(taskId){
   let ups=[]; try{ const r=await sb.from("os_task_updates").select("by_name,note,percent,at").eq("task_id",taskId).order("at",{ascending:false}).limit(15); ups=r.data||[]; }catch(e){}
   const box=$("tlBox"); if(!box) return;
@@ -4177,7 +4190,7 @@ async function loadTaskTimeline(taskId){
   box.innerHTML=`<div class="sec-h" style="margin-top:4px">سجل التقدّم <span class="ln"></span></div>`+
     ups.map(u=>`<div style="display:flex;gap:8px;align-items:baseline;margin-bottom:7px;font-size:13px;color:var(--ink)">
       <span class="badge b-green" style="min-width:46px;justify-content:center">${u.percent==null?"—":u.percent+"%"}</span>
-      <div style="flex:1"><b>${esc(u.by_name||"")}</b>${u.note?(" — "+esc(u.note)):""} <span class="muted" style="font-size:11.5px">· ${timeAgo(u.at)}</span></div>
+      <div style="flex:1"><b>${esc(u.by_name||"")}</b>${u.note?(" — "+tlNote(u.note)):""} <span class="muted" style="font-size:11.5px">· ${timeAgo(u.at)}</span></div>
     </div>`).join("");
 }
 function openNewEvent(){
