@@ -126,6 +126,9 @@ a{color:var(--blue-d);}
 #v-chat{padding-bottom:calc(var(--tabh) + env(safe-area-inset-bottom) + 84px);}
 .chip{padding:8px 15px;border-radius:999px;font-weight:700;font-size:13.5px;background:var(--soft);color:var(--muted);}
 .chip.on{background:linear-gradient(135deg,var(--blue),var(--blue-d));color:#fff;}
+.dept-chip{transition:transform .08s ease,background .15s ease,border-color .15s ease;}
+.dept-chip:active{transform:scale(.96);background:var(--blue-l);border-color:var(--blue);}
+.dept-chip:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
 .qbtns{display:flex;gap:7px;flex-wrap:wrap;margin-top:6px;}
 .qbtn{padding:7px 12px;border-radius:10px;background:var(--soft);font-weight:700;font-size:13px;color:var(--blue-d);}
 .qbtn.on{background:var(--blue);color:#fff;}
@@ -713,7 +716,14 @@ function renderEmployeeHome(d){
 
 /* ---------- my own tasks (home, owner/ops) ---------- */
 function myTasksSection(d){
-  const mine=(d.openTasks||[]).filter(t=>t.assignee_id===ME.id);
+  const _now=Date.now();
+  const mine=(d.openTasks||[]).filter(t=>t.assignee_id===ME.id).slice().sort((a,b)=>{
+    const ad=a.deadline?new Date(a.deadline).getTime():Infinity, bd=b.deadline?new Date(b.deadline).getTime():Infinity;
+    const ao=ad<_now?0:1, bo=bd<_now?0:1;
+    if(ao!==bo) return ao-bo;
+    if(ad!==bd) return ad-bd;
+    return (b.priority==="high"?1:0)-(a.priority==="high"?1:0);
+  });
   if(!mine.length) return "";
   const late=mine.filter(t=>t.deadline&&new Date(t.deadline)<new Date()).length;
   let h=`<div class="sec-h">مهامي أنا${late?` <span class="badge b-red" style="font-size:10px">${late} متأخرة</span>`:""} <span class="ln"></span></div>`;
@@ -723,7 +733,7 @@ function myTasksSection(d){
 }
 /* ---------- shared html bits ---------- */
 function deptChipHtml(dep){
-  return `<button class="dept-chip" data-dept="${dep.key}" style="cursor:pointer;font-family:inherit;font-weight:700;font-size:13px;padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:var(--soft);color:var(--ink);white-space:nowrap">${esc(dep.name)}</button>`;
+  return `<button class="dept-chip" data-dept="${dep.key}" style="cursor:pointer;font-family:inherit;font-weight:700;font-size:13px;padding:11px 16px;border-radius:999px;border:1px solid var(--line);background:var(--soft);color:var(--ink);white-space:nowrap">${esc(dep.name)}</button>`;
 }
 function reqMiniHtml(r){ return `<button class="card flat" data-go="req" style="width:100%;text-align:right;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px;align-items:start"><b>${esc(r.title||"طلب")}</b>${r.priority==="high"?prioBadge("high"):""}</div><div class="meta"><span>من ${esc(r.from_name||nameOf(r.from_id)||"زميل")}</span><span class="dot"></span><span class="muted">${relativeTime(r.created_at)}</span></div></button>`; }
 function evCardHtml(e){ return `<div class="card flat" style="background:var(--soft)"><b>${esc(e.title)}</b><div class="meta"><span>${e.at_time?new Date(e.at_time).toLocaleString("ar-EG",{weekday:"long",day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"}):"\u2014"}</span>${e.with_who?`<span class="dot"></span><span>مع ${esc(e.with_who)}</span>`:""}</div></div>`; }
@@ -2144,7 +2154,7 @@ function wireHome(el){
   }
   el.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{ if(b.dataset.ev) taskFilter="events"; switchTab(b.dataset.go); });
   el.querySelectorAll("[data-dept]").forEach(b=>b.onclick=()=>{ if(isOwnerOps()){ openDeptPanel(b.dataset.dept); } else { askDeptKey=b.dataset.dept; chatHistory=[]; switchTab("ask"); } });
-  el.querySelectorAll("[data-task]").forEach(b=>b.onclick=async()=>{ switchTab("tasks"); });
+  el.querySelectorAll("[data-task]").forEach(b=>b.onclick=async()=>{ taskFilter="mine"; switchTab("tasks"); });
   el.querySelectorAll("[data-quick]").forEach(b=>b.onclick=()=>{
     const q=b.dataset.quick;
     track("action","quick:"+q);
