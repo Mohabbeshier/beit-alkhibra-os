@@ -4154,10 +4154,11 @@ async function loadClientJourney(taskId){
     const card=document.createElement("div");
     card.className="card flat";
     card.style.cssText="border-right:4px solid var(--green-d);background:#F6FFF8;margin-bottom:10px";
+    const canPhone=(PROFILE.role==="owner"||PROFILE.dept==="ops_marketing");
     const phoneClean=String(data.phone||"").replace(/[^+\d]/g,"");
     card.innerHTML='<b style="font-size:13.5px">ملف العميل — '+esc(data.name||"\u2014")+'</b>'
       +'<div class="muted" style="font-size:12.5px;margin-top:6px;line-height:2">'
-      +(data.phone?''+esc(data.phone)+' <button class="lnk" id="cjCall" style="font-size:11px">اتصل</button> <button class="lnk" id="cjWa" style="font-size:11px;color:var(--green-d)">واتساب</button><br>':'')
+      +((data.phone&&canPhone)?''+esc(data.phone)+' <button class="lnk" id="cjCall" style="font-size:11px">اتصل</button> <button class="lnk" id="cjWa" style="font-size:11px;color:var(--green-d)">واتساب</button> <button class="lnk" id="cjReply" style="font-size:11px;color:var(--green-d)">رد جاهز</button><br>':'')
       +(data.city?''+esc(data.city)+' \u00b7 ':'')+(data.service?''+esc(data.service):'')+(data.details?'<br>تفاصيل: '+esc(data.details):'')
       +'<br>دخل من الموقع: '+relativeTime(data.entered_at)
       +' \u00b7 لمسات: '+(data.touches||0)
@@ -4167,6 +4168,7 @@ async function loadClientJourney(taskId){
     tl.parentNode.insertBefore(card,tl);
     const c1=card.querySelector("#cjCall"); if(c1) c1.onclick=()=>{ location.href="tel:"+phoneClean; };
     const c2=card.querySelector("#cjWa"); if(c2) c2.onclick=()=>{ window.open("https://wa.me/"+phoneClean.replace("+",""),"_blank"); };
+    const c3=card.querySelector("#cjReply"); if(c3) c3.onclick=()=>{ const msg="أهلًا "+(data.name||"")+"، معاك مهاب من بيت الخبرة للاستشارات الهندسية. استلمنا طلبك بخصوص "+(data.service||"مشروعك")+" وجاهزين نساعدك فورًا 🌟"; window.open("https://wa.me/"+phoneClean.replace("+","")+"?text="+encodeURIComponent(msg),"_blank"); };
     if(data.file_url){ const fb=document.createElement("button"); fb.type="button"; fb.textContent="\ud83d\udcce افتح الملف المرفق"; fb.style.cssText="margin-top:8px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#0D2538;background:#EAF2FB;border:1px solid #CFE0F3;border-radius:8px;padding:7px 12px;cursor:pointer"; fb.onclick=()=>{ window.open(data.file_url,"_blank","noopener"); }; card.appendChild(fb); }
   }catch(e){}
 }
@@ -4183,15 +4185,22 @@ function tlNote(note){
   var a='<a href="'+url.replace(/"/g,"%22")+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:'+col+';background:'+bg+';border:1px solid '+bd+';border-radius:7px;padding:3px 9px;text-decoration:none">'+label+'</a>';
   return (pre?esc(pre)+" ":"")+a+(post?" "+esc(post):"");
 }
+function tlToggleAI(btn){ var sp=btn.nextElementSibling; if(!sp) return; var hid=sp.style.display==='none'; sp.style.display=hid?'inline':'none'; btn.textContent=hid?'🙈 إخفاء الاقتراح':'🧠 اعرض اقتراح الذكاء'; }
 async function loadTaskTimeline(taskId){
   let ups=[]; try{ const r=await sb.from("os_task_updates").select("by_name,note,percent,at").eq("task_id",taskId).order("at",{ascending:false}).limit(15); ups=r.data||[]; }catch(e){}
   const box=$("tlBox"); if(!box) return;
   if(!ups.length){ box.innerHTML=`لسه مفيش تحديثات متسجّلة على المهمة دي.`; return; }
   box.innerHTML=`<div class="sec-h" style="margin-top:4px">سجل التقدّم <span class="ln"></span></div>`+
-    ups.map(u=>`<div style="display:flex;gap:8px;align-items:baseline;margin-bottom:7px;font-size:13px;color:var(--ink)">
-      <span class="badge b-green" style="min-width:46px;justify-content:center">${u.percent==null?"—":u.percent+"%"}</span>
-      <div style="flex:1"><b>${esc(u.by_name||"")}</b>${u.note?(" — "+tlNote(u.note)):""} <span class="muted" style="font-size:11.5px">· ${timeAgo(u.at)}</span></div>
-    </div>`).join("");
+    ups.map(u=>{
+      var isAI=/عقل العملاء/.test(u.by_name||"")||/^\s*🤖/.test(u.note||"");
+      var body = isAI
+        ? `<b>${esc(u.by_name||"")}</b> <button type="button" class="lnk" style="font-size:11px;color:#1565C0" onclick="tlToggleAI(this)">🧠 اعرض اقتراح الذكاء</button><span style="display:none"> — ${tlNote(u.note)}</span> <span class="muted" style="font-size:11.5px">· ${timeAgo(u.at)}</span>`
+        : `<b>${esc(u.by_name||"")}</b>${u.note?(" — "+tlNote(u.note)):""} <span class="muted" style="font-size:11.5px">· ${timeAgo(u.at)}</span>`;
+      return `<div style="display:flex;gap:8px;align-items:baseline;margin-bottom:7px;font-size:13px;color:var(--ink)">
+      <span class="badge b-green" style="min-width:46px;justify-content:center">${isAI?"🧠":(u.percent==null?"—":u.percent+"%")}</span>
+      <div style="flex:1">${body}</div>
+    </div>`;
+    }).join("");
 }
 function openNewEvent(){
   openSheet(`<h3>موعد جديد</h3>
