@@ -159,6 +159,12 @@ a{color:var(--blue-d);}
 .deep-tg.on{background:linear-gradient(135deg,var(--blue),var(--blue-d));color:#fff;box-shadow:0 6px 14px rgba(30,136,229,.25);}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:13px;}
 .stat{background:#fff;border:1px solid var(--line);border-radius:16px;padding:13px 8px;text-align:center;box-shadow:var(--shadow-sm);}
+.stat{transition:transform .1s ease,box-shadow .15s ease;}
+.stat:active{transform:scale(.97);}
+.tabbar .tab{transition:opacity .1s ease;}
+.tabbar .tab:active{opacity:.55;}
+.btn:focus-visible,.btn.sm:focus-visible,.stat:focus-visible,.chip:focus-visible,.dept-chip:focus-visible,.card[data-go]:focus-visible,.card[data-task]:focus-visible,.card[data-dept]:focus-visible,.tabbar .tab:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important;}}
 .stat .n{font-size:24px;font-weight:900;color:var(--blue-d);line-height:1.2;}
 .stat .l{font-size:11.5px;color:var(--muted);font-weight:700;margin-top:2px;}
 .dept-card{display:flex;align-items:center;gap:11px;}
@@ -588,9 +594,10 @@ function renderOwnerHome(d){
       <div class="muted" style="font-size:12.5px;margin:4px 0 10px">${d.joins.map(j=>esc(j.manager_name)).join("، ")}</div>
       <button class="btn green sm" data-go="req">راجع واقبل</button></div>`;
   }
-  if(overdue.length){
+  const ovOthers=overdue.filter(t=>t.assignee_id!==ME.id);
+  if(ovOthers.length){
     body+=`<div class="sec-h" style="color:var(--red)">مهام متأخرة محتاجة متابعة <span class="ln"></span></div>`;
-    body+=overdue.slice(0,4).map(t=>`<div class="card flat" style="border-right:4px solid var(--red)"><b>${esc(t.title)}</b><div class="meta"><span>${esc(t.assignee_name||nameOf(t.assignee_id)||"—")}</span><span class="dot"></span><span>${fmtDate(t.deadline)}</span></div></div>`).join("");
+    body+=ovOthers.slice(0,4).map(t=>`<div class="card flat" style="border-right:4px solid var(--red)"><b>${esc(t.title)}</b><div class="meta"><span>${esc(t.assignee_name||nameOf(t.assignee_id)||"—")}</span><span class="dot"></span><span>${fmtDate(t.deadline)}</span></div></div>`).join("");
   }
   body+=myTasksSection(d);
   body+=`<div class="sec-h">الأقسام — متابعة حيّة <span class="ln"></span></div>`;
@@ -636,9 +643,12 @@ function renderOpsHome(d){
   if(d.pendIn.length){
     body+=`<div class="sec-h">طلبات مستنية ردّك <span class="ln"></span></div>`+d.pendIn.slice(0,4).map(r=>reqMiniHtml(r)).join("");
   }
+  if(!d.joins.length&&!d.pendIn.length&&!(d.openTasks||[]).some(t=>t.assignee_id===ME.id)){
+    body+=`<div class="card flat" style="text-align:center;background:linear-gradient(135deg,#E8F5E9,#F1FFF4);border-color:#C8E6C9"><b>كل حاجة تمام ✓</b><div class="muted" style="font-size:12px;margin-top:2px">مفيش طلبات مستنية ولا مهام عليك دلوقتي</div></div>`;
+  }
   body+=myTasksSection(d);
   body+=`<div class="sec-h">اسأل أي قسم <span class="ln"></span></div>`;
-  body+=`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:11px">`+DEPTS.map(dep=>deptChipHtml(dep)).join("")+`</div>`;
+  body+=`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:11px">`+DEPTS.map(dep=>deptChipHtml(dep,(d.openTasks||[]).filter(t=>t.dept===dep.key).length)).join("")+`</div>`;
   body+=`<div class="sec-h">تحركات سريعة <span class="ln"></span></div>
     <div class="row-actions"><button class="btn sm" data-quick="myday" style="flex:1;background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button></div>
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:10px 2px 3px;opacity:.85">أنشئ بسرعة</div>
@@ -707,7 +717,7 @@ function renderEmployeeHome(d){
     <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button></div></div>`;
   body+=`<div class="sec-h">المهام اللي عليك <span class="ln"></span></div>`;
   if(myTasks.length){
-    body+=myTasks.slice(0,6).map(t=>`<button class="card flat" data-task="${t.id}" style="width:100%;text-align:right;cursor:pointer"${t.deadline&&new Date(t.deadline)<new Date()?' style="border-right:4px solid var(--red)"':''}><b>${esc(t.title)}</b><div class="meta">${t.deadline?`<span>${fmtDate(t.deadline)}</span>`:`<span class="muted">من غير موعد</span>`}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}<span class="dot"></span><span class="muted">${t.progress||0}%</span></div></button>`).join("");
+    body+=myTasks.slice(0,6).map(t=>`<button class="card flat" data-task="${t.id}" style="width:100%;text-align:right;cursor:pointer${t.deadline&&new Date(t.deadline)<new Date()?';border-right:4px solid var(--red)':''}"><b>${esc(t.title)}</b><div class="meta">${t.deadline?`<span>${fmtDate(t.deadline)}</span>`:`<span class="muted">من غير موعد</span>`}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}<span class="dot"></span><span class="muted">${t.progress||0}%</span></div></button>`).join("");
   } else body+=`<div class="empty" style="padding:20px">مفيش مهام عليك دلوقتي. مبسوطين بيك!</div>`;
   if(d.evs.length) body+=`<div class="sec-h">مواعيدك الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   el.innerHTML=body;
@@ -726,14 +736,17 @@ function myTasksSection(d){
   });
   if(!mine.length) return "";
   const late=mine.filter(t=>t.deadline&&new Date(t.deadline)<new Date()).length;
-  let h=`<div class="sec-h">مهامي أنا${late?` <span class="badge b-red" style="font-size:10px">${late} متأخرة</span>`:""} <span class="ln"></span></div>`;
+  let h=`<div class="sec-h">مهامي أنا <span class="muted" style="font-weight:700;font-size:11px">${mine.length}</span>${late?` <span class="badge b-red" style="font-size:10px">${late} متأخرة</span>`:""} <span class="ln"></span></div>`;
   h+=mine.slice(0,5).map(t=>`<button class="card flat" data-task="${t.id}" style="width:100%;text-align:right;cursor:pointer${t.deadline&&new Date(t.deadline)<new Date()?';border-right:4px solid var(--red)':''}"><b>${esc(t.title)}</b><div class="meta">${t.deadline?`<span>${fmtDate(t.deadline)}</span>`:`<span class="muted">من غير موعد</span>`}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}<span class="dot"></span><span class="muted">${t.progress||0}%</span></div></button>`).join("");
   if(mine.length>5) h+=`<button class="btn ghost sm" data-task="more" style="margin-top:6px">شوف كل مهامي (${mine.length})</button>`;
   return h;
 }
 /* ---------- shared html bits ---------- */
-function deptChipHtml(dep){
-  return `<button class="dept-chip" data-dept="${dep.key}" style="cursor:pointer;font-family:inherit;font-weight:700;font-size:13px;padding:11px 16px;border-radius:999px;border:1px solid var(--line);background:var(--soft);color:var(--ink);white-space:nowrap">${esc(dep.name)}</button>`;
+function deptChipHtml(dep,n){
+  const mgr=PROFILES.find(p=>p.email===dep.manager_email);
+  const who=mgr?firstName(mgr.name):(dep.manager_name?firstName(dep.manager_name):"");
+  const cnt=(n&&n>0)?` <span style="font-weight:800;font-size:11px;color:var(--blue-d)">· ${n}</span>`:"";
+  return `<button class="dept-chip" data-dept="${dep.key}" style="cursor:pointer;font-family:inherit;display:inline-flex;flex-direction:column;align-items:flex-start;gap:1px;padding:8px 15px;border-radius:16px;border:1px solid var(--line);background:var(--soft);color:var(--ink);white-space:nowrap"><span style="font-weight:700;font-size:13px">${esc(dep.name)}${cnt}</span>${who?`<span class="muted" style="font-size:10px">${esc(who)}</span>`:""}</button>`;
 }
 function reqMiniHtml(r){ return `<button class="card flat" data-go="req" style="width:100%;text-align:right;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px;align-items:start"><b>${esc(r.title||"طلب")}</b>${r.priority==="high"?prioBadge("high"):""}</div><div class="meta"><span>من ${esc(r.from_name||nameOf(r.from_id)||"زميل")}</span><span class="dot"></span><span class="muted">${relativeTime(r.created_at)}</span></div></button>`; }
 function evCardHtml(e){ return `<div class="card flat" style="background:var(--soft)"><b>${esc(e.title)}</b><div class="meta"><span>${e.at_time?new Date(e.at_time).toLocaleString("ar-EG",{weekday:"long",day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"}):"\u2014"}</span>${e.with_who?`<span class="dot"></span><span>مع ${esc(e.with_who)}</span>`:""}</div></div>`; }
