@@ -397,7 +397,7 @@ async function startApp(user){
   try{
     const [{data:prof}, {data:profs}, {data:depts}] = await Promise.all([
       sb.from("os_profiles").select("*").eq("id",user.id).maybeSingle(),
-      sb.from("os_profiles").select("id,name,email,role,dept,manager_id"),
+      sb.from("os_profiles").select("id,name,email,role,dept,manager_id,position"),
       sb.from("os_departments").select("*").order("sort_order",{ascending:true}).order("name"),
     ]);
     PROFILE = prof || { id:user.id, name:(user.email||"مستخدم").split("@")[0], role:"employee", dept:null, email:user.email };
@@ -440,6 +440,7 @@ async function startApp(user){
 
 function isOwnerOps(){ return PROFILE.role==="owner"||PROFILE.role==="ops"; }
 function canSeeClients(){ return isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="hr"); }
+function canSeeLeads(){ if(isOwnerOps()) return true; if(PROFILE.position==="assistant") return true; if(PROFILE.role==="manager"&&String(PROFILE.dept||"").startsWith("off_")) return true; if(PROFILE.dept==="legal"||PROFILE.dept==="finance") return true; return false; }
 function userTitle(p){
   if(p.role==="owner") return "المالك · الإدارة العليا";
   if(p.role==="ops") return p.dept||"إدارة التشغيل";
@@ -684,7 +685,7 @@ function renderManagerHome(d){
     body+=myDeptTasks.slice(0,5).map(t=>`<div class="card flat"${t.deadline&&new Date(t.deadline)<new Date()?' style="border-right:4px solid var(--red)"':''}><b>${esc(t.title)}</b><div class="meta"><span>${esc(t.assignee_name||nameOf(t.assignee_id)||"—")}</span>${t.deadline?`<span class="dot"></span><span>${fmtDate(t.deadline)}</span>`:""}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}</div></div>`).join("");
   } else body+=`<div class="empty" style="padding:18px">مفيش مهام بالقسم لسه.</div>`;
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
-    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="hr"?'<button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}<button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
+    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="hr"?'<button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}<button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   el.innerHTML=body;
   HOME_SUMMARY=`${d.greet} يا ${PROFILE.name}. قسم ${(dep&&dep.name)||""} عنده ${myDeptTasks.length} مهمة شغّالة، منهم ${overdue.length} متأخرة. عندك ${d.pendIn.length} طلب مستني ردك. ${d.evTxt}`;
@@ -716,7 +717,7 @@ function renderEmployeeHome(d){
   body+=`<div class="card" style="background:linear-gradient(135deg,#E3F2FD,#E8F5E9);border:none">
     <b>محتاج تعمل حاجة؟ اتكلم بس</b>
     <div class="muted" style="font-size:12.5px;margin:4px 0 12px">مش لازم تكتب — دوس واتكلم والنظام يفهمك.</div>
-    <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button></div></div>`;
+    <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button>${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}</div></div>`;
   body+=`<div class="sec-h">المهام اللي عليك <span class="ln"></span></div>`;
   if(myTasks.length){
     body+=myTasks.slice(0,6).map(t=>`<button class="card flat" data-task="${t.id}" style="width:100%;text-align:right;cursor:pointer${t.deadline&&new Date(t.deadline)<new Date()?';border-right:4px solid var(--red)':''}"><b>${esc(t.title)}</b><div class="meta">${t.deadline?`<span>${fmtDate(t.deadline)}</span>`:`<span class="muted">من غير موعد</span>`}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}<span class="dot"></span><span class="muted">${t.progress||0}%</span></div></button>`).join("");
@@ -1651,6 +1652,38 @@ async function paintDelegations(){
     });
   }catch(e){ $("dgBox").innerHTML=failBox("معرفناش نجيب التفويضات.",paintDelegations); }
 }
+async function openLeadsFeed(){
+  if(!canSeeLeads()){ toast("الشاشة دي للمكاتب والقانوني والمالية","bad"); return; }
+  openSheet('<h3>📥 الليدز الواردة</h3>'
+    +'<div class="muted" style="margin:-6px 0 10px;font-size:12px">ليدز جايالك من الموقع — مرفق معاها ملفات العميل. لو محتاج رسم/مستند ابعت طلب للمساعد بسهولة. الرقم محمي ومع الأوبريشن/القيادة.</div>'
+    +'<div class="field" style="margin-bottom:8px"><input id="lfSearch" placeholder="دوّر باسم/خدمة/مدينة…"/></div>'
+    +'<div id="lfBox"><div class="skel"></div><div class="skel"></div></div>'
+    +'<button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
+  $("lfSearch").addEventListener("input",()=>paintLeadsFeed($("lfSearch").value));
+  await paintLeadsFeed("");
+}
+async function paintLeadsFeed(qstr){
+  try{
+    const { data }=await sb.from("os_leads_feed").select("*").order("created_at",{ascending:false}).limit(60);
+    let rows=data||[];
+    const s=(qstr||"").trim();
+    if(s) rows=rows.filter(r=>((r.name||"")+" "+(r.service||"")+" "+(r.city||"")).includes(s));
+    if(!rows.length){ $("lfBox").innerHTML='<div class="empty">'+(s?"مفيش نتايج.":"مفيش ليدز لسه.")+'</div>'; return; }
+    $("lfBox").innerHTML='<div class="muted" style="font-size:11.5px;margin-bottom:8px">'+rows.length+' ليد</div>'+rows.map(r=>{
+      const st=esc(r.project_status||"جديد");
+      return '<div class="card flat">'
+        +'<div style="display:flex;gap:8px;align-items:center"><b style="flex:1;font-size:14px">'+esc(r.name||"عميل")+'</b><span class="badge b-blue" style="font-size:10px">'+st+'</span></div>'
+        +'<div class="meta"><span>'+esc(r.service||"خدمة غير محددة")+'</span>'+(r.city?'<span class="dot"></span><span>'+esc(r.city)+'</span>':"")+'<span class="dot"></span><span>'+timeAgo(r.created_at)+'</span></div>'
+        +(r.details?'<div class="muted" style="font-size:12px;margin-top:4px">'+esc(r.details)+'</div>':"")
+        +'<div style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;align-items:center">'
+        +(r.file_url?'<a href="'+esc(r.file_url)+'" target="_blank" class="lnk" style="font-size:12.5px">📎 ملف العميل</a>':'<span class="muted" style="font-size:11.5px">مفيش ملف مرفق</span>')
+        +'<button class="lnk" data-lfreq="1" style="font-size:12.5px;color:var(--blue)">📨 اطلب متابعة/مستند</button>'
+        +(r.has_phone?'<span class="muted" style="font-size:11px">📞 الرقم مع الأوبريشن/القيادة</span>':"")
+        +'</div></div>';
+    }).join("");
+    $("lfBox").querySelectorAll("[data-lfreq]").forEach(b=>b.onclick=()=>{ closeSheet(); switchTab("req"); setTimeout(openNewReq,90); });
+  }catch(e){ $("lfBox").innerHTML=failBox("معرفناش نجيب الليدز.",()=>paintLeadsFeed("")); }
+}
 async function openSalesFunnel(){
   openSheet('<h3>المبيعات والليدز</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">قمع المبيعات الحي + وعد الـ24 ساعة لعملاء الموقع</div><div id="sfBox"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
   try{
@@ -2183,6 +2216,7 @@ function wireHome(el){
     else if(q==="syshealth"){ openSysHealth(); }
     else if(q==="decisions"){ openDecisionsBoard(); }
     else if(q==="sales"){ openSalesFunnel(); }
+    else if(q==="leads"){ openLeadsFeed(); }
     else if(q==="adminhub"){ openAdminHub(); }
     else if(q==="meeting"){ openMeetingReport(); }
     else if(q==="projects"){ openProjects(); }
@@ -2734,6 +2768,10 @@ const NOTIF_META={
   welcome:["","var(--green-d)","أهلًا بيك"],
   member_new:["","var(--blue)","عضو جديد"],
   lead_repeat:["","#F59E0B","عميل رجع تاني"],
+  lead_new:["","var(--green-d)","ليد جديد من الموقع"],
+  file_incoming:["","var(--blue)","ملف وارد لقسمك"],
+  task_received:["","var(--green-d)","المكلَّف استلم"],
+  request_seen:["","var(--blue)","اتشاف طلبك"],
   client_checking:["","var(--blue)","عميل بيتابع"],
   lead_forgotten:["","var(--red)","عميل اتنسى!"],
   lead_escalated:["","var(--red)","تصعيد عميل"],
@@ -3052,6 +3090,8 @@ function wireNtfRows(scope){
     if(ref==="os_tasks"||ref==="task"){ taskFilter="mine"; switchTab("tasks"); }
     else if(ref==="os_requests"||ref==="request"||ref==="os_join_requests"||ref==="join"){ switchTab("req"); }
     else if(ref==="os_messages"||ref==="message"){ switchTab("chat"); }
+    else if(ref==="clients"){ openLeadsFeed(); }
+    else if(ref==="file"){ openMyFiles(); }
     else { switchTab("home"); }
   }; });
 }
