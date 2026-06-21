@@ -350,7 +350,8 @@ const ICONS={
  link:_icoWrap('<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>'),
  doc:_icoWrap('<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>'),
  search:_icoWrap('<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>'),
- send:'<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:scaleX(-1)"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2" fill="#fff" stroke="none"/></svg>'
+ send:'<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:scaleX(-1)"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2" fill="#fff" stroke="none"/></svg>',
+ users:_icoWrap('<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>')
 };
 const MIC_BTN_SVG='<svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></svg>';
 const STOP_BTN_SVG='<svg viewBox="0 0 24 24" width="34" height="34" fill="#fff"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
@@ -3756,17 +3757,59 @@ function hhmm(iso){ const d=new Date(iso); return d.toLocaleTimeString("ar-EG",{
 function highlightMentions(escaped){
   return escaped.replace(/@([\u0600-\u06FF\w]+)/g,'<b style="color:var(--blue-d);background:#EAF2FB;border-radius:5px;padding:0 4px">@$1</b>');
 }
+/* البند ٣: شات بين التيمات — اختيار قسم/مكتب تاني وفتح قناة pair منفصلة */
+function pairLabel(ch){
+  /* ch زي pair:dept_a|dept_b — نطلّع اسم الطرف التاني */
+  try{
+    const body=String(ch).replace(/^pair:/,"");
+    const parts=body.split(/[|:_]/).filter(Boolean);
+    const me=myDeptKey();
+    const others=Object.keys(DEPT_BY_KEY).filter(k=>body.indexOf(k)>=0 && k!==me);
+    const ok=others[0];
+    if(ok&&DEPT_BY_KEY[ok]) return (DEPT_EMOJI[ok]||"")+" "+DEPT_BY_KEY[ok].name;
+  }catch(e){}
+  return "قناة مشتركة";
+}
+function openPairPicker(){
+  const me=myDeptKey();
+  /* كل الأقسام والمكاتب ما عدا قسمي */
+  const all=Object.values(DEPT_BY_KEY)
+    .filter(d=>d.key!==me)
+    .sort((a,b)=>((a.sort_order??500)-(b.sort_order??500))||String(a.name).localeCompare(b.name,"ar"));
+  if(!all.length){ toast("مفيش أقسام تانية متاحة","bad"); return; }
+  const rows=all.map(d=>'<button class="lnk pair-row" data-pk="'+esc(d.key)+'" style="display:flex;align-items:center;gap:9px;width:100%;text-align:right;padding:12px 12px;border:1px solid var(--line);border-radius:13px;margin-bottom:8px;background:#fff;font-size:14px;font-weight:700;color:var(--ink)"><span style="font-size:17px">'+(DEPT_EMOJI[d.key]||ICONS.users)+'</span><span style="flex:1">'+esc(d.name)+'</span><span style="color:var(--muted)">\u2039</span></button>').join("");
+  openSheet('<h3>تواصل مع قسم أو مكتب تاني</h3><div class="muted" style="font-size:12.5px;margin:-4px 0 12px">هتفتح قناة خاصة بينك وبينهم منفصلة عن غرفة القسم.</div><div style="max-height:56vh;overflow-y:auto">'+rows+'</div><div class="row-actions" style="margin-top:6px"><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>');
+  document.querySelectorAll(".pair-row").forEach(b=>b.onclick=()=>openPairChannel(b.dataset.pk));
+}
+async function openPairChannel(otherKey){
+  const me=myDeptKey();
+  if(!me){ toast("لازم تكون في قسم عشان تفتح قناة مشتركة","bad"); return; }
+  if(me===otherKey){ toast("ده قسمك أنت","bad"); return; }
+  try{
+    const { data, error }=await sb.rpc("os_pair_channel",{ a:me, b:otherKey });
+    if(error) throw error;
+    const ch=(typeof data==="string")?data:(data&&data.channel)||(Array.isArray(data)&&data[0]);
+    if(!ch){ toast("معرفناش نفتح القناة","bad"); return; }
+    closeSheet();
+    chatChannel=ch;
+    renderChatRoom();
+    toast("اتفتحت قناة مع "+((DEPT_BY_KEY[otherKey]&&DEPT_BY_KEY[otherKey].name)||"القسم"),"ok");
+  }catch(e){ toast("معرفناش نفتح القناة: "+(e.message||""),"bad"); }
+}
 function chatChannels(){
   const list=[["company","الشركة كلها"]];
   if(isOwnerOps()){ DEPTS.forEach(d=>list.push(["dept:"+d.key,(DEPT_EMOJI[d.key]||"")+" "+d.name])); }
   else { const k=myDeptKey(); if(k&&DEPT_BY_KEY[k]) list.push(["dept:"+k,(DEPT_EMOJI[k]||"")+" "+DEPT_BY_KEY[k].name]); }
+  if(String(chatChannel).indexOf("pair:")===0 && !list.find(c=>c[0]===chatChannel)){
+    list.push([chatChannel,pairLabel(chatChannel)]);
+  }
   return list;
 }
 async function renderChatRoom(){
   const chans=chatChannels();
   if(!chans.find(c=>c[0]===chatChannel)) chatChannel="company";
   chatReplyTo=null; chatSearchQ=""; chatOldestAt=null; chatHasMore=false;
-  $("v-chat").innerHTML=`<div class="page-h"><div><h2>الدردشة</h2><div class="sub">رسائل الفريق — لحظية</div></div><div style="display:flex;gap:6px"><button class="btn ghost sm" id="chSumBtn">لخّصلي</button><button class="btn ghost sm" id="chSearchBtn">${ICONS.search}</button></div></div>
+  $("v-chat").innerHTML=`<div class="page-h"><div><h2>الدردشة</h2><div class="sub">رسائل الفريق — لحظية</div></div><div style="display:flex;gap:6px"><button class="btn ghost sm" id="chPairBtn">${ICONS.users} قسم تاني</button><button class="btn ghost sm" id="chSumBtn">لخّصلي</button><button class="btn ghost sm" id="chSearchBtn">${ICONS.search}</button></div></div>
     <div id="chSearchRow" style="display:none;margin-bottom:8px"><input id="chSearchIn" placeholder="دوّر في الرسائل…" style="width:100%;padding:9px 13px;border:1.5px solid var(--line);border-radius:12px;font-family:inherit;font-size:13px"/></div>
     <div class="chips" id="chChips">${chans.map(c=>`<button class="chip ${c[0]===chatChannel?'on':''}" data-ch="${c[0]}">${esc(c[1])}</button>`).join("")}</div>
     <div id="chPinBar"></div>
@@ -3793,6 +3836,7 @@ async function renderChatRoom(){
     }catch(e){ $("sumBox").innerHTML='<div class="empty">معرفناش نلخص دلوقتي.</div>'; }
     $("sumSay").onclick=()=>speak(window._lastSum||"");
   };
+  $("chPairBtn").onclick=openPairPicker;
   $("chSearchBtn").onclick=()=>{ const r=$("chSearchRow"); const show=r.style.display==="none"; r.style.display=show?"block":"none"; if(show){ $("chSearchIn").focus(); } else { chatSearchQ=""; paintChat(); } };
   $("chSearchIn") && ($("chSearchIn").oninput=(e)=>{ chatSearchQ=(e.target.value||"").trim(); paintChat(); });
   /* منشن حقيقي: @ يفتح قايمة أسماء تتضغط + مؤشر "بيكتب…" للباقيين */
