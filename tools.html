@@ -3749,14 +3749,27 @@ function highlightMentions(escaped){
   return escaped.replace(/@([\u0600-\u06FF\w]+)/g,'<b style="color:var(--blue-d);background:#EAF2FB;border-radius:5px;padding:0 4px">@$1</b>');
 }
 function chatChannels(){
-  const list=[["company","الشركة كلها"]];
-  if(isOwnerOps()){ DEPTS.forEach(d=>list.push(["dept:"+d.key,(DEPT_EMOJI[d.key]||"")+" "+d.name])); }
-  else { const k=myDeptKey(); if(k&&DEPT_BY_KEY[k]) list.push(["dept:"+k,(DEPT_EMOJI[k]||"")+" "+DEPT_BY_KEY[k].name]); }
+  const isOff=k=>!!k&&k.indexOf("off_")===0;
+  const offLabel=(key,name)=>(DEPT_EMOJI[key]||"")+" "+name+" + الهندسة";
+  const offices=DEPTS.filter(d=>isOff(d.key)), others=DEPTS.filter(d=>!isOff(d.key));
+  const list=[];
+  if(isOwnerOps()){
+    list.push(["company","الشركة كلها"]);
+    offices.forEach(d=>list.push(["dept:"+d.key,offLabel(d.key,d.name)]));
+    others.forEach(d=>list.push(["dept:"+d.key,(DEPT_EMOJI[d.key]||"")+" "+d.name]));
+  } else if(myDeptKey()==="engineering"){
+    offices.forEach(d=>list.push(["dept:"+d.key,offLabel(d.key,d.name)]));
+    var e=DEPT_BY_KEY["engineering"]; if(e) list.push(["dept:engineering",(DEPT_EMOJI["engineering"]||"")+" "+e.name]);
+  } else {
+    var k=myDeptKey();
+    if(k&&DEPT_BY_KEY[k]) list.push(["dept:"+k, isOff(k)?offLabel(k,DEPT_BY_KEY[k].name):((DEPT_EMOJI[k]||"")+" "+DEPT_BY_KEY[k].name)]);
+  }
+  if(!list.length) list.push(["company","الشركة كلها"]);
   return list;
 }
 async function renderChatRoom(){
   const chans=chatChannels();
-  if(!chans.find(c=>c[0]===chatChannel)) chatChannel="company";
+  if(!chans.find(c=>c[0]===chatChannel)) chatChannel=(chans[0]&&chans[0][0])||"company";
   chatReplyTo=null; chatSearchQ=""; chatOldestAt=null; chatHasMore=false;
   $("v-chat").innerHTML=`<div class="page-h"><div><h2>الدردشة</h2><div class="sub">رسائل الفريق — لحظية</div></div><div style="display:flex;gap:6px"><button class="btn ghost sm" id="chSumBtn">لخّصلي</button><button class="btn ghost sm" id="chSearchBtn">${ICONS.search}</button></div></div>
     <div id="chSearchRow" style="display:none;margin-bottom:8px"><input id="chSearchIn" placeholder="دوّر في الرسائل…" style="width:100%;padding:9px 13px;border:1.5px solid var(--line);border-radius:12px;font-family:inherit;font-size:13px"/></div>
