@@ -203,6 +203,10 @@ button.stat,button.dept-card{font-family:inherit;cursor:pointer;}
 .composer .send.sendmsg{background:linear-gradient(135deg,var(--blue),var(--blue-d));box-shadow:0 6px 16px rgba(30,136,229,.32);}
 .composer .send.sendmsg:active{transform:scale(.93);}
 .composer .send.sendmsg svg{margin-right:-2px;}
+.composer .send.mic-sec{width:42px;height:42px;background:#EAF2FB;color:var(--blue);box-shadow:none;border:1.5px solid #CFE2F7;}
+.composer .send.mic-sec.on{background:linear-gradient(135deg,#ef5350,var(--red));color:#fff;border-color:transparent;}
+.msg-more{display:none;gap:14px;align-items:center;margin-top:7px;flex-wrap:wrap;}
+.msg-more.open{display:flex;}
 
 /* tab bar */
 .tabbar{position:fixed;bottom:0;left:0;right:0;z-index:30;display:flex;background:rgba(255,255,255,.94);backdrop-filter:blur(12px);border-top:1px solid var(--line);height:calc(var(--tabh) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);}
@@ -351,7 +355,8 @@ const ICONS={
  doc:_icoWrap('<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>'),
  search:_icoWrap('<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>'),
  send:'<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:scaleX(-1)"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2" fill="#fff" stroke="none"/></svg>',
- users:_icoWrap('<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>')
+ users:_icoWrap('<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'),
+ dots:'<span style="display:inline-flex;vertical-align:-1px"><svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></span>'
 };
 const MIC_BTN_SVG='<svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></svg>';
 const STOP_BTN_SVG='<svg viewBox="0 0 24 24" width="34" height="34" fill="#fff"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
@@ -3817,7 +3822,7 @@ async function renderChatRoom(){
     <div id="chTyping" class="muted" style="font-size:11.5px;min-height:16px;padding:2px 6px"></div>
     <div id="chReplyBar" style="display:none;background:#EAF2FB;border-radius:10px;padding:6px 12px;margin-bottom:6px;font-size:12px;align-items:center;gap:8px"></div>
     <div id="chMention" style="display:none;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:6px;margin-bottom:6px;max-height:140px;overflow-y:auto"></div>
-    <div class="composer"><button class="send" id="chMic" style="background:linear-gradient(135deg,var(--blue),var(--blue-d))">${ICONS.mic.replace(/#94a3b8/g,"#fff")}</button><input id="chIn" placeholder="اكتب رسالة… أو اتكلم" /><button class="send sendmsg" id="chSend">${ICONS.send}</button></div>`;
+    <div class="composer"><button class="send mic-sec" id="chMic" aria-label="سجّل بصوتك">${ICONS.mic.replace(/#94a3b8/g,"var(--blue)")}</button><input id="chIn" placeholder="اكتب رسالة… أو اتكلم" /><button class="send sendmsg" id="chSend">${ICONS.send}</button></div>`;
   $("chChips").querySelectorAll("[data-ch]").forEach(b=>b.onclick=()=>{ chatChannel=b.dataset.ch; renderChatRoom(); });
   $("chSend").onclick=sendChat;
   bindSheetMic("chMic","chIn",{idle:ICONS.mic,rec:ICONS.stop,recDict:ICONS.stop,busy:"…",onDone:()=>{ if(($("chIn").value||"").trim()){ toast("اتبعتت صوتيًا","ok"); sendChat(); } }});
@@ -3931,19 +3936,23 @@ function paintChat(keepScroll){
               ? ' <button class="lnk" data-seers="'+m.id+'" style="font-size:10.5px;color:var(--blue);font-weight:800">\u2713\u2713 '+seers.length+'</button>'
               : ' \u2713';
           }
-          return '<div style="display:flex;gap:9px;align-items:center;margin-top:5px;flex-wrap:wrap"><span class="muted" style="font-size:10.5px">'+hhmm(m.created_at)+tick+'</span>';
+          return '<div class="msg-actions" style="display:flex;gap:12px;align-items:center;margin-top:6px"><span class="muted" style="font-size:10.5px">'+hhmm(m.created_at)+tick+'</span>';
         })()
-      +'<button class="lnk" data-reply="'+m.id+'" style="font-size:11px">رد</button>'
-      +'<button class="lnk" data-rxopen="'+m.id+'" style="font-size:11px">'+ICONS.smile+'</button>'
-      +'<button class="lnk" data-say-msg="'+esc(m.body).replace(/"/g,'&quot;')+'" style="font-size:11px">'+ICONS.speaker+'</button>'
-      +'<button class="lnk" data-copy="'+m.id+'" style="font-size:11px">نسخ</button>'
-      +(isOwnerOps()?'<button class="lnk" data-pin="'+m.id+'" style="font-size:11px">'+ICONS.pin+'</button>':"")
-      +(can?'<button class="lnk" data-del-msg="'+m.id+'" style="font-size:11px;color:var(--red)">حذف</button>':"")
+      +'<button class="lnk" data-reply="'+m.id+'" style="font-size:11.5px">رد</button>'
+      +'<button class="lnk" data-rxopen="'+m.id+'" style="font-size:11.5px">'+ICONS.smile+'</button>'
+      +'<button class="lnk" data-more="'+m.id+'" style="font-size:13px;margin-inline-start:auto">'+ICONS.dots+'</button>'
+      +'</div>'
+      +'<div class="msg-more" id="more-'+m.id+'">'
+      +'<button class="lnk" data-say-msg="'+esc(m.body).replace(/"/g,'&quot;')+'" style="font-size:11.5px">'+ICONS.speaker+'</button>'
+      +'<button class="lnk" data-copy="'+m.id+'" style="font-size:11.5px">نسخ</button>'
+      +(isOwnerOps()?'<button class="lnk" data-pin="'+m.id+'" style="font-size:11.5px">'+ICONS.pin+'</button>':"")
+      +(can?'<button class="lnk" data-del-msg="'+m.id+'" style="font-size:11.5px;color:var(--red)">حذف</button>':"")
       +'</div><div class="rx-pick" id="rxp-'+m.id+'" style="display:none;gap:6px;margin-top:6px"></div></div>';
   }).join("");
   box.innerHTML=h;
   const byId={}; chatMsgs.forEach(m=>byId[m.id]=m);
   const moreBtn=$("chMore"); if(moreBtn) moreBtn.onclick=()=>loadChat(true);
+  box.querySelectorAll("[data-more]").forEach(b=>b.onclick=()=>{ const mm=$("more-"+b.dataset.more); if(mm){ mm.classList.toggle("open"); } });
   box.querySelectorAll("[data-say-msg]").forEach(b=>b.onclick=()=>speak(b.dataset.sayMsg));
   box.querySelectorAll("[data-del-msg]").forEach(b=>b.onclick=()=>{ confirmDlg("تحذف الرسالة دي؟",async()=>{ await sb.from("os_messages").delete().eq("id",b.dataset.delMsg); loadChat(); }); });
   box.querySelectorAll("[data-reply]").forEach(b=>b.onclick=()=>setReply(byId[b.dataset.reply]));
