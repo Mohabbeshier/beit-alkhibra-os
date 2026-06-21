@@ -398,13 +398,14 @@ async function startApp(user){
     const [{data:prof}, {data:profs}, {data:depts}] = await Promise.all([
       sb.from("os_profiles").select("*").eq("id",user.id).maybeSingle(),
       sb.from("os_profiles").select("id,name,email,role,dept,manager_id"),
-      sb.from("os_departments").select("*"),
+      sb.from("os_departments").select("*").order("sort_order",{ascending:true}).order("name"),
     ]);
     PROFILE = prof || { id:user.id, name:(user.email||"مستخدم").split("@")[0], role:"employee", dept:null, email:user.email };
     PROFILES = profs || [];
     BY_ID={}; PROFILES.forEach(p=>BY_ID[p.id]=p);
-    DEPTS = depts || [];
-    DEPT_BY_KEY={}; DEPTS.forEach(d=>DEPT_BY_KEY[d.key]=d);
+    const _allDepts = depts || [];
+    DEPT_BY_KEY={}; _allDepts.forEach(d=>DEPT_BY_KEY[d.key]=d);
+    DEPTS = _allDepts.filter(d=> d.sort_order==null || d.sort_order < 900);
   }catch(e){
     PROFILE = { id:user.id, name:(user.email||"مستخدم").split("@")[0], role:"employee", dept:null };
   }
@@ -2531,7 +2532,7 @@ function openRejectJoin(id){
 }
 
 /* ===================== JOIN (public) + APPROVAL (ops) ===================== */
-const JOIN_DEPTS=[["legal","القسم القانوني والعقود"],["finance","القسم المالي"],["admin","القسم الإداري والحكومي"],["engineering","القسم الإنشائي والهندسي والرسومات"],["dev_ai","قسم التطوير والذكاء الاصطناعي"],["ops_marketing","قسم التشغيل والتسويق"],["executive","الإدارة التنفيذية"]];
+const JOIN_DEPTS=[["engineering","الإدارة الهندسية"],["hr","الأوبريشن"],["ops_marketing","التسويق والتشغيل"],["realestate","التطوير العقاري"],["finance","المالية"],["legal","الشئون القانونية"],["executive","تطوير الأعمال"],["off_zayed","مكتب الشيخ زايد"],["off_october","مكتب أكتوبر"],["off_hadayek","مكتب حدايق أكتوبر"],["off_newoctober","مكتب أكتوبر الجديدة"],["off_capital","مكتب العاصمة والهيئة"],["off_sadat","مكتب السادات"]];
 function openJoinForm(){
   openSheet(`<h3>طلب انضمام — مدير قسم</h3>
     <div class="card flat" style="border-right:4px solid var(--blue);background:#F4F9FF;margin-bottom:12px;font-size:12.5px"><b>\u2139لو إنت من فريق بيت الخبرة</b> واستلمت إيميل وباسوورد من الإدارة — <b>حسابك جاهز أصلًا!</b> ارجع لشاشة الدخول وادخل بيهم مباشرة. الطلب ده <b>للمديرين الجدد بس</b> اللي لسه ملهمش حساب.</div>
