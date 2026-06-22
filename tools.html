@@ -3901,7 +3901,10 @@ function chatChannels(){
     var e=DEPT_BY_KEY["engineering"]; if(e) list.push(["dept:engineering",(DEPT_EMOJI["engineering"]||"")+" "+e.name]);
   } else {
     var k=myDeptKey();
-    if(k&&DEPT_BY_KEY[k]) list.push(["dept:"+k, isOff(k)?offLabel(k,DEPT_BY_KEY[k].name):((DEPT_EMOJI[k]||"")+" "+DEPT_BY_KEY[k].name)]);
+    if(k&&DEPT_BY_KEY[k]) list.push(["dept:"+k, (DEPT_EMOJI[k]||"")+" "+DEPT_BY_KEY[k].name]);
+    if(isOff(k)){
+      ["engineering","legal","finance"].forEach(dk=>{ if(DEPT_BY_KEY[dk]){ var ch="pair:"+[k,dk].sort().join("__"); if(!list.find(c=>c[0]===ch)) list.push([ch,(DEPT_EMOJI[dk]||"")+" "+DEPT_BY_KEY[dk].name]); } });
+    }
   }
   (window._activeChans||[]).forEach(ch=>{ if(String(ch).indexOf("pair:")===0 && !list.find(c=>c[0]===ch)) list.push([ch,pairLabel(ch)]); else if(String(ch).indexOf("dm:")===0 && !list.find(c=>c[0]===ch)) list.push([ch,dmLabel(ch)]); });
   if(String(chatChannel).indexOf("pair:")===0 && !list.find(c=>c[0]===chatChannel)){
