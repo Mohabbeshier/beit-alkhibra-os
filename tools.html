@@ -3887,6 +3887,7 @@ function chatChannels(){
     var k=myDeptKey();
     if(k&&DEPT_BY_KEY[k]) list.push(["dept:"+k, isOff(k)?offLabel(k,DEPT_BY_KEY[k].name):((DEPT_EMOJI[k]||"")+" "+DEPT_BY_KEY[k].name)]);
   }
+  (window._activeChans||[]).forEach(ch=>{ if(String(ch).indexOf("pair:")===0 && !list.find(c=>c[0]===ch)) list.push([ch,pairLabel(ch)]); });
   if(String(chatChannel).indexOf("pair:")===0 && !list.find(c=>c[0]===chatChannel)){
     list.push([chatChannel,pairLabel(chatChannel)]);
   }
@@ -3894,6 +3895,7 @@ function chatChannels(){
   return list;
 }
 async function renderChatRoom(){
+  try{ const { data:_ac }=await sb.from("os_messages").select("channel").or("channel.like.pair:%,channel.like.dm:%").limit(500); window._activeChans=[...new Set((_ac||[]).map(m=>m.channel))]; }catch(e){ window._activeChans=window._activeChans||[]; }
   const chans=chatChannels();
   if(!chans.find(c=>c[0]===chatChannel)) chatChannel=(chans[0]&&chans[0][0])||"company";
   chatReplyTo=null; chatSearchQ=""; chatOldestAt=null; chatHasMore=false;
