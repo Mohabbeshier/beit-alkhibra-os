@@ -4597,19 +4597,30 @@ async function parseSmartTasks(){
     if(s>=0&&eI>=0) out=out.slice(s,eI+1);
     const arr=(JSON.parse(out).tasks||[]).filter(t=>t&&String(t.title||"").trim());
     if(!arr.length) throw new Error("empty");
-    renderSmartPreview(arr);
+    await renderSmartPreview(arr);
   }catch(e){ toast("معرفناش نفصّل — جرّب صياغة تانية أو ضيف يدوي","bad"); }
   btn.disabled=false; btn.textContent="فصّلها لمهام";
 }
-function renderSmartPreview(arr){
-  const opts=(sel)=>`<option value="">ليّا (${esc(PROFILE.name)})</option>`+PROFILES.filter(p=>p.id!==ME.id).map(p=>`<option value="${p.id}" ${sel===p.id?"selected":""}>${esc(p.name)}</option>`).join("");
+async function renderSmartPreview(arr){
+  /* البند ٥: تحميل موظفي القسم + ترشيح الأقل تحميلًا */
+  let _wl={}, _topId="";
+  try{
+    const { data:_tk }=await sb.from("os_tasks").select("assignee_id").neq("status","done").limit(2000);
+    (_tk||[]).forEach(t=>{ if(t.assignee_id) _wl[t.assignee_id]=(_wl[t.assignee_id]||0)+1; });
+    const _mates=PROFILES.filter(p=>p.dept===PROFILE.dept&&p.id!==ME.id);
+    _mates.forEach(p=>{ if(_wl[p.id]==null) _wl[p.id]=0; });
+    if(_mates.length){ _mates.sort((a,b)=>(_wl[a.id]||0)-(_wl[b.id]||0)); _topId=_mates[0].id; }
+  }catch(e){}
+  const _wlTxt=(id)=>_wl[id]!=null?" · "+_wl[id]+" مهمة":"";
+  const opts=(sel)=>`<option value="">ليّا (${esc(PROFILE.name)})</option>`+PROFILES.filter(p=>p.id!==ME.id).map(p=>`<option value="${p.id}" ${sel===p.id?"selected":""}>${esc(p.name)}${_wlTxt(p.id)}</option>`).join("");
   const okDate=(v)=>/^\d{4}-\d{2}-\d{2}$/.test(v||"")?v:"";
   $("stPrev").innerHTML=`<div class="sec-h">راجع المهام (${arr.length}) <span class="ln"></span></div>`+
-    arr.map((t,i)=>{ const m=matchProfile(t.assignee); const pr=["high","low"].includes(t.priority)?t.priority:"medium";
+    (_topId?`<div class="muted" style="font-size:11.5px;margin:-4px 0 8px">الأرقام جنب الأسماء = مهام مفتوحة دلوقتي. اللي الذكاء مش لاقيله حد، رشّحنا أقل واحد مشغول.</div>`:"")+
+    arr.map((t,i)=>{ const m=matchProfile(t.assignee); const _selId=m?m.id:(_topId||""); const pr=["high","low"].includes(t.priority)?t.priority:"medium";
       return `<div class="card flat" data-row="${i}" data-prio="${pr}" style="background:var(--soft)">
       <div class="field" style="margin-bottom:8px"><input class="st-title" value="${esc(t.title)}"/></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <select class="st-ass" style="flex:1;min-width:140px;padding:9px;border:1.6px solid var(--line);border-radius:10px;background:#fff">${opts(m?m.id:"")}</select>
+        <select class="st-ass" style="flex:1;min-width:140px;padding:9px;border:1.6px solid var(--line);border-radius:10px;background:#fff">${opts(_selId)}</select>
         <input class="st-due" type="date" value="${okDate(t.deadline)}" style="padding:9px;border:1.6px solid var(--line);border-radius:10px;background:#fff"/>
         ${pr==="high"?'<span class="badge b-red">عاجل</span>':""}
         <button class="qbtn st-del" title="حذف">${ICONS.trash}</button>
