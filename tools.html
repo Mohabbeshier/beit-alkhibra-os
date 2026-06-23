@@ -1748,7 +1748,9 @@ async function openLeadsFeed(){
 }
 async function paintLeadsFeed(qstr){
   try{
-    const { data }=await sb.from("os_leads_feed").select("*").order("created_at",{ascending:false}).limit(60);
+    let _lq=sb.from("os_leads_feed").select("*").order("created_at",{ascending:false}).limit(60);
+    if(PROFILE.role==="manager" && String(PROFILE.dept||"").startsWith("off_")){ _lq=_lq.or("office_dept.eq."+PROFILE.dept+",office_dept.is.null"); }
+    const { data }=await _lq;
     let rows=data||[];
     const s=(qstr||"").trim();
     if(s) rows=rows.filter(r=>((r.name||"")+" "+(r.service||"")+" "+(r.city||"")).includes(s));
