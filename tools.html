@@ -835,6 +835,102 @@ async function paintCorrespondence(){
     }).join("");
   }catch(e){ box.innerHTML=failBox("معرفناش نجيب السجل.",paintCorrespondence); }
 }
+/* ===== ملفات العملاء — ملف رئيسي لكل عميل + مستندات مصنّفة جواه ===== */
+let _cfSearch="";
+async function openClientFiles(){
+  openSheet('<h3>ملفات العملاء</h3><div class="muted" style="margin:-6px 0 10px;font-size:12px">ملف رئيسي لكل عميل، وكل مستنداته منظّمة جواه.</div>'
+    +'<div class="field" style="margin-bottom:8px"><input id="cfSearch" placeholder="دوّر باسم العميل أو رقم تليفونه…"/></div>'
+    +'<div id="cfBox"><div class="skel"></div><div class="skel"></div></div>'
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="cfNew">عميل جديد</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+  addMicTo("cfSearch");
+  $("cfSearch").addEventListener("input",(e)=>{ _cfSearch=e.target.value; paintClientFiles(); });
+  $("cfNew").onclick=()=>openClientNew();
+  await paintClientFiles();
+}
+async function paintClientFiles(){
+  const box=$("cfBox"); if(!box) return;
+  try{
+    let q=sb.from("clients").select("id,name,phone,city,service").order("created_at",{ascending:false}).limit(60);
+    const s=_cfSearch.trim();
+    if(s) q=q.or("name.ilike.%"+s+"%,phone.ilike.%"+s+"%");
+    const { data }=await q;
+    const rows=data||[];
+    if(!rows.length){ box.innerHTML='<div class="empty">مفيش عملاء لسه. دوس "عميل جديد".</div>'; return; }
+    box.innerHTML=rows.map(c=>'<button class="card flat" data-cf="'+c.id+'" style="width:100%;text-align:right;cursor:pointer">'
+      +'<div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(c.name)+'</b>'+(c.service?'<span class="badge" style="background:#eef2f7;color:#0D47A1">'+esc(c.service)+'</span>':'')+'</div>'
+      +'<div class="muted" style="font-size:11.5px;margin-top:2px">'+(c.phone?esc(c.phone):"—")+(c.city?" · "+esc(c.city):"")+'</div></button>').join("");
+    box.querySelectorAll("[data-cf]").forEach(el=>el.onclick=()=>openClientFileDetail(el.getAttribute("data-cf")));
+  }catch(e){ box.innerHTML=failBox("معرفناش نجيب العملاء.",paintClientFiles); }
+}
+function openClientNew(){
+  openSheet('<h3>عميل جديد</h3>'
+    +'<div class="field"><label>الاسم</label><input id="cnName" placeholder="اسم العميل"/></div>'
+    +'<div class="field"><label>التليفون</label><input id="cnPhone" type="tel"/></div>'
+    +'<div class="field"><label>الإيميل (اختياري)</label><input id="cnEmail" type="email"/></div>'
+    +'<div class="field"><label>المدينة</label><input id="cnCity" placeholder="الشيخ زايد / أكتوبر / حدايق أكتوبر…"/></div>'
+    +'<div class="field"><label>الخدمة المطلوبة</label><input id="cnService" placeholder="رسومات / ترخيص / استشارة…"/></div>'
+    +'<div class="row-actions"><button class="btn green" id="cnGo">أضف العميل</button><button class="btn ghost" onclick="openClientFiles()">إلغاء</button></div>');
+  addMicTo("cnName");
+  $("cnGo").onclick=async()=>{
+    const name=$("cnName").value.trim(); if(!name){ toast("اكتب اسم العميل","bad"); return; }
+    const btn=$("cnGo"); btn.disabled=true; btn.textContent="بيضيف…";
+    const { data, error }=await sb.from("clients").insert({ name, phone:$("cnPhone").value.trim()||null, email:$("cnEmail").value.trim()||null, city:$("cnCity").value.trim()||null, service:$("cnService").value.trim()||null, source:"reception" }).select("id").single();
+    if(error){ toast("معرفناش نضيف: "+error.message,"bad"); btn.disabled=false; btn.textContent="أضف العميل"; return; }
+    toast("العميل اتضاف ✓","ok"); openClientFileDetail(data.id);
+  };
+}
+async function openClientFileDetail(id){
+  openSheet('<h3>ملف العميل</h3><div id="cdBox"><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="openClientFiles()">رجوع لملفات العملاء</button>');
+  await paintClientFileDetail(id);
+}
+async function paintClientFileDetail(id){
+  try{
+    const { data:c, error }=await sb.from("clients").select("*").eq("id",id).single();
+    if(error||!c){ $("cdBox").innerHTML=failBox("معرفناش نجيب العميل.",()=>paintClientFileDetail(id)); return; }
+    const { data:files }=await sb.from("os_files").select("*").eq("client_id",id).eq("archived",false).order("created_at",{ascending:false});
+    const fl=files||[];
+    let h='<div class="card"><b style="font-size:15px">'+esc(c.name)+'</b>'
+      +'<div class="meta" style="margin-top:6px">'+(c.phone?'<span>'+esc(c.phone)+'</span>':'')+(c.city?'<span class="dot"></span><span>'+esc(c.city)+'</span>':'')+(c.service?'<span class="dot"></span><span>'+esc(c.service)+'</span>':'')+'</div></div>';
+    h+='<div class="sec-h">مستندات العميل <span class="ln"></span></div>';
+    h+='<div class="card flat"><div class="field"><label>اسم المستند</label><input id="cfTitle" placeholder="مثلاً: عقد الاتفاق — نسخة موقّعة"/></div>'
+      +'<div class="field"><label>تصنيف</label><select id="cfCat">'+FILE_CATS.map(f=>'<option value="'+f[0]+'">'+f[1]+'</option>').join("")+'</select></div>'
+      +'<div class="field"><label>ابعتها لأي قسم؟ (اختياري)</label><select id="cfToDept"><option value="">بدون تحديد</option>'+DEPTS.map(d=>'<option value="'+d.key+'">'+esc(d.name)+'</option>').join("")+'</select></div>'
+      +'<div class="field"><label>اختار ملف (أقصى 20 ميجا)</label><input id="cfFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx" style="font-size:12px"/></div>'
+      +'<div id="cfStatus" class="muted" style="font-size:12px;margin-bottom:8px"></div>'
+      +'<div class="row-actions"><button class="btn green sm" id="cfUp">ارفع لملف العميل</button></div></div>';
+    h+='<div id="cfFilesBox" style="margin-top:8px">';
+    if(!fl.length){ h+='<div class="empty">مفيش مستندات لسه.</div>'; }
+    else { h+=fl.map(f=>{
+      const sz=f.size_bytes?(" · "+fmtBytes(f.size_bytes)):"";
+      const revBadge=(f.revision||1)>1?'<span class="badge b-blue" style="font-size:10px">Rev '+f.revision+'</span>':"";
+      const catLbl=(FILE_CATS.find(x=>x[0]===f.category)||["",""])[1];
+      return '<div class="card flat"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:13px">'+esc(f.title||"ملف")+'</b>'+revBadge
+        +(f.url?'<a class="btn sm" href="'+esc(f.url)+'" target="_blank" rel="noopener" style="background:var(--blue);color:#fff">فتح</a>':'')+'</div>'
+        +'<div class="meta"><span>'+(catLbl||"عام")+sz+'</span>'+((f.uploaded_name)?'<span class="dot"></span><span>'+esc(f.uploaded_name)+'</span>':'')+(f.to_dept?'<span class="dot"></span><span>➜ '+esc((DEPT_BY_KEY[f.to_dept]&&DEPT_BY_KEY[f.to_dept].name)||f.to_dept)+'</span>':'')+'</div></div>';
+    }).join(""); }
+    h+='</div>';
+    $("cdBox").innerHTML=h;
+    addMicTo("cfTitle");
+    $("cfUp").onclick=async()=>{
+      const title=$("cfTitle").value.trim(); const fe=$("cfFile");
+      if(!title){ toast("اكتب اسم المستند","bad"); return; }
+      if(!fe.files||!fe.files[0]){ toast("اختار ملف الأول","bad"); return; }
+      const b=$("cfUp"); b.disabled=true; $("cfStatus").textContent="بيترفع…";
+      try{
+        const up=await uploadEmployeeFile(fe.files[0]);
+        let revision=1;
+        const { data:dupes }=await sb.from("os_files").select("id,revision").eq("client_id",id).eq("archived",false).ilike("title",title);
+        if(dupes&&dupes.length){
+          revision=Math.max(...dupes.map(d=>d.revision||1))+1;
+          await sb.from("os_files").update({ archived:true, archived_at:new Date().toISOString(), archived_by:ME.id }).in("id",dupes.map(d=>d.id));
+        }
+        await registerFile({ title, kind:"file", category:$("cfCat").value, client_id:id, to_dept:$("cfToDept").value||null, url:up.url, storage_path:up.path, size_bytes:up.size, mime:up.mime, revision });
+        toast(revision>1?"اترفعت نسخة جديدة (Rev "+revision+")":"اترفع لملف العميل ✓","ok");
+        paintClientFileDetail(id);
+      }catch(e){ $("cfStatus").textContent=""+(e.message||"فشل"); toast(e.message||"فشل الرفع","bad"); b.disabled=false; }
+    };
+  }catch(e){ $("cdBox").innerHTML=failBox("حصل خطأ.",()=>paintClientFileDetail(id)); }
+}
 async function openVisitorLog(){
   const hostOpts=PROFILES.filter(p=>p.id!==ME.id).sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),"ar")).map(p=>`<option value="${p.id}">${esc(p.name)}${p.dept?" — "+esc((DEPT_BY_KEY[p.dept]&&DEPT_BY_KEY[p.dept].name)||p.dept):""}</option>`).join("");
   openSheet('<h3>تسجيل زائر</h3>'
@@ -933,7 +1029,7 @@ function renderEmployeeHome(d){
   body+=`<div class="card" style="background:linear-gradient(135deg,#E3F2FD,#E8F5E9);border:none">
     <b>محتاج تعمل حاجة؟ اتكلم بس</b>
     <div class="muted" style="font-size:12.5px;margin:4px 0 12px">مش لازم تكتب — دوس واتكلم والنظام يفهمك.</div>
-    <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button><button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="newreq">طلب</button>${PROFILE.position==="gov"?'<button class="btn sm" data-quick="govcases">المعاملات الحكومية</button>':""}${PROFILE.dept==="reception"?'<button class="btn sm" data-quick="visitor">تسجيل زائر</button><button class="btn ghost sm" data-quick="call">تسجيل مكالمة</button><button class="btn ghost sm" data-quick="corr">الوارد والصادر</button><button class="btn ghost sm" data-quick="docs">خزنة المستندات</button><button class="btn ghost sm" data-quick="attlog">مين موجود النهاردة</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}</div></div>`;
+    <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button><button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="newreq">طلب</button>${PROFILE.position==="gov"?'<button class="btn sm" data-quick="govcases">المعاملات الحكومية</button>':""}${PROFILE.dept==="reception"?'<button class="btn sm" data-quick="visitor">تسجيل زائر</button><button class="btn ghost sm" data-quick="call">تسجيل مكالمة</button><button class="btn ghost sm" data-quick="corr">الوارد والصادر</button><button class="btn ghost sm" data-quick="clientfiles">ملفات العملاء</button><button class="btn ghost sm" data-quick="docs">خزنة المستندات</button><button class="btn ghost sm" data-quick="attlog">مين موجود النهاردة</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}</div></div>`;
   body+=`<div class="sec-h">المهام اللي عليك <span class="ln"></span></div>`;
   if(myTasks.length){
     body+=myTasks.slice(0,6).map(t=>`<button class="card flat" data-task="${t.id}" style="width:100%;text-align:right;cursor:pointer${t.deadline&&new Date(t.deadline)<new Date()?';border-right:4px solid var(--red)':''}"><b>${esc(t.title)}</b><div class="meta">${t.deadline?`<span>${fmtDate(t.deadline)}</span>`:`<span class="muted">من غير موعد</span>`}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}<span class="dot"></span><span class="muted">${t.progress||0}%</span></div></button>`).join("");
@@ -2730,6 +2826,7 @@ function wireHome(el){
     else if(q==="visitor"){ openVisitorLog(); }
     else if(q==="call"){ openCallLog(); }
     else if(q==="corr"){ openCorrespondence(); }
+    else if(q==="clientfiles"){ openClientFiles(); }
     else if(q==="docs"){ openDocsVault(); }
     else if(q==="govcases"){ openGovCases(); }
     else if(q==="attlog"){ openAttendanceLog(); }
