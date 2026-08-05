@@ -707,7 +707,7 @@ function renderManagerHome(d){
     body+=myDeptTasks.slice(0,5).map(t=>`<div class="card flat"${t.deadline&&new Date(t.deadline)<new Date()?' style="border-right:4px solid var(--red)"':''}><b>${esc(t.title)}</b><div class="meta"><span>${esc(t.assignee_name||nameOf(t.assignee_id)||"—")}</span>${t.deadline?`<span class="dot"></span><span>${fmtDate(t.deadline)}</span>`:""}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}</div></div>`).join("");
   } else body+=`<div class="empty" style="padding:18px">مفيش مهام بالقسم لسه.</div>`;
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
-    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="hr"?'<button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}<button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
+    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="hr"?'<button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}<button class="btn ghost sm" data-quick="leaves">🏖️ الإجازات</button><button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   el.innerHTML=body;
   HOME_SUMMARY=`${d.greet} يا ${PROFILE.name}. قسم ${(dep&&dep.name)||""} عنده ${myDeptTasks.length} مهمة شغّالة، منهم ${overdue.length} متأخرة. عندك ${d.pendIn.length} طلب مستني ردك. ${d.evTxt}`;
@@ -739,7 +739,7 @@ function renderEmployeeHome(d){
   body+=`<div class="card" style="background:linear-gradient(135deg,#E3F2FD,#E8F5E9);border:none">
     <b>محتاج تعمل حاجة؟ اتكلم بس</b>
     <div class="muted" style="font-size:12.5px;margin:4px 0 12px">مش لازم تكتب — دوس واتكلم والنظام يفهمك.</div>
-    <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button>${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}</div></div>`;
+    <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button><button class="btn ghost sm" data-quick="leaves">🏖️ الإجازات</button>${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}</div></div>`;
   body+=`<div class="sec-h">المهام اللي عليك <span class="ln"></span></div>`;
   if(myTasks.length){
     body+=myTasks.slice(0,6).map(t=>`<button class="card flat" data-task="${t.id}" style="width:100%;text-align:right;cursor:pointer${t.deadline&&new Date(t.deadline)<new Date()?';border-right:4px solid var(--red)':''}"><b>${esc(t.title)}</b><div class="meta">${t.deadline?`<span>${fmtDate(t.deadline)}</span>`:`<span class="muted">من غير موعد</span>`}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}<span class="dot"></span><span class="muted">${t.progress||0}%</span></div></button>`).join("");
@@ -2303,6 +2303,7 @@ function wireHome(el){
     else if(q==="decisions"){ openDecisionsBoard(); }
     else if(q==="sales"){ openSalesFunnel(); }
     else if(q==="leads"){ openLeadsFeed(); }
+    else if(q==="leaves"){ openLeaves(); }
     else if(q==="adminhub"){ openAdminHub(); }
     else if(q==="meeting"){ openMeetingReport(); }
     else if(q==="projects"){ openProjects(); }
