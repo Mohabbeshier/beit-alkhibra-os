@@ -4191,6 +4191,7 @@ function chatChannels(){
   } else if(myDeptKey()==="reception"){
     var rc=DEPT_BY_KEY["reception"]; if(rc) list.push(["dept:reception",(DEPT_EMOJI["reception"]||"")+" "+rc.name]);
     offices.forEach(d=>list.push(["dept:"+d.key,(DEPT_EMOJI[d.key]||"")+" "+d.name]));
+    others.forEach(d=>{ if(d.key!=="reception") list.push(["dept:"+d.key,(DEPT_EMOJI[d.key]||"")+" "+d.name]); });
   } else {
     var k=myDeptKey();
     if(k&&DEPT_BY_KEY[k]) list.push(["dept:"+k, (DEPT_EMOJI[k]||"")+" "+DEPT_BY_KEY[k].name]);
