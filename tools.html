@@ -3181,7 +3181,6 @@ function openRejectJoin(id){
 }
 
 /* ===================== JOIN (public) + APPROVAL (ops) ===================== */
-const JOIN_DEPTS=[["engineering","الإدارة الهندسية"],["hr","الأوبريشن"],["ops_marketing","التسويق والتشغيل"],["realestate","التطوير العقاري"],["finance","المالية"],["legal","الشئون القانونية"],["executive","تطوير الأعمال"],["off_zayed","مكتب الشيخ زايد"],["off_october","مكتب أكتوبر"],["off_hadayek","مكتب حدايق أكتوبر"],["off_newoctober","مكتب أكتوبر الجديدة"],["off_capital","مكتب العاصمة والهيئة"],["off_sadat","مكتب السادات"]];
 function openJoinForm(){
   openSheet(`<h3>طلب انضمام — مدير قسم</h3>
     <div class="card flat" style="border-right:4px solid var(--blue);background:#F4F9FF;margin-bottom:12px;font-size:12.5px"><b>\u2139لو إنت من فريق بيت الخبرة</b> واستلمت إيميل وباسوورد من الإدارة — <b>حسابك جاهز أصلًا!</b> ارجع لشاشة الدخول وادخل بيهم مباشرة. الطلب ده <b>للمديرين الجدد بس</b> اللي لسه ملهمش حساب.</div>
@@ -3369,7 +3368,7 @@ function openAddEmployee(){
 }
 function openApprove(id){
   const j=LAST_JOINS[id]; if(!j) return;
-  const deptOpts=JOIN_DEPTS.map(d=>`<option value="${d[0]}" ${d[0]===j.dept?"selected":""}>${d[1]}</option>`).join("");
+  const deptOpts=Object.values(DEPT_BY_KEY).sort((a,b)=>(a.sort_order??500)-(b.sort_order??500)).map(d=>`<option value="${esc(d.key)}" ${d.key===j.dept?"selected":""}>${esc(d.name)}</option>`).join("");
   const tmpPass="Bk!"+Math.random().toString(36).slice(2,8);
   openSheet(`<h3>قبول وإنشاء حساب — ${esc(j.manager_name)}</h3>
     <div class="field"><label>الاسم</label><input id="aName" value="${esc(j.manager_name)}"/></div>
