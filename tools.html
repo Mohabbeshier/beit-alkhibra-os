@@ -643,7 +643,7 @@ function renderOwnerHome(d){
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:10px 2px 3px;opacity:.85">أنشئ بسرعة</div>
     <div class="row-actions" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button></div>
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:11px 2px 3px;opacity:.85">روح لـ</div>
-    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
+    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
   if(d.evs.length){
     body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   }
@@ -679,7 +679,7 @@ function renderOpsHome(d){
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:10px 2px 3px;opacity:.85">أنشئ بسرعة</div>
     <div class="row-actions" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn ghost sm" data-quick="event">موعد</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button></div>
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:11px 2px 3px;opacity:.85">روح لـ</div>
-    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
+    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   body+='<div id="presBox"></div><div id="wwBox"></div><div id="wlBox"></div><div id="activityBox"></div>';
   el.innerHTML=body;
@@ -933,7 +933,7 @@ function renderEmployeeHome(d){
   body+=`<div class="card" style="background:linear-gradient(135deg,#E3F2FD,#E8F5E9);border:none">
     <b>محتاج تعمل حاجة؟ اتكلم بس</b>
     <div class="muted" style="font-size:12.5px;margin:4px 0 12px">مش لازم تكتب — دوس واتكلم والنظام يفهمك.</div>
-    <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button><button class="btn ghost sm" data-quick="leaves">الإجازات</button>${PROFILE.dept==="reception"?'<button class="btn sm" data-quick="visitor">تسجيل زائر</button><button class="btn ghost sm" data-quick="call">تسجيل مكالمة</button><button class="btn ghost sm" data-quick="corr">الوارد والصادر</button><button class="btn ghost sm" data-quick="docs">خزنة المستندات</button><button class="btn ghost sm" data-quick="attlog">مين موجود النهاردة</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}</div></div>`;
+    <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button><button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="newreq">طلب</button>${PROFILE.position==="gov"?'<button class="btn sm" data-quick="govcases">المعاملات الحكومية</button>':""}${PROFILE.dept==="reception"?'<button class="btn sm" data-quick="visitor">تسجيل زائر</button><button class="btn ghost sm" data-quick="call">تسجيل مكالمة</button><button class="btn ghost sm" data-quick="corr">الوارد والصادر</button><button class="btn ghost sm" data-quick="docs">خزنة المستندات</button><button class="btn ghost sm" data-quick="attlog">مين موجود النهاردة</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}</div></div>`;
   body+=`<div class="sec-h">المهام اللي عليك <span class="ln"></span></div>`;
   if(myTasks.length){
     body+=myTasks.slice(0,6).map(t=>`<button class="card flat" data-task="${t.id}" style="width:100%;text-align:right;cursor:pointer${t.deadline&&new Date(t.deadline)<new Date()?';border-right:4px solid var(--red)':''}"><b>${esc(t.title)}</b><div class="meta">${t.deadline?`<span>${fmtDate(t.deadline)}</span>`:`<span class="muted">من غير موعد</span>`}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}<span class="dot"></span><span class="muted">${t.progress||0}%</span></div></button>`).join("");
@@ -1507,6 +1507,121 @@ async function openStructNew(){
     if(error){ toast("معرفناش نضيف: "+error.message,"bad"); b.disabled=false; b.textContent="أضف المشروع"; return; }
     toast("المشروع الإنشائي اتضاف","ok"); openStructEng();
   };
+}
+/* ===================== العلاقات الحكومية — متابعة المعاملات ===================== */
+const GOV_TYPE={permit:"تصريح",license:"ترخيص",renewal:"تجديد",registration:"تسجيل",inspection:"معاينة",other:"تانية"};
+const GOV_STATUS={new:["جديدة","b-amber"],in_progress:["شغّالة","b-blue"],submitted:["مقدّمة للجهة","#7C3AED"],pending_govt:["قيد المراجعة الحكومية","#F59E0B"],approved:["معتمدة","b-green"],rejected:["مرفوضة","b-red"],archived:["مؤرشفة","b-grey"]};
+function isGovUser(){ return isOwnerOps()||PROFILE.position==="gov"; }
+let _govView="active";
+async function openGovCases(){
+  if(!isGovUser()){ toast("الشاشة دي للعلاقات الحكومية والإدارة","bad"); return; }
+  openSheet('<h3>المعاملات الحكومية</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">من التقديم للاعتماد — كل معاملة بتاريخها وكودها وحالتها</div>'
+    +'<div style="display:flex;gap:6px;margin-bottom:10px" id="govFilters"><button class="chip on" data-gf="active">شغّالة</button><button class="chip" data-gf="archived">الأرشيف</button></div>'
+    +'<div id="govBox"><div class="skel"></div><div class="skel"></div></div>'
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="govNew">معاملة جديدة</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+  _govView="active";
+  $("govFilters").querySelectorAll("[data-gf]").forEach(b=>b.onclick=()=>{ _govView=b.dataset.gf; $("govFilters").querySelectorAll(".chip").forEach(x=>x.classList.toggle("on",x===b)); paintGovCases(); });
+  $("govNew").onclick=()=>openGovCaseNew();
+  await paintGovCases();
+}
+async function paintGovCases(){
+  const box=$("govBox"); if(!box) return;
+  try{
+    let q=sb.from("os_gov_cases").select("*").order("created_at",{ascending:false}).limit(60);
+    q = _govView==="archived" ? q.eq("status","archived") : q.neq("status","archived");
+    const { data }=await q;
+    const rows=data||[];
+    if(!rows.length){ box.innerHTML='<div class="empty">'+(_govView==="archived"?"مفيش معاملات مؤرشفة لسه.":"مفيش معاملات شغّالة. ابدأ بمعاملة جديدة.")+'</div>'; return; }
+    box.innerHTML=rows.map(c=>{
+      const st=GOV_STATUS[c.status]||["—","b-grey"];
+      const pr=Math.max(0,Math.min(100,c.progress||0));
+      let dd="";
+      if(c.target_date&&c.status!=="archived"){
+        const days=Math.ceil((new Date(c.target_date)-new Date())/86400000);
+        dd = days<0?'<span style="color:var(--red);font-weight:800">متأخرة '+Math.abs(days)+' يوم</span>':days<=3?'<span style="color:#B45309;font-weight:700">خلال '+days+' يوم</span>':'خلال '+days+' يوم';
+      }
+      return '<div class="card flat" data-gov="'+c.id+'" style="cursor:pointer">'
+        +'<div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(c.title)+'</b><span class="badge" style="background:'+(st[1][0]==="#"?st[1]:"")+'" class="badge '+(st[1][0]==="#"?"":st[1])+'">'+st[0]+'</span></div>'
+        +'<div class="prog" style="margin:8px 0 4px"><i style="width:'+pr+'%"></i></div>'
+        +'<div class="meta"><span>'+(GOV_TYPE[c.case_type]||c.case_type)+'</span>'+(c.government_body?'<span class="dot"></span><span>'+esc(c.government_body)+'</span>':'')+(dd?'<span class="dot"></span><span>'+dd+'</span>':'')+'</div></div>';
+    }).join("");
+    box.querySelectorAll("[data-gov]").forEach(el=>el.onclick=()=>openGovCaseDetail(el.getAttribute("data-gov")));
+  }catch(e){ box.innerHTML=failBox("معرفناش نجيب المعاملات.",paintGovCases); }
+}
+async function openGovCaseNew(){
+  let prjOpts='<option value="">بدون ربط بمشروع</option>';
+  try{ const { data:prjs }=await sb.from("os_projects").select("id,name").order("name").limit(200); prjOpts+=(prjs||[]).map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join(""); }catch(e){}
+  openSheet('<h3>معاملة حكومية جديدة</h3>'
+    +'<div class="field"><label>عنوان المعاملة</label><input id="gcTitle" placeholder="مثلاً: تجديد ترخيص بناء فيلا زايد"/></div>'
+    +'<div class="field"><label>النوع</label><select id="gcType">'+Object.entries(GOV_TYPE).map(([k,v])=>'<option value="'+k+'">'+v+'</option>').join("")+'</select></div>'
+    +'<div class="field"><label>الجهة الحكومية</label><input id="gcBody" placeholder="مثلاً: حي الشيخ زايد"/></div>'
+    +'<div class="field"><label>مربوطة بمشروع؟ (اختياري)</label><select id="gcProject">'+prjOpts+'</select></div>'
+    +'<div class="field"><label>موعد مستهدف (اختياري)</label><input id="gcTarget" type="date"/></div>'
+    +'<div class="field"><label>ملاحظات</label><textarea id="gcNotes"></textarea></div>'
+    +'<div class="row-actions"><button class="btn green" id="gcGo">أضف المعاملة</button><button class="btn ghost" onclick="openGovCases()">إلغاء</button></div>');
+  addMicTo("gcTitle");
+  $("gcGo").onclick=async()=>{
+    const title=$("gcTitle").value.trim(); if(!title){ toast("اكتب عنوان المعاملة","bad"); return; }
+    const btn=$("gcGo"); btn.disabled=true; btn.textContent="بيضيف…";
+    const payload={ title, case_type:$("gcType").value, government_body:$("gcBody").value.trim()||null, project_id:$("gcProject").value||null, target_date:$("gcTarget").value||null, notes:$("gcNotes").value.trim()||null, dept:PROFILE.dept||null, assigned_to:ME.id, assigned_to_name:PROFILE.name, created_by:ME.id, created_by_name:PROFILE.name };
+    const { error }=await sb.from("os_gov_cases").insert(payload);
+    if(error){ toast("معرفناش نضيف: "+error.message,"bad"); btn.disabled=false; btn.textContent="أضف المعاملة"; return; }
+    toast("المعاملة اتضافت","ok"); openGovCases();
+  };
+}
+async function openGovCaseDetail(id){
+  openSheet('<h3>تفاصيل المعاملة</h3><div id="gdBox"><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="openGovCases()">رجوع للمعاملات</button>');
+  await paintGovCaseDetail(id);
+}
+async function paintGovCaseDetail(id){
+  try{
+    const { data:c, error }=await sb.from("os_gov_cases").select("*").eq("id",id).single();
+    if(error||!c){ $("gdBox").innerHTML=failBox("معرفناش نجيب المعاملة.",()=>paintGovCaseDetail(id)); return; }
+    let prjLine="";
+    if(c.project_id){ try{ const { data:p }=await sb.from("os_projects").select("name").eq("id",c.project_id).single(); if(p) prjLine='<button class="btn ghost sm" id="gdPrj" style="margin-top:6px">📎 المشروع: '+esc(p.name)+' — افتح</button>'; }catch(e){} }
+    const st=GOV_STATUS[c.status]||["—","b-grey"];
+    let h='<div class="card">'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="badge" style="'+(st[1][0]==="#"?"background:"+st[1]+";color:#fff":"")+'" class="badge '+(st[1][0]==="#"?"":st[1])+'">'+st[0]+'</span><span class="badge" style="background:#eef2f7;color:#0D47A1">'+(GOV_TYPE[c.case_type]||c.case_type)+'</span></div>'
+      +'<b style="display:block;margin-top:8px;font-size:15px">'+esc(c.title)+'</b>'
+      +(c.government_body?'<div class="muted" style="font-size:12.5px;margin-top:3px">الجهة: '+esc(c.government_body)+'</div>':'')
+      +prjLine+'</div>';
+    h+='<div class="sec-h">نسبة الإنجاز <span class="ln"></span></div>';
+    h+='<div class="prog" style="margin-bottom:6px"><i style="width:'+(c.progress||0)+'%"></i></div><div class="muted" style="font-size:12px;margin-bottom:8px">'+(c.progress||0)+'%</div>';
+    h+='<div class="qbtns" id="gdProg">'+[0,25,50,75,100].map(p=>'<button class="qbtn'+((c.progress||0)===p?" on":"")+'" data-gp="'+p+'">'+p+'%</button>').join("")+'</div>';
+    h+='<div class="sec-h">الحالة <span class="ln"></span></div>';
+    h+='<div class="field"><select id="gdStatus">'+Object.entries(GOV_STATUS).filter(([k])=>k!=="archived").map(([k,v])=>'<option value="'+k+'"'+(c.status===k?" selected":"")+'>'+v[0]+'</option>').join("")+'</select></div>';
+    h+='<div class="field"><label>الرقم المرجعي الرسمي</label><input id="gdRef" value="'+esc(c.reference_code||"")+'" placeholder="رقم المعاملة عند الجهة"/></div>';
+    h+='<div class="field"><label>مرجع الختم/البصمة (عند الاعتماد)</label><input id="gdStamp" value="'+esc(c.stamp_ref||"")+'" placeholder="رقم الختم أو الاعتماد"/></div>';
+    h+='<div class="field"><label>ملاحظات</label><textarea id="gdNotes">'+esc(c.notes||"")+'</textarea></div>';
+    h+='<div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn green sm" id="gdSave">احفظ التحديث</button><button class="btn ghost sm" id="gdEvent">جدولة متابعة</button>'+(c.status!=="archived"?'<button class="btn ghost sm" id="gdArch" style="color:var(--green-d);border-color:#A5D6A7">أرشفة (خلصت)</button>':'')+'</div>';
+    $("gdBox").innerHTML=h;
+    const pjBtn=$("gdPrj"); if(pjBtn) pjBtn.onclick=()=>openProjectDetail(c.project_id);
+    let chosenProg=c.progress||0;
+    $("gdProg").querySelectorAll("[data-gp]").forEach(b=>b.onclick=()=>{ chosenProg=+b.dataset.gp; $("gdProg").querySelectorAll(".qbtn").forEach(x=>x.classList.toggle("on",x===b)); });
+    $("gdSave").onclick=async()=>{
+      const btn=$("gdSave"); btn.disabled=true; btn.textContent="بيحفظ…";
+      const upd={ progress:chosenProg, status:$("gdStatus").value, reference_code:$("gdRef").value.trim()||null, stamp_ref:$("gdStamp").value.trim()||null, notes:$("gdNotes").value.trim()||null, updated_at:new Date().toISOString() };
+      const { error }=await sb.from("os_gov_cases").update(upd).eq("id",id);
+      if(error){ toast("معرفناش نحفظ: "+error.message,"bad"); btn.disabled=false; btn.textContent="احفظ التحديث"; return; }
+      toast("اتحفظ ✓","ok"); paintGovCaseDetail(id);
+    };
+    $("gdEvent").onclick=async()=>{
+      const b=$("gdEvent"); b.disabled=true; b.textContent="بيجدول…";
+      const d=new Date(); d.setDate(d.getDate()+1); d.setHours(11,0,0,0);
+      const { error }=await sb.from("os_events").insert({ title:"متابعة معاملة: "+c.title, by_id:ME.id, by_name:PROFILE.name, at_time:d.toISOString(), with_who:c.government_body||null });
+      if(error){ toast("معرفناش نجدول","bad"); b.disabled=false; b.textContent="جدولة متابعة"; return; }
+      toast("اتجدولت متابعة بكرة الساعة 11 — عدّلها من المواعيد لو محتاج","ok"); b.disabled=false; b.textContent="جدولة متابعة";
+    };
+    const archBtn=$("gdArch");
+    if(archBtn) archBtn.onclick=async()=>{
+      if(!$("gdRef").value.trim()&&!confirm("مفيش رقم مرجعي رسمي متسجّل — تؤرشف من غيره؟")) return;
+      const btn=archBtn; btn.disabled=true; btn.textContent="بيؤرشف…";
+      const upd={ status:"archived", progress:100, completed_date:todayStr(), reference_code:$("gdRef").value.trim()||null, stamp_ref:$("gdStamp").value.trim()||null, notes:$("gdNotes").value.trim()||null };
+      const { error }=await sb.from("os_gov_cases").update(upd).eq("id",id);
+      if(error){ toast("معرفناش نؤرشف: "+error.message,"bad"); btn.disabled=false; btn.textContent="أرشفة (خلصت)"; return; }
+      toast("اتأرشفت بكل بياناتها ✓","ok"); openGovCases();
+    };
+  }catch(e){ $("gdBox").innerHTML=failBox("حصل خطأ.",()=>paintGovCaseDetail(id)); }
 }
 async function openAdminHub(){
   let docsExp=0;
@@ -2570,6 +2685,7 @@ function wireHome(el){
     else if(q==="call"){ openCallLog(); }
     else if(q==="corr"){ openCorrespondence(); }
     else if(q==="docs"){ openDocsVault(); }
+    else if(q==="govcases"){ openGovCases(); }
     else if(q==="attlog"){ openAttendanceLog(); }
     else if(q==="adminhub"){ openAdminHub(); }
     else if(q==="meeting"){ openMeetingReport(); }
