@@ -749,7 +749,7 @@ function renderManagerHome(d){
     body+=myDeptTasks.slice(0,5).map(t=>`<div class="card flat"${t.deadline&&new Date(t.deadline)<new Date()?' style="border-right:4px solid var(--red)"':''}><b>${esc(t.title)}</b><div class="meta"><span>${esc(t.assignee_name||nameOf(t.assignee_id)||"—")}</span>${t.deadline?`<span class="dot"></span><span>${fmtDate(t.deadline)}</span>`:""}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}</div></div>`).join("");
   } else body+=`<div class="empty" style="padding:18px">مفيش مهام بالقسم لسه.</div>`;
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
-    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="hr"?'<button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}<button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button><button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
+    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="hr"?'<button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}<button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button><button class="btn ghost sm" data-quick="addemp">إضافة موظف</button><button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   el.innerHTML=body;
   paintAttendance();
@@ -2141,10 +2141,11 @@ function wireHRActions(){
 async function openHRBoard(){
   if(!["owner","ops","manager"].includes(PROFILE.role)){ toast("الشاشة دي للإدارة بس","bad"); return; }
   const canArchive=isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="hr");
-  openSheet('<h3>كفاءة الفريق</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">درجة من 100 بتتحسب تلقائيًا من الشغل الفعلي (إنجاز 55% + ردود 30% + التزام بالمواعيد 15%)</div><div id="hrBox"><div class="skel"></div><div class="skel"></div></div><div class="row-actions" style="margin-top:10px">'+(canArchive?'<button class="btn sm" id="hrArchive">أرشيف الموظفين</button>':'')+'<button class="btn sm" id="hrAtt">سجل الحضور</button>'+((isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="hr"))?'<button class="btn green sm" id="hrFreeze">اعتمد تقييم الشهر</button>':'')+'<button class="btn ghost sm" id="hrHistory">تقييمات سابقة</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+  openSheet('<h3>كفاءة الفريق</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">درجة من 100 بتتحسب تلقائيًا من الشغل الفعلي (إنجاز 55% + ردود 30% + التزام بالمواعيد 15%)</div><div id="hrBox"><div class="skel"></div><div class="skel"></div></div><div class="row-actions" style="margin-top:10px">'+(canArchive?'<button class="btn sm" id="hrArchive">أرشيف الموظفين</button>':'')+'<button class="btn sm" id="hrAtt">سجل الحضور</button><button class="btn sm" id="hrAdd">إضافة موظف</button>'+((isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="hr"))?'<button class="btn green sm" id="hrFreeze">اعتمد تقييم الشهر</button>':'')+'<button class="btn ghost sm" id="hrHistory">تقييمات سابقة</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
   wireHRActions();
   const ha=$("hrArchive"); if(ha) ha.onclick=()=>openEmployeeArchive();
   const hat=$("hrAtt"); if(hat) hat.onclick=()=>openAttendanceLog();
+  const had=$("hrAdd"); if(had) had.onclick=()=>openAddEmployee();
   try{
     const { data }=await sb.from("os_hr_scores").select("*").order("score",{ascending:false});
     const rows=data||[];
@@ -2404,6 +2405,7 @@ function wireHome(el){
     else if(q==="sales"){ openSalesFunnel(); }
     else if(q==="leads"){ openLeadsFeed(); }
     else if(q==="leaves"){ openLeaves(); }
+    else if(q==="addemp"){ openAddEmployee(); }
     else if(q==="adminhub"){ openAdminHub(); }
     else if(q==="meeting"){ openMeetingReport(); }
     else if(q==="projects"){ openProjects(); }
@@ -2913,6 +2915,33 @@ async function createUserViaFn(payload){
     body:JSON.stringify(payload) });
   const d=await res.json().catch(()=>({}));
   return { status:res.status, ok:res.ok, data:d };
+}
+/* ===== إضافة موظف جديد — مدير عادي يضيف لقسمه، مدير الـHR والإدارة العليا يضيفوا لأي قسم وأي دور ===== */
+function openAddEmployee(){
+  if(!["owner","ops","manager"].includes(PROFILE.role)){ toast("الشاشة دي للإدارة بس","bad"); return; }
+  const isHRManager=PROFILE.role==="manager"&&PROFILE.dept==="hr";
+  const fullAccess=isOwnerOps()||isHRManager;
+  const tmpPass="Bk!"+Math.random().toString(36).slice(2,8);
+  const deptOpts=Object.values(DEPT_BY_KEY).sort((a,b)=>((a.sort_order??500)-(b.sort_order??500))).map(d=>`<option value="${esc(d.key)}" ${d.key===PROFILE.dept?"selected":""}>${esc(d.name)}</option>`).join("");
+  const posOpts=[["staff","موظف"],["manager","مدير"],["assistant","مساعد/ة"],["gov","علاقات حكومية"],["archive","أرشيف"]].map(p=>`<option value="${p[0]}">${p[1]}</option>`).join("");
+  openSheet(`<h3>إضافة موظف جديد</h3>
+    <div class="field"><label>الاسم</label><input id="neName" placeholder="الاسم كامل"/></div>
+    <div class="field"><label>الإيميل</label><input id="neEmail" type="email" placeholder="name@beit-alkhibra.com"/></div>
+    <div class="field"><label>باسورد مؤقت (ابعتهوله)</label><input id="nePass" value="${tmpPass}"/></div>
+    <div class="field"><label>القسم أو المكتب</label>${fullAccess?`<select id="neDept">${deptOpts}</select>`:`<div class="muted" style="font-size:12.5px">${esc((DEPT_BY_KEY[PROFILE.dept]&&DEPT_BY_KEY[PROFILE.dept].name)||"قسمك")} <input type="hidden" id="neDept" value="${esc(PROFILE.dept||"")}"/></div>`}</div>
+    <div class="field"><label>الدور</label>${fullAccess?`<select id="neRole"><option value="employee">موظف</option><option value="manager">مدير</option></select>`:`<div class="muted" style="font-size:12.5px">موظف <input type="hidden" id="neRole" value="employee"/></div>`}</div>
+    <div class="field"><label>المسمى (اختياري)</label><select id="nePos"><option value="">بدون تحديد</option>${posOpts}</select></div>
+    <div class="row-actions"><button class="btn green" id="neGo">أنشئ الحساب ✓</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+  $("neGo").onclick=async()=>{
+    const btn=$("neGo");
+    const name=$("neName").value.trim(), email=$("neEmail").value.trim(), pass=$("nePass").value.trim();
+    const dept=$("neDept").value, role=$("neRole").value, position=$("nePos").value||null;
+    if(!name||!email||!pass){ toast("كمّل البيانات الأساسية","bad"); return; }
+    btn.disabled=true; btn.textContent="بينشئ الحساب…";
+    const r=await createUserViaFn({ name, email, password:pass, role, dept, position });
+    if(!r.ok){ toast("معرفناش ننشئ: "+(r.data&&r.data.error||"خطأ"),"bad"); btn.disabled=false; btn.textContent="أنشئ الحساب ✓"; return; }
+    closeSheet(); toast("اتعمل حساب "+name+" ✓ — الباسورد المؤقت: "+pass,"ok");
+  };
 }
 function openApprove(id){
   const j=LAST_JOINS[id]; if(!j) return;
