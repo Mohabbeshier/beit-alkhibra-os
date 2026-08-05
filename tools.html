@@ -733,6 +733,52 @@ async function openAttendanceLog(){
   }catch(e){ $("attLogBox").innerHTML=failBox("معرفناش نجيب السجل.",openAttendanceLog); }
 }
 /* ===== الاستقبال — سجل الزوار ===== */
+/* ===== سجل الوارد والصادر ===== */
+let _corrDir="all";
+async function openCorrespondence(){
+  const deptOpts=DEPTS.map(d=>'<option value="'+d.key+'">'+esc(d.name)+'</option>').join("");
+  openSheet('<h3>سجل الوارد والصادر</h3>'
+    +'<div class="field"><label>النوع</label><select id="coDir"><option value="in">وارد (خطاب جاي للشركة)</option><option value="out">صادر (خطاب طالع من الشركة)</option></select></div>'
+    +'<div class="field"><label>الموضوع</label><input id="coSubj" placeholder="موضوع الخطاب"/></div>'
+    +'<div class="field"><label>من / إلى</label><input id="coCounter" placeholder="اسم الجهة أو الشخص"/></div>'
+    +'<div class="field"><label>موجّه لأي قسم؟</label><select id="coDept"><option value="">بدون تحديد</option>'+deptOpts+'</select></div>'
+    +'<div class="field"><label>تاريخ الخطاب</label><input id="coDate" type="date" value="'+todayStr()+'"/></div>'
+    +'<div class="row-actions"><button class="btn green" id="coGo">سجّل ✓</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>'
+    +'<div class="sec-h" style="margin-top:16px">آخر القيود <span class="ln"></span></div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="coFilters"><button class="chip on" data-cf="all">الكل</button><button class="chip" data-cf="in">وارد</button><button class="chip" data-cf="out">صادر</button></div>'
+    +'<div id="coBox"><div class="skel"></div></div>');
+  addMicTo("coSubj");
+  _corrDir="all";
+  $("coFilters").querySelectorAll("[data-cf]").forEach(b=>b.onclick=()=>{ _corrDir=b.dataset.cf; $("coFilters").querySelectorAll(".chip").forEach(x=>x.classList.toggle("on",x===b)); paintCorrespondence(); });
+  $("coGo").onclick=async()=>{
+    const btn=$("coGo");
+    const direction=$("coDir").value, subject=$("coSubj").value.trim(), counterparty=$("coCounter").value.trim()||null, dept=$("coDept").value||null, cdate=$("coDate").value||todayStr();
+    if(!subject){ toast("اكتب موضوع الخطاب","bad"); return; }
+    btn.disabled=true; btn.textContent="بيسجّل…";
+    const { data, error }=await sb.from("os_correspondence").insert({ direction, subject, counterparty, dept, correspondence_date:cdate, logged_by:ME.id, logged_by_name:PROFILE.name }).select("ref_no").single();
+    if(error){ toast("معرفناش نسجّل: "+error.message,"bad"); btn.disabled=false; btn.textContent="سجّل ✓"; return; }
+    toast("اتسجّل برقم "+(data&&data.ref_no||"—"),"ok");
+    $("coSubj").value=""; $("coCounter").value=""; $("coDept").value="";
+    btn.disabled=false; btn.textContent="سجّل ✓";
+    paintCorrespondence();
+  };
+  paintCorrespondence();
+}
+async function paintCorrespondence(){
+  const box=$("coBox"); if(!box) return;
+  try{
+    let q=sb.from("os_correspondence").select("*").order("created_at",{ascending:false}).limit(40);
+    if(_corrDir!=="all") q=q.eq("direction",_corrDir);
+    const { data }=await q;
+    const rows=data||[];
+    if(!rows.length){ box.innerHTML='<div class="empty">مفيش قيود لسه.</div>'; return; }
+    box.innerHTML=rows.map(c=>{
+      const dirBadge=c.direction==="in"?'<span class="badge b-blue">وارد</span>':'<span class="badge b-green">صادر</span>';
+      return '<div class="card flat"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(c.subject)+'</b>'+dirBadge+'</div>'
+        +'<div class="muted" style="font-size:11.5px;margin-top:2px">'+esc(c.ref_no||"—")+(c.counterparty?" · "+esc(c.counterparty):"")+(c.dept?" · "+esc((DEPT_BY_KEY[c.dept]&&DEPT_BY_KEY[c.dept].name)||c.dept):"")+" · "+fmtDate(c.correspondence_date)+'</div></div>';
+    }).join("");
+  }catch(e){ box.innerHTML=failBox("معرفناش نجيب السجل.",paintCorrespondence); }
+}
 async function openVisitorLog(){
   const hostOpts=PROFILES.filter(p=>p.id!==ME.id).sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),"ar")).map(p=>`<option value="${p.id}">${esc(p.name)}${p.dept?" — "+esc((DEPT_BY_KEY[p.dept]&&DEPT_BY_KEY[p.dept].name)||p.dept):""}</option>`).join("");
   openSheet('<h3>تسجيل زائر</h3>'
@@ -831,7 +877,7 @@ function renderEmployeeHome(d){
   body+=`<div class="card" style="background:linear-gradient(135deg,#E3F2FD,#E8F5E9);border:none">
     <b>محتاج تعمل حاجة؟ اتكلم بس</b>
     <div class="muted" style="font-size:12.5px;margin:4px 0 12px">مش لازم تكتب — دوس واتكلم والنظام يفهمك.</div>
-    <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button><button class="btn ghost sm" data-quick="leaves">الإجازات</button>${PROFILE.dept==="reception"?'<button class="btn sm" data-quick="visitor">تسجيل زائر</button><button class="btn ghost sm" data-quick="newreq">تسجيل مكالمة</button><button class="btn ghost sm" data-quick="attlog">مين موجود النهاردة</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}</div></div>`;
+    <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button><button class="btn ghost sm" data-quick="leaves">الإجازات</button>${PROFILE.dept==="reception"?'<button class="btn sm" data-quick="visitor">تسجيل زائر</button><button class="btn ghost sm" data-quick="newreq">تسجيل مكالمة</button><button class="btn ghost sm" data-quick="corr">الوارد والصادر</button><button class="btn ghost sm" data-quick="docs">خزنة المستندات</button><button class="btn ghost sm" data-quick="attlog">مين موجود النهاردة</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}</div></div>`;
   body+=`<div class="sec-h">المهام اللي عليك <span class="ln"></span></div>`;
   if(myTasks.length){
     body+=myTasks.slice(0,6).map(t=>`<button class="card flat" data-task="${t.id}" style="width:100%;text-align:right;cursor:pointer${t.deadline&&new Date(t.deadline)<new Date()?';border-right:4px solid var(--red)':''}"><b>${esc(t.title)}</b><div class="meta">${t.deadline?`<span>${fmtDate(t.deadline)}</span>`:`<span class="muted">من غير موعد</span>`}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}<span class="dot"></span><span class="muted">${t.progress||0}%</span></div></button>`).join("");
@@ -1681,7 +1727,7 @@ async function openDocsVault(){
     +'<div class="field" style="margin-bottom:8px"><input id="dvSearch" placeholder="دوّر باسم المستند…" value="'+esc(_dvSearch)+'"/></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="dvFilters"><button class="chip on" data-df="all">الكل</button><button class="chip" data-df="contract">عقود</button><button class="chip" data-df="license">تراخيص</button><button class="chip" data-df="expiring">بتنتهي</button><button class="chip" data-df="locked">مقفولة</button><button class="chip" data-df="mine">بتاعتي</button></div>'
     +'<div id="dvBox"><div class="skel"></div></div>'
-    +(canWrite()?'<div class="sec-h">ضيف مستند <span class="ln"></span></div>'
+    +((canWrite()||PROFILE.dept==="reception")?'<div class="sec-h">ضيف مستند <span class="ln"></span></div>'
     +'<div class="field"><label>الاسم</label><input id="dvTitle" placeholder="مثلًا: رخصة فيلا زايد — نسخة نهائية"/></div>'
     +'<div class="field"><label>نوع المستند</label><select id="dvKind"><option value="general">عام</option><option value="contract">عقد</option><option value="license">ترخيص</option><option value="letter">خطاب رسمي</option><option value="report">تقرير</option></select></div>'
     +'<div class="field"><label>القسم</label><select id="dvDept"><option value="">— عام —</option>'+DEPTS.map(d=>'<option value="'+d.key+'">'+esc(d.name)+'</option>').join("")+'</select></div>'
@@ -2455,6 +2501,8 @@ function wireHome(el){
     else if(q==="leaves"){ openLeaves(); }
     else if(q==="addemp"){ openAddEmployee(); }
     else if(q==="visitor"){ openVisitorLog(); }
+    else if(q==="corr"){ openCorrespondence(); }
+    else if(q==="docs"){ openDocsVault(); }
     else if(q==="attlog"){ openAttendanceLog(); }
     else if(q==="adminhub"){ openAdminHub(); }
     else if(q==="meeting"){ openMeetingReport(); }
