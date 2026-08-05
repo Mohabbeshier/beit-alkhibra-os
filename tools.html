@@ -1771,7 +1771,7 @@ async function paintLeadsFeed(qstr){
   }catch(e){ $("lfBox").innerHTML=failBox("معرفناش نجيب الليدز.",()=>paintLeadsFeed("")); }
 }
 async function openSalesFunnel(){
-  openSheet('<h3>المبيعات والليدز</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">قمع المبيعات الحي + وعد الـ24 ساعة لعملاء الموقع</div><div id="sfBox"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
+  openSheet('<h3>المبيعات والليدز</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">قمع المبيعات الحيّ ومؤشر الاستجابة خلال 24 ساعة لعملاء الموقع</div><div id="sfBox"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
   try{
     const [fR,kR]=await Promise.all([
       sb.from("os_sales_funnel").select("*").maybeSingle(),
@@ -1786,22 +1786,22 @@ async function openSalesFunnel(){
       +'<div class="stat"><div class="n">'+(f.website_clients_total||0)+'</div><div class="l">عميل من الموقع</div></div>'
       +'<div class="stat"><div class="n">'+(f.website_clients_week||0)+'</div><div class="l">الأسبوع ده</div></div>'
       +'<div class="stat'+(f.open_lead_tasks?' stat-hot':'')+'"><div class="n">'+(f.open_lead_tasks||0)+'</div><div class="l">مهمة ليد مفتوحة</div></div></div>';
-    h+='<div class="sec-h">حرارة الليدز <span class="ln"></span></div><div class="card flat">'
-      +bar(hot,"var(--red)","ساخن — كلّمهم النهارده","")
-      +bar(warm,"#F59E0B","دافي — متابعة الأسبوع ده","")
-      +bar(cold,"var(--blue)","بارد — رعاية طويلة","")+'</div>';
+    h+='<div class="sec-h">تصنيف الليدز <span class="ln"></span></div><div class="card flat">'
+      +bar(hot,"var(--red)","ساخن — يحتاج تواصل فوري","")
+      +bar(warm,"#F59E0B","دافي — متابعة خلال الأسبوع","")
+      +bar(cold,"var(--blue)","بارد — متابعة على المدى الطويل","")+'</div>';
     if(f.pipeline_value_egp) h+='<div class="card flat" style="text-align:center"><div class="muted" style="font-size:11.5px">قيمة الـpipeline</div><b style="font-size:19px;color:var(--green-d)">'+Number(f.pipeline_value_egp).toLocaleString("ar-EG")+' جنيه</b></div>';
     /* وعد الـ24 ساعة */
     const broken=k.broken_promise||0;
-    h+='<div class="sec-h">وعد الـ24 ساعة <span class="ln"></span></div>';
+    h+='<div class="sec-h">الاستجابة خلال 24 ساعة <span class="ln"></span></div>';
     h+='<div class="card flat"'+(broken?' style="border-color:#FCA5A5;background:#FFF5F5"':'')+'>'
       +'<div class="stats" style="margin-bottom:0">'
       +'<div class="stat"><div class="n">'+(k.total_website_clients||0)+'</div><div class="l">عميل موقع</div></div>'
-      +'<div class="stat"><div class="n">'+(k.responded||0)+'</div><div class="l">اترد عليهم</div></div>'
-      +'<div class="stat"><div class="n">'+(k.within_24h||0)+'</div><div class="l">جوه الـ24س</div></div>'
-      +'<div class="stat'+(broken?' stat-hot':'')+'"><div class="n">'+broken+'</div><div class="l">وعد اتكسر</div></div></div>'
+      +'<div class="stat"><div class="n">'+(k.responded||0)+'</div><div class="l">تم الرد عليهم</div></div>'
+      +'<div class="stat"><div class="n">'+(k.within_24h||0)+'</div><div class="l">خلال 24 ساعة</div></div>'
+      +'<div class="stat'+(broken?' stat-hot':'')+'"><div class="n">'+broken+'</div><div class="l">تجاوز الـ24 ساعة</div></div></div>'
       +(k.avg_response_hours!=null?'<div class="muted" style="font-size:12px;margin-top:8px;text-align:center">متوسط سرعة الرد: <b>'+(Math.round(k.avg_response_hours*10)/10)+' ساعة</b></div>':'')
-      +(broken?'<div style="color:var(--red);font-weight:800;font-size:12.5px;margin-top:8px;text-align:center">في عملاء اتأخرنا عليهم — افتح مهام الليدز فورًا</div>':'')
+      +(broken?'<div style="color:var(--red);font-weight:800;font-size:12.5px;margin-top:8px;text-align:center">فيه عملاء تجاوزوا مهلة الرد — افتح مهام الليدز فورًا</div>':'')
       +'</div>';
     h+='<div class="row-actions" style="margin-top:6px"><button class="btn green sm" id="sfLeads">افتح مهام الليدز</button></div>';
     h+='<div id="sfHot"></div>';
@@ -1820,9 +1820,9 @@ async function openSalesFunnel(){
           const stale=staleR.count||0;
           const openTitles=new Set((openR.data||[]).map(t=>t.title));
           let hh="";
-          if(stale) hh+='<div class="card flat" style="border-color:#FCA5A5;background:#FFF5F5;margin-top:10px"><b style="font-size:13px;color:var(--red)">'+stale+' فرصة نايمة</b><div class="muted" style="font-size:11.5px;margin-top:2px">مفيش عليها أي حركة من 7 أيام أو أكتر — ابدأ بالساخن تحت</div></div>';
+          if(stale) hh+='<div class="card flat" style="border-color:#FCA5A5;background:#FFF5F5;margin-top:10px"><b style="font-size:13px;color:var(--red)">'+stale+' فرصة متوقفة</b><div class="muted" style="font-size:11.5px;margin-top:2px">مفيش أي تحديث عليها من 7 أيام أو أكتر — راجع العملاء الساخنين تحت</div></div>';
           if(hot.length){
-            hh+='<div class="sec-h" style="margin-top:10px">الساخن دلوقتي — كلّمهم النهارده <span class="ln"></span></div>';
+            hh+='<div class="sec-h" style="margin-top:10px">العملاء الساخنون حاليًا — يحتاجون تواصل فوري <span class="ln"></span></div>';
             hh+=hot.map(o=>{
               const wa=(o.whatsapp||o.phone||"").replace(/[^0-9+]/g,"");
               const taskTitle="متابعة ليد: "+(o.name||"");
