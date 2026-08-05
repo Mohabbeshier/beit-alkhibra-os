@@ -899,7 +899,7 @@ function renderManagerHome(d){
     body+=myDeptTasks.slice(0,5).map(t=>`<div class="card flat"${t.deadline&&new Date(t.deadline)<new Date()?' style="border-right:4px solid var(--red)"':''}><b>${esc(t.title)}</b><div class="meta"><span>${esc(t.assignee_name||nameOf(t.assignee_id)||"—")}</span>${t.deadline?`<span class="dot"></span><span>${fmtDate(t.deadline)}</span>`:""}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}</div></div>`).join("");
   } else body+=`<div class="empty" style="padding:18px">مفيش مهام بالقسم لسه.</div>`;
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
-    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="hr"?'<button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}<button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button><button class="btn ghost sm" data-quick="addemp">إضافة موظف</button><button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
+    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="hr"?'<button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}<button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button><button class="btn ghost sm" data-quick="addemp">إضافة موظف</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${PROFILE.dept==="engineering"?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}<button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   el.innerHTML=body;
   paintAttendance();
@@ -1311,15 +1311,16 @@ async function openComplaintsAdmin(){
 }
 /* =====المشاريع ===== */
 async function openProjects(){
+  const canAddPrj=isOwnerOps()||PROFILE.role==="manager";
   openSheet('<h3>المشاريع</h3><div id="prjBox"><div class="skel"></div><div class="skel"></div></div>'
-    +(isOwnerOps()?'<div class="sec-h">مشروع جديد <span class="ln"></span></div>'
+    +(canAddPrj?'<div class="sec-h">مشروع جديد <span class="ln"></span></div>'
       +'<div class="field"><label>اسم المشروع</label><input id="pjName" placeholder="فيلا الشيخ زايد — عميل X"/></div>'
-      +'<div class="field"><label>القسم</label><select id="pjDept">'+DEPTS.map(d=>'<option value="'+d.key+'">'+esc(d.name)+'</option>').join("")+'</select></div>'
+      +'<div class="field"><label>القسم</label><select id="pjDept">'+DEPTS.map(d=>'<option value="'+d.key+'"'+(d.key===PROFILE.dept?" selected":"")+'>'+esc(d.name)+'</option>').join("")+'</select></div>'
       +'<div class="field"><label>المرحلة</label><select id="pjStage"><option value="design">تصميم</option><option value="license">ترخيص</option><option value="execution">تنفيذ</option><option value="handover">تسليم</option></select></div>'
       +'<div class="field"><label>القيمة (جنيه — اختياري)</label><input id="pjVal" type="number" inputmode="numeric"/></div>'
       +'<div class="row-actions"><button class="btn green" id="pjGo">أضف المشروع</button></div>':"")
     +'<button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
-  if(isOwnerOps()){
+  if(canAddPrj){
     addMicTo("pjName");
     $("pjGo").onclick=async()=>{
       const name=$("pjName").value.trim(); if(!name){ toast("اكتب اسم المشروع","bad"); return; }
@@ -1389,7 +1390,8 @@ async function paintProjectDetail(id){
     if(!fl.length){ h+='<div class="empty">مفيش مرفقات للمشروع ده لسه.</div>'; }
     else { h+=fl.map(f=>{
       const isLink=f.kind==="link"; const sz=f.size_bytes?(" · "+fmtBytes(f.size_bytes)):"";
-      return '<div class="card flat"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:13px">'+esc(f.title||"ملف")+'</b>'
+      const revBadge=(f.revision||1)>1?'<span class="badge b-blue" style="font-size:10px">Rev '+f.revision+'</span>':"";
+      return '<div class="card flat"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:13px">'+esc(f.title||"ملف")+'</b>'+revBadge
         +(f.url?'<a class="btn sm" href="'+esc(f.url)+'" target="_blank" rel="noopener" style="background:var(--blue);color:#fff">فتح</a>':'')+'</div>'
         +'<div class="meta"><span>'+(isLink?"لينك":"ملف")+sz+'</span>'+((f.uploaded_name)?'<span class="dot"></span><span>'+esc(f.uploaded_name)+'</span>':'')+'</div></div>';
     }).join(""); }
@@ -1404,8 +1406,16 @@ async function paintProjectDetail(id){
         const b=$("pdUp"); b.disabled=true; $("pdStatus").textContent="بيترفع…";
         try{
           const up=await uploadEmployeeFile(fe.files[0]);
-          await registerFile({ title, kind:"file", project_id:id, dept:prj.dept||null, url:up.url, storage_path:up.path, size_bytes:up.size, mime:up.mime });
-          toast("اترفع واتربط بالمشروع","ok"); paintProjectDetail(id);
+          /* تحكم النسخ: لو فيه ملف بنفس الاسم في نفس المشروع، اعتبره نسخة قديمة واحفظه كأرشيف */
+          let revision=1;
+          const { data:dupes }=await sb.from("os_files").select("id,revision").eq("project_id",id).eq("archived",false).ilike("title",title);
+          if(dupes&&dupes.length){
+            revision=Math.max(...dupes.map(d=>d.revision||1))+1;
+            await sb.from("os_files").update({ archived:true, archived_at:new Date().toISOString(), archived_by:ME.id }).in("id",dupes.map(d=>d.id));
+          }
+          await registerFile({ title, kind:"file", project_id:id, dept:prj.dept||null, url:up.url, storage_path:up.path, size_bytes:up.size, mime:up.mime, revision });
+          toast(revision>1?"اترفعت نسخة جديدة (Rev "+revision+") — النسخة القديمة اتأرشفت أوتوماتيك":"اترفع واتربط بالمشروع","ok");
+          paintProjectDetail(id);
         }catch(e){ $("pdStatus").textContent=""+(e.message||"فشل"); toast(e.message||"فشل الرفع","bad"); b.disabled=false; }
       };
     }
