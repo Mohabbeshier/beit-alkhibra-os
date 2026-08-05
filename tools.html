@@ -4269,6 +4269,33 @@ function taskCard(t){
     ${quick?'<div style="display:flex;justify-content:flex-end;margin-top:8px">'+quick+'</div>':''}
   </div>`;
 }
+function smartTaskCard(t){
+  /* بطاقة ذكية: إيه هي، جاية منين، إمتى — بدون AI عشان تبقى فورية ومضمونة */
+  const src = t.type==="lead"
+    ? "🌐 دخلت أوتوماتيك من فورم الموقع"
+    : "👤 أضافها "+(esc(t.created_by_name||"الإدارة"));
+  const created = t.created_at ? relativeTime(t.created_at) : null;
+  const lastAct = (t.last_update_at||t.updated_at) ? relativeTime(t.last_update_at||t.updated_at) : null;
+  let ddLine="";
+  if(t.deadline){
+    const days=Math.ceil((new Date(t.deadline).getTime()-Date.now())/86400000);
+    if(t.status==="done") ddLine="";
+    else if(days<0) ddLine='<span style="color:var(--red);font-weight:800">⚠️ اتأخرت '+Math.abs(days)+' يوم عن الموعد</span>';
+    else if(days===0) ddLine='<span style="color:var(--red);font-weight:800">⏰ الموعد النهاردة</span>';
+    else if(days<=2) ddLine='<span style="color:#B45309;font-weight:700">الموعد خلال '+days+' يوم</span>';
+    else ddLine='الموعد خلال '+days+' يوم';
+  }
+  const statusTxt={new:"لسه ما اتبدأتش",in_progress:"شغّالة دلوقتي",review:"مستنية اعتماد المدير",done:"خلصت رسمي"}[t.status]||t.status;
+  const staleLine = isStale(t) ? '<div style="margin-top:6px;color:#B45309;font-weight:700">🐢 مفيش تحديث عليها من 3 أيام أو أكتر</div>' : "";
+  return '<div class="card flat" style="background:linear-gradient(135deg,#EEF4FF,#F3FBF3);border-color:#C7D9F5;margin-bottom:12px">'
+    +'<div style="font-family:Cairo,sans-serif;font-weight:800;font-size:12.5px;margin-bottom:8px;color:var(--blue-d)">🧠 نظرة سريعة</div>'
+    +'<div style="font-size:12.5px;line-height:1.9">'
+    +'<div><b>المصدر:</b> '+src+'</div>'
+    +(created?'<div><b>اتضافت:</b> '+created+'</div>':'')
+    +'<div><b>الحالة:</b> '+statusTxt+(lastAct&&t.status!=="new"?' — آخر تحديث '+lastAct:'')+'</div>'
+    +(ddLine?'<div><b>الموعد:</b> '+ddLine+'</div>':'')
+    +'</div>'+staleLine+'</div>';
+}
 function openTask(id,all){
   const t=(all||[]).find(x=>x.id===id); if(!t) return;
   loadTaskTimeline(id);
@@ -4290,6 +4317,7 @@ function openTask(id,all){
   const mine = t.assignee_id===ME.id || isOwnerOps() || (PROFILE.role==="manager"&&t.dept===myDeptKey());
   openSheet(`<h3>${esc(t.title)}</h3>
     <div class="meta" style="margin-bottom:10px"><span>${esc(t.assignee_name||"—")}</span>${t.deadline?`<span class="dot"></span><span>${fmtDate(t.deadline)}</span>`:""}<span class="dot"></span>${statusBadge(t.status)}</div>
+    ${smartTaskCard(t)}
     <div class="prog" style="margin-bottom:6px"><i style="width:${Math.max(0,Math.min(100,t.progress||0))}%"></i></div>
     <div class="muted" style="margin-bottom:10px">التقدّم: ${t.progress||0}%</div>
     <div id="tlBox" style="margin-bottom:14px"><div class="skel" style="height:34px"></div><div class="skel" style="height:34px;width:80%"></div></div>
