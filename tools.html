@@ -1363,15 +1363,51 @@ async function openProjectDetail(id){
   openSheet('<h3>تفاصيل المشروع</h3><div id="pdBox"><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="openProjects()">رجوع للمشاريع</button>');
   await paintProjectDetail(id);
 }
+function openProjectMilestoneNew(projectId,prj){
+  const opts=PROFILES.map(p=>`<option value="${p.id}" ${p.dept===prj.dept?"selected":""}>${esc(p.name)}</option>`).join("");
+  openSheet(`<h3>معلم/مهمة جديدة للمشروع</h3>
+    <div class="muted" style="font-size:12px;margin:-6px 0 12px">${esc(prj.name)}</div>
+    <div class="field"><label>العنوان</label><input id="msTitle" placeholder="مثلاً: تسليم الرسم المعماري النهائي"/></div>
+    <div class="field"><label>المسؤول</label><select id="msAss">${opts}</select></div>
+    <div class="field"><label>الموعد المستهدف</label><input id="msDue" type="date"/></div>
+    <div class="field"><label>الأولوية</label><select id="msPrio"><option value="medium">عادي</option><option value="high">عاجل</option></select></div>
+    <div class="row-actions"><button class="btn green" id="msGo">أضف</button><button class="btn ghost" onclick="openProjectDetail('${projectId}')">إلغاء</button></div>`);
+  addMicTo("msTitle");
+  $("msGo").onclick=async()=>{
+    const title=$("msTitle").value.trim(); if(!title){ toast("اكتب العنوان","bad"); return; }
+    const btn=$("msGo"); btn.disabled=true; btn.textContent="بيضيف…";
+    const assId=$("msAss").value; const ap=BY_ID[assId];
+    const { error }=await sb.from("os_tasks").insert({ title, project_id:projectId, assignee_id:assId, assignee_name:ap?ap.name:PROFILE.name, dept:ap?ap.dept:prj.dept, deadline:$("msDue").value||null, priority:$("msPrio").value, type:"task", status:"new", progress:0, created_by:ME.id, created_by_name:PROFILE.name });
+    if(error){ toast("معرفناش نضيف: "+error.message,"bad"); btn.disabled=false; btn.textContent="أضف"; return; }
+    toast("اتضاف للمشروع ✓","ok"); openProjectDetail(projectId);
+  };
+}
 async function paintProjectDetail(id){
   try{
     const { data:prj, error }=await sb.from("os_projects").select("*").eq("id",id).single();
     if(error||!prj){ $("pdBox").innerHTML=failBox("معرفناش نجيب المشروع.",()=>paintProjectDetail(id)); return; }
     const canUp = isOwnerOps() || PROFILE.dept===prj.dept || PROFILE.dept==="engineering";
-    const { data:files }=await sb.from("os_files").select("*").eq("project_id",id).eq("archived",false).order("created_at",{ascending:false});
+    const [{ data:files },{ data:ptasks }]=await Promise.all([
+      sb.from("os_files").select("*").eq("project_id",id).eq("archived",false).order("created_at",{ascending:false}),
+      sb.from("os_tasks").select("*").eq("project_id",id).order("created_at",{ascending:false})
+    ]);
     const fl=files||[];
+    const tsk=ptasks||[];
+    const openTsk=tsk.filter(t=>t.status!=="done");
+    const overdueTsk=openTsk.filter(t=>t.deadline&&new Date(t.deadline)<new Date());
     const dt=prj.created_at?new Date(prj.created_at).toLocaleDateString("ar-EG"):"";
-    let h='<div class="card">'
+    /* نظرة سريعة ذكية */
+    const lastActs=[prj.created_at,...fl.map(f=>f.created_at),...tsk.map(t=>t.created_at)].filter(Boolean).sort().reverse();
+    const lastAct=lastActs[0];
+    const staleDays=lastAct?Math.floor((Date.now()-new Date(lastAct).getTime())/86400000):null;
+    let h='<div class="card" style="background:linear-gradient(135deg,#EEF4FF,#F3FBF3);border-color:#C7D9F5;margin-bottom:12px">'
+      +'<div style="font-family:Cairo,sans-serif;font-weight:800;font-size:12.5px;margin-bottom:8px;color:var(--blue-d)">🧠 نظرة سريعة</div>'
+      +'<div style="font-size:12.5px;line-height:1.9">'
+      +'<div><b>آخر نشاط:</b> '+(lastAct?relativeTime(lastAct):"—")+(staleDays!==null&&staleDays>=7?' <span style="color:#B45309;font-weight:700">— واقف '+staleDays+' يوم</span>':'')+'</div>'
+      +'<div><b>مهام المشروع:</b> '+openTsk.length+' شغّالة'+(overdueTsk.length?' — <span style="color:var(--red);font-weight:800">'+overdueTsk.length+' متأخرة</span>':'')+'</div>'
+      +'<div><b>مرفقات:</b> '+fl.length+' ملف'+'</div>'
+      +'</div></div>';
+    h+='<div class="card">'
       +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+(prj.code?'<span class="badge" style="background:#eef2f7;color:#0D47A1;font-weight:800">'+esc(prj.code)+'</span>':'')
       +'<span class="badge" style="'+(prj.status==="open"?"background:#E3F2FD;color:#0D47A1":"background:#E8F5E9;color:#2E7D32")+'">'+esc(prj.status==="open"?"مفتوح":(prj.status||"—"))+'</span></div>'
       +'<b style="display:block;margin-top:8px;font-size:15px">'+esc(prj.name)+'</b>'
@@ -1379,6 +1415,15 @@ async function paintProjectDetail(id){
       +((DEPT_BY_KEY[prj.dept]&&'<span>'+esc(DEPT_BY_KEY[prj.dept].name)+'</span>')||'')
       +(prj.value_egp?'<span class="dot"></span><span>'+Number(prj.value_egp).toLocaleString("en")+' ج</span>':'')
       +(dt?'<span class="dot"></span><span>'+dt+'</span>':'')+'</div></div>';
+    /* معالم ومهام المشروع */
+    h+='<div class="sec-h">معالم ومهام المشروع <span class="ln"></span></div>';
+    if(canUp) h+='<div class="row-actions" style="margin:-4px 0 10px"><button class="btn sm" id="pdAddMs">➕ أضف معلم/مهمة</button></div>';
+    if(!tsk.length){ h+='<div class="empty">مفيش معالم أو مهام مرتبطة بالمشروع لسه.</div>'; }
+    else { h+=tsk.map(t=>{
+      const isOverdue=t.deadline&&t.status!=="done"&&new Date(t.deadline)<new Date();
+      return '<div class="card flat"'+(isOverdue?' style="border-right:4px solid var(--red)"':'')+'><div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:13px">'+esc(t.title)+'</b>'+statusBadge(t.status)+'</div>'
+        +'<div class="meta"><span>'+esc(t.assignee_name||nameOf(t.assignee_id)||"غير محدد")+'</span>'+(t.deadline?'<span class="dot"></span><span>'+fmtDate(t.deadline)+'</span>':'')+'</div></div>';
+    }).join(""); }
     h+='<div class="sec-h">مرفقات المشروع <span class="ln"></span></div>';
     if(canUp){
       h+='<div class="card flat"><div class="field"><label>اسم المرفق</label><input id="pdTitle" placeholder="مثلًا: رسمة معمارية — الدور الأرضي"/></div>'
@@ -1397,6 +1442,7 @@ async function paintProjectDetail(id){
     }).join(""); }
     h+='</div>';
     $("pdBox").innerHTML=h;
+    const msBtn=$("pdAddMs"); if(msBtn) msBtn.onclick=()=>openProjectMilestoneNew(id,prj);
     if(canUp){
       addMicTo("pdTitle");
       $("pdUp").onclick=async()=>{
