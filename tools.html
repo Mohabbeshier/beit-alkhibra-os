@@ -688,6 +688,48 @@ function renderOpsHome(d){
 }
 
 /* ---------- MANAGER: their department only ---------- */
+/* ---------- الحضور والانصراف ---------- */
+function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function timeStr(iso){ return iso?new Date(iso).toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"}):""; }
+async function paintAttendance(){
+  const box=$("attWidget"); if(!box) return;
+  try{
+    const { data }=await sb.from("os_attendance").select("*").eq("user_id",ME.id).eq("work_date",todayStr()).maybeSingle();
+    if(!data){
+      box.innerHTML='<div class="card flat" style="background:linear-gradient(135deg,#E3F2FD,#E8F5E9);border:none;text-align:center"><b style="font-size:13px">لسه ما سجّلتش حضورك النهارده</b><button class="btn green sm" id="attIn" style="margin-top:8px;width:100%">✅ سجّل حضورك دلوقتي</button></div>';
+      const b=$("attIn"); if(b) b.onclick=async()=>{ b.disabled=true; b.textContent="بيسجّل…";
+        const { error }=await sb.from("os_attendance").upsert({ user_id:ME.id, user_name:PROFILE.name, dept:PROFILE.dept||null, work_date:todayStr(), check_in:new Date().toISOString() },{onConflict:"user_id,work_date"});
+        if(error){ toast("معرفناش نسجّل: "+error.message,"bad"); b.disabled=false; b.textContent="✅ سجّل حضورك دلوقتي"; return; }
+        toast("اتسجّل حضورك ✓","ok"); paintAttendance();
+      };
+    } else if(!data.check_out){
+      box.innerHTML='<div class="card flat" style="background:#F1F8F2;border-color:#A5D6A7;text-align:center"><b style="font-size:13px">✅ حضرت الساعة '+timeStr(data.check_in)+'</b><button class="btn ghost sm" id="attOut" style="margin-top:8px;width:100%">🚪 سجّل انصرافك</button></div>';
+      const b=$("attOut"); if(b) b.onclick=async()=>{ b.disabled=true; b.textContent="بيسجّل…";
+        const { error }=await sb.from("os_attendance").update({ check_out:new Date().toISOString() }).eq("user_id",ME.id).eq("work_date",todayStr());
+        if(error){ toast("معرفناش نسجّل: "+error.message,"bad"); b.disabled=false; b.textContent="🚪 سجّل انصرافك"; return; }
+        toast("اتسجّل انصرافك ✓ يوم سعيد","ok"); paintAttendance();
+      };
+    } else {
+      box.innerHTML='<div class="card flat" style="background:#F4F9FF;text-align:center"><b style="font-size:13px">تمام لدلوقتي — حضرت '+timeStr(data.check_in)+' وانصرفت '+timeStr(data.check_out)+'</b></div>';
+    }
+  }catch(e){ box.innerHTML=""; }
+}
+async function openAttendanceLog(){
+  if(!["owner","ops","manager"].includes(ME.role)){ toast("الشاشة دي للإدارة بس","bad"); return; }
+  openSheet('<h3>سجل الحضور — النهاردة</h3><div id="attLogBox"><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
+  try{
+    const scope=isOwnerOps()?PROFILES:PROFILES.filter(p=>p.dept===PROFILE.dept);
+    const { data }=await sb.from("os_attendance").select("*").eq("work_date",todayStr());
+    const byUser={}; (data||[]).forEach(r=>byUser[r.user_id]=r);
+    const rows=scope.filter(p=>p.id!==ME.id||true).map(p=>{
+      const r=byUser[p.id];
+      const st=!r?'<span class="badge b-grey">لسه</span>':!r.check_out?'<span class="badge b-green">حضر '+timeStr(r.check_in)+'</span>':'<span class="badge b-blue">انصرف '+timeStr(r.check_out)+'</span>';
+      return '<div class="card flat"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(p.name)+'</b>'+st+'</div>'
+        +(isOwnerOps()?'<div class="muted" style="font-size:11px;margin-top:2px">'+esc((DEPT_BY_KEY[p.dept]&&DEPT_BY_KEY[p.dept].name)||p.dept||"—")+'</div>':'')+'</div>';
+    }).join("");
+    $("attLogBox").innerHTML=rows||'<div class="empty">مفيش موظفين.</div>';
+  }catch(e){ $("attLogBox").innerHTML=failBox("معرفناش نجيب السجل.",openAttendanceLog); }
+}
 function renderManagerHome(d){
   const el=$("hBody");
   const myKey=myDeptKey();
@@ -698,7 +740,7 @@ function renderManagerHome(d){
     statCard("req",d.pendIn.length,"طلب مستنيك",{hot:true})+
     statCard("tasks",myDeptTasks.length,"مهمة بالقسم")+
     statCard("tasks",overdue.length,"متأخرة",{hot:true});
-  let body=`<div class="card" style="background:linear-gradient(135deg,#E8F5E9,#E3F2FD);border:none"><div style="display:flex;align-items:center;gap:11px"><div class="avatar" style="width:36px;height:36px;font-size:15px;flex-shrink:0">${((dep&&dep.name)||"ق")[0]}</div><div><b>${esc((dep&&dep.name)||"قسمك")}</b><div class="muted" style="font-size:12px">إنت مدير القسم ده</div></div></div></div>`;
+  let body=`<div class="card" style="background:linear-gradient(135deg,#E8F5E9,#E3F2FD);border:none"><div style="display:flex;align-items:center;gap:11px"><div class="avatar" style="width:36px;height:36px;font-size:15px;flex-shrink:0">${((dep&&dep.name)||"ق")[0]}</div><div><b>${esc((dep&&dep.name)||"قسمك")}</b><div class="muted" style="font-size:12px">إنت مدير القسم ده</div></div></div></div><div id="attWidget" style="margin-top:10px"></div>`;
   if(d.pendIn.length){
     body+=`<div class="sec-h">طلبات مستنية ردّك <span class="ln"></span></div>`+d.pendIn.slice(0,3).map(r=>reqMiniHtml(r)).join("");
   }
@@ -710,6 +752,7 @@ function renderManagerHome(d){
     <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="hr"?'<button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}<button class="btn ghost sm" data-quick="leaves">🏖️ الإجازات</button><button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   el.innerHTML=body;
+  paintAttendance();
   HOME_SUMMARY=`${d.greet} يا ${PROFILE.name}. قسم ${(dep&&dep.name)||""} عنده ${myDeptTasks.length} مهمة شغّالة، منهم ${overdue.length} متأخرة. عندك ${d.pendIn.length} طلب مستني ردك. ${d.evTxt}`;
 }
 
@@ -736,6 +779,7 @@ function renderEmployeeHome(d){
     statCard("req",d.pendIn.length,"طلب ليك")+
     statCard("tasks",d.evs.length,"موعد جاي",{ev:true});
   let body=onboardCard({tasks:myTasks,reqs:d.pendIn});
+  body+='<div id="attWidget" style="margin-bottom:10px"></div>';
   body+=`<div class="card" style="background:linear-gradient(135deg,#E3F2FD,#E8F5E9);border:none">
     <b>محتاج تعمل حاجة؟ اتكلم بس</b>
     <div class="muted" style="font-size:12.5px;margin:4px 0 12px">مش لازم تكتب — دوس واتكلم والنظام يفهمك.</div>
@@ -746,6 +790,7 @@ function renderEmployeeHome(d){
   } else body+=`<div class="empty" style="padding:20px">مفيش مهام عليك دلوقتي. مبسوطين بيك!</div>`;
   if(d.evs.length) body+=`<div class="sec-h">مواعيدك الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   el.innerHTML=body;
+  paintAttendance();
   HOME_SUMMARY=`${d.greet} يا ${PROFILE.name}. عليك ${myTasks.length} مهمة${myOverdue.length?("، منهم "+myOverdue.length+" متأخرة"):""}. ${d.evTxt} لو محتاج حاجة، دوس اسأل قسمك واتكلم.`;
 }
 
@@ -2096,9 +2141,10 @@ function wireHRActions(){
 async function openHRBoard(){
   if(!["owner","ops","manager"].includes(ME.role)){ toast("الشاشة دي للإدارة بس","bad"); return; }
   const canArchive=isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="hr");
-  openSheet('<h3>كفاءة الفريق</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">درجة من 100 بتتحسب تلقائيًا من الشغل الفعلي (إنجاز 55% + ردود 30% + التزام بالمواعيد 15%)</div><div id="hrBox"><div class="skel"></div><div class="skel"></div></div><div class="row-actions" style="margin-top:10px">'+(canArchive?'<button class="btn sm" id="hrArchive">🗂️ أرشيف الموظفين</button>':'')+((isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="hr"))?'<button class="btn green sm" id="hrFreeze">اعتمد تقييم الشهر</button>':'')+'<button class="btn ghost sm" id="hrHistory">تقييمات سابقة</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+  openSheet('<h3>كفاءة الفريق</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">درجة من 100 بتتحسب تلقائيًا من الشغل الفعلي (إنجاز 55% + ردود 30% + التزام بالمواعيد 15%)</div><div id="hrBox"><div class="skel"></div><div class="skel"></div></div><div class="row-actions" style="margin-top:10px">'+(canArchive?'<button class="btn sm" id="hrArchive">🗂️ أرشيف الموظفين</button>':'')+'<button class="btn sm" id="hrAtt">🕐 سجل الحضور</button>'+((isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="hr"))?'<button class="btn green sm" id="hrFreeze">اعتمد تقييم الشهر</button>':'')+'<button class="btn ghost sm" id="hrHistory">تقييمات سابقة</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
   wireHRActions();
   const ha=$("hrArchive"); if(ha) ha.onclick=()=>openEmployeeArchive();
+  const hat=$("hrAtt"); if(hat) hat.onclick=()=>openAttendanceLog();
   try{
     const { data }=await sb.from("os_hr_scores").select("*").order("score",{ascending:false});
     const rows=data||[];
