@@ -1591,13 +1591,14 @@ async function paintStructProjects(){
       if(rest.length){ h+='<div class="sec-h">باقي المشاريع <span class="ln"></span></div>'+rest.map(seCard).join(""); }
     } else { h+=rows.map(seCard).join(""); }
     $("seBox").innerHTML=h;
+    $("seBox").querySelectorAll("[data-se]").forEach(el=>el.onclick=()=>openStructProjectDetail(el.getAttribute("data-se")));
   }catch(e){ $("seBox").innerHTML=failBox("معرفناش نجيب المشاريع الإنشائية.",paintStructProjects); }
 }
 
 function seCard(p){
   const fail=(p.failed_checks||0);
   const stale=(p.days_since_update||0)>=7;
-  return '<div class="card flat"'+(fail?' style="border-right:4px solid var(--red)"':'')+'>'
+  return '<div class="card flat" data-se="'+p.id+'" style="cursor:pointer'+(fail?';border-right:4px solid var(--red)':'')+'">'
     +'<div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(p.name)+'</b>'
     +'<span class="badge b-blue">'+(SE_STAGE[p.stage]||esc(p.stage))+'</span></div>'
     +'<div class="meta" style="margin-top:6px"><span>'+(SE_SW[p.software]||esc(p.software||""))+'</span>'
@@ -1608,6 +1609,88 @@ function seCard(p){
     +'</div></div>';
 }
 
+const ETYPE_LBL={column:"عمود",slab:"بلاطة",beam:"كمرة",footing:"قاعدة"};
+const FOOTING_LBL={isolated:"منفردة",combined:"مشتركة",raft:"حصيرة"};
+const LOADCASE_LBL={ultimate:"نهائي (Ultimate)",working:"تشغيلي (Working)"};
+const REVIEW_LBL={pending:["محتاجة مراجعة","b-amber"],approved:["معتمدة","b-green"],rejected:["مرفوضة","b-red"],needs_edit:["محتاجة تعديل","#F59E0B"]};
+async function openStructProjectDetail(id){
+  openSheet('<h3>تفاصيل المشروع الإنشائي</h3><div id="sdBox"><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="openStructEng()">رجوع للمشاريع الإنشائية</button>');
+  await paintStructProjectDetail(id);
+}
+async function paintStructProjectDetail(id){
+  try{
+    const { data:p, error }=await sb.from("os_struct_projects").select("*").eq("id",id).single();
+    if(error||!p){ $("sdBox").innerHTML=failBox("معرفناش نجيب المشروع.",()=>paintStructProjectDetail(id)); return; }
+    const { data:els }=await sb.from("os_struct_element_status").select("*").eq("project_id",id).order("created_at",{ascending:false});
+    const rows=els||[];
+    let h='<div class="card">'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="badge b-blue">'+(SE_STAGE[p.stage]||esc(p.stage))+'</span><span class="badge" style="background:#eef2f7;color:#0D47A1">'+(SE_SW[p.software]||esc(p.software||""))+'</span></div>'
+      +'<b style="display:block;margin-top:8px;font-size:15px">'+esc(p.name)+'</b>'
+      +'<div class="meta" style="margin-top:6px">'+(p.architect_name?'<span>معماري: '+esc(p.architect_name)+'</span><span class="dot"></span>':'')+(p.engineer_name?'<span>إنشائي: '+esc(p.engineer_name)+'</span>':'')+'</div>'
+      +'<div class="muted" style="font-size:11.5px;margin-top:6px">'+(p.fc?'fc='+p.fc+' N/mm² · ':'')+(p.fy?'fy='+p.fy+' N/mm² · ':'')+(p.num_floors?p.num_floors+' دور':'')+'</div></div>';
+    h+='<div class="sec-h">العناصر ('+rows.length+') <span class="ln"></span></div>';
+    if(isStructUser()) h+='<div class="row-actions" style="margin:-4px 0 10px"><button class="btn green sm" id="seAddEl">➕ أضف عنصر</button></div>';
+    if(!rows.length){ h+='<div class="empty">مفيش عناصر متسجّلة لسه.</div>'; }
+    else { h+=rows.map(e=>{
+      const cs=e.check_status;
+      const csBadge=cs==="fail"?'<span class="badge b-red">فشل ✕</span>':cs==="pass"?'<span class="badge b-green">تمام ✓</span>':'<span class="badge b-grey">من غير تشيك</span>';
+      const rv=REVIEW_LBL[e.review_status]||REVIEW_LBL.pending;
+      const canReview=isStructUser()&&e.review_status==="pending";
+      return '<div class="card flat" data-el="'+e.id+'"'+(cs==="fail"?' style="border-right:4px solid var(--red)"':'')+'>'
+        +'<div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(e.label)+' — '+(ETYPE_LBL[e.etype]||e.etype)+'</b>'+csBadge+'</div>'
+        +'<div class="meta">'+(e.level?'<span>الدور: '+esc(e.level)+'</span><span class="dot"></span>':'')+'<span class="badge" style="background:transparent;color:var(--ink-soft);padding:0">'+rv[0]+'</span>'+(e.worst_ratio!=null?'<span class="dot"></span><span>أسوأ نسبة: '+Number(e.worst_ratio).toFixed(2)+'</span>':'')+'</div>'
+        +(canReview?'<div class="row-actions" style="margin-top:8px"><button class="btn green sm" data-elok="'+e.id+'">اعتماد</button><button class="btn ghost sm" data-eledit="'+e.id+'">محتاجة تعديل</button></div>':'')
+        +'</div>';
+    }).join(""); }
+    $("sdBox").innerHTML=h;
+    const addBtn=$("seAddEl"); if(addBtn) addBtn.onclick=()=>openStructElementNew(id);
+    $("sdBox").querySelectorAll("[data-elok]").forEach(b=>b.onclick=async()=>{
+      const { error }=await sb.from("os_struct_elements").update({ review_status:"approved", reviewed_by:ME.id, reviewed_at:new Date().toISOString() }).eq("id",b.dataset.elok);
+      if(error){ toast("معرفناش نعتمد: "+error.message,"bad"); return; }
+      toast("اتعتمد ✓","ok"); paintStructProjectDetail(id);
+    });
+    $("sdBox").querySelectorAll("[data-eledit]").forEach(b=>b.onclick=async()=>{
+      const note=prompt("اكتب ملاحظة التعديل المطلوب")||null;
+      const { error }=await sb.from("os_struct_elements").update({ review_status:"needs_edit", reviewed_by:ME.id, reviewed_at:new Date().toISOString(), review_note:note }).eq("id",b.dataset.eledit);
+      if(error){ toast("معرفناش نحدّث: "+error.message,"bad"); return; }
+      toast("اترجعت للتعديل","ok"); paintStructProjectDetail(id);
+    });
+  }catch(e){ $("sdBox").innerHTML=failBox("حصل خطأ.",()=>paintStructProjectDetail(id)); }
+}
+function openStructElementNew(projectId){
+  openSheet('<h3>عنصر جديد</h3>'
+    +'<div class="field"><label>اسم العنصر</label><input id="elLabel" placeholder="مثلاً: C1, B4, F2…"/></div>'
+    +'<div class="field"><label>النوع</label><select id="elType">'+Object.entries(ETYPE_LBL).map(([k,v])=>'<option value="'+k+'">'+v+'</option>').join("")+'</select></div>'
+    +'<div class="field"><label>الدور</label><input id="elLevel" placeholder="مثلاً: الأرضي، الأول…"/></div>'
+    +'<div class="field"><label>نوع القاعدة (لو العنصر قاعدة)</label><select id="elFooting"><option value="">—</option>'+Object.entries(FOOTING_LBL).map(([k,v])=>'<option value="'+k+'">'+v+'</option>').join("")+'</select></div>'
+    +'<div class="field"><label>المقطع</label><input id="elSection" placeholder="مثلاً: 25×60 سم"/></div>'
+    +'<div class="field"><label>التسليح</label><input id="elReinf" placeholder="مثلاً: 6⌀16"/></div>'
+    +'<div class="field"><label>سُمك البلاطة (سم — لو بلاطة)</label><input id="elThick" type="number" inputmode="decimal"/></div>'
+    +'<div class="field"><label>حالة التحميل</label><select id="elLoadCase">'+Object.entries(LOADCASE_LBL).map(([k,v])=>'<option value="'+k+'">'+v+'</option>').join("")+'</select></div>'
+    +'<div class="field"><label>قيمة الحمل (طن)</label><input id="elLoadVal" type="number" inputmode="decimal"/></div>'
+    +'<div class="sec-h">نتايج التشيك (نسبة الطلب/السعة — أكبر من ١ = فشل) <span class="ln"></span></div>'
+    +'<div class="field"><label>عزم رئيسي (Major)</label><input id="elChkM1" type="number" inputmode="decimal" step="0.01"/></div>'
+    +'<div class="field"><label>عزم ثانوي (Minor)</label><input id="elChkM2" type="number" inputmode="decimal" step="0.01"/></div>'
+    +'<div class="field"><label>قص (Shear)</label><input id="elChkV" type="number" inputmode="decimal" step="0.01"/></div>'
+    +'<div class="field"><label>ثقب (Punching)</label><input id="elChkP" type="number" inputmode="decimal" step="0.01"/></div>'
+    +'<div class="field"><label>ملاحظات</label><textarea id="elNotes"></textarea></div>'
+    +'<div class="row-actions"><button class="btn green" id="elGo">أضف العنصر</button><button class="btn ghost" onclick="openStructProjectDetail(\''+projectId+'\')">إلغاء</button></div>');
+  addMicTo("elLabel");
+  $("elGo").onclick=async()=>{
+    const label=$("elLabel").value.trim(); if(!label){ toast("اكتب اسم العنصر","bad"); return; }
+    const btn=$("elGo"); btn.disabled=true; btn.textContent="بيضيف…";
+    const num=(id)=>{ const v=parseFloat($(id).value); return isNaN(v)?null:v; };
+    const { error }=await sb.from("os_struct_elements").insert({
+      project_id:projectId, label, etype:$("elType").value, level:$("elLevel").value.trim()||"",
+      footing_type:$("elFooting").value||null, section:$("elSection").value.trim()||null, reinforcement:$("elReinf").value.trim()||null,
+      thickness_cm:num("elThick"), load_case:$("elLoadCase").value, load_value:num("elLoadVal"),
+      chk_moment_major:num("elChkM1"), chk_moment_minor:num("elChkM2"), chk_shear:num("elChkV"), chk_punch:num("elChkP"),
+      notes:$("elNotes").value.trim()||null, created_by:ME.id
+    });
+    if(error){ toast("معرفناش نضيف: "+error.message,"bad"); btn.disabled=false; btn.textContent="أضف العنصر"; return; }
+    toast("العنصر اتضاف ✓","ok"); openStructProjectDetail(projectId);
+  };
+}
 function seNumField(id,label,ph,unitNote){
   return '<div class="field"><label>'+label+(unitNote?' <span class="muted" style="font-size:10.5px">'+unitNote+'</span>':'')+'</label><input id="'+id+'" type="number" inputmode="decimal" placeholder="'+(ph||"")+'"/></div>';
 }
