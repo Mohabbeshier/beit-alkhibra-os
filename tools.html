@@ -715,20 +715,68 @@ async function paintAttendance(){
   }catch(e){ box.innerHTML=""; }
 }
 async function openAttendanceLog(){
-  if(!["owner","ops","manager"].includes(PROFILE.role)){ toast("الشاشة دي للإدارة بس","bad"); return; }
+  const isReception=PROFILE.dept==="reception";
+  if(!["owner","ops","manager"].includes(PROFILE.role)&&!isReception){ toast("الشاشة دي للإدارة بس","bad"); return; }
   openSheet('<h3>سجل الحضور — النهاردة</h3><div id="attLogBox"><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
   try{
-    const scope=isOwnerOps()?PROFILES:PROFILES.filter(p=>p.dept===PROFILE.dept);
+    const wide=isOwnerOps()||isReception;
+    const scope=wide?PROFILES:PROFILES.filter(p=>p.dept===PROFILE.dept);
     const { data }=await sb.from("os_attendance").select("*").eq("work_date",todayStr());
     const byUser={}; (data||[]).forEach(r=>byUser[r.user_id]=r);
     const rows=scope.filter(p=>p.id!==ME.id||true).map(p=>{
       const r=byUser[p.id];
       const st=!r?'<span class="badge b-grey">لسه</span>':!r.check_out?'<span class="badge b-green">حضر '+timeStr(r.check_in)+'</span>':'<span class="badge b-blue">انصرف '+timeStr(r.check_out)+'</span>';
       return '<div class="card flat"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(p.name)+'</b>'+st+'</div>'
-        +(isOwnerOps()?'<div class="muted" style="font-size:11px;margin-top:2px">'+esc((DEPT_BY_KEY[p.dept]&&DEPT_BY_KEY[p.dept].name)||p.dept||"—")+'</div>':'')+'</div>';
+        +(wide?'<div class="muted" style="font-size:11px;margin-top:2px">'+esc((DEPT_BY_KEY[p.dept]&&DEPT_BY_KEY[p.dept].name)||p.dept||"—")+'</div>':'')+'</div>';
     }).join("");
     $("attLogBox").innerHTML=rows||'<div class="empty">مفيش موظفين.</div>';
   }catch(e){ $("attLogBox").innerHTML=failBox("معرفناش نجيب السجل.",openAttendanceLog); }
+}
+/* ===== الاستقبال — سجل الزوار ===== */
+async function openVisitorLog(){
+  const hostOpts=PROFILES.filter(p=>p.id!==ME.id).sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),"ar")).map(p=>`<option value="${p.id}">${esc(p.name)}${p.dept?" — "+esc((DEPT_BY_KEY[p.dept]&&DEPT_BY_KEY[p.dept].name)||p.dept):""}</option>`).join("");
+  openSheet('<h3>تسجيل زائر</h3>'
+    +'<div class="field"><label>اسم الزائر</label><input id="viName" placeholder="اسم الزائر"/></div>'
+    +'<div class="field"><label>سبب الزيارة</label><input id="viPurpose" placeholder="مثلاً: اجتماع، تسليم أوراق…"/></div>'
+    +'<div class="field"><label>جاي يقابل مين؟</label><select id="viHost"><option value="">بدون تحديد</option>'+hostOpts+'</select></div>'
+    +'<div class="row-actions"><button class="btn green" id="viGo">سجّل الزيارة ✓</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>'
+    +'<div class="sec-h" style="margin-top:16px">زوار النهاردة <span class="ln"></span></div>'
+    +'<div id="viBox"><div class="skel"></div></div>');
+  addMicTo("viPurpose");
+  $("viGo").onclick=async()=>{
+    const btn=$("viGo");
+    const name=$("viName").value.trim(), purpose=$("viPurpose").value.trim(), hostId=$("viHost").value||null;
+    if(!name){ toast("اكتب اسم الزائر","bad"); return; }
+    btn.disabled=true; btn.textContent="بيسجّل…";
+    const host=hostId?BY_ID[hostId]:null;
+    const { error }=await sb.from("os_visitors").insert({ visitor_name:name, purpose:purpose||null, host_id:hostId, host_name:host?host.name:null, dept:host?host.dept:null, logged_by:ME.id, logged_by_name:PROFILE.name });
+    if(error){ toast("معرفناش نسجّل: "+error.message,"bad"); btn.disabled=false; btn.textContent="سجّل الزيارة ✓"; return; }
+    toast(host?"اتسجّلت — "+host.name+" هياخد إشعار":"اتسجّلت ✓","ok");
+    $("viName").value=""; $("viPurpose").value=""; $("viHost").value="";
+    btn.disabled=false; btn.textContent="سجّل الزيارة ✓";
+    paintVisitorsToday();
+  };
+  paintVisitorsToday();
+}
+async function paintVisitorsToday(){
+  const box=$("viBox"); if(!box) return;
+  try{
+    const start=new Date(); start.setHours(0,0,0,0);
+    const { data }=await sb.from("os_visitors").select("*").gte("checked_in_at",start.toISOString()).order("checked_in_at",{ascending:false}).limit(30);
+    const rows=data||[];
+    if(!rows.length){ box.innerHTML='<div class="empty">مفيش زوار لسه النهاردة.</div>'; return; }
+    box.innerHTML=rows.map(v=>{
+      const out=v.checked_out_at?'<span class="badge b-blue">خرج '+timeStr(v.checked_out_at)+'</span>':'<button class="btn ghost sm" data-viout="'+v.id+'">سجّل خروج</button>';
+      return '<div class="card flat"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(v.visitor_name)+'</b>'+out+'</div>'
+        +'<div class="muted" style="font-size:11.5px;margin-top:2px">'+(v.host_name?"جاي يقابل: "+esc(v.host_name)+" · ":"")+"دخل "+timeStr(v.checked_in_at)+(v.purpose?" · "+esc(v.purpose):"")+'</div></div>';
+    }).join("");
+    box.querySelectorAll("[data-viout]").forEach(b=>b.onclick=async()=>{
+      b.disabled=true; b.textContent="…";
+      const { error }=await sb.from("os_visitors").update({ checked_out_at:new Date().toISOString() }).eq("id",b.dataset.viout);
+      if(error){ toast("معرفناش نسجّل الخروج","bad"); b.disabled=false; b.textContent="سجّل خروج"; return; }
+      paintVisitorsToday();
+    });
+  }catch(e){ box.innerHTML=failBox("معرفناش نجيب سجل الزوار.",paintVisitorsToday); }
 }
 function renderManagerHome(d){
   const el=$("hBody");
@@ -783,7 +831,7 @@ function renderEmployeeHome(d){
   body+=`<div class="card" style="background:linear-gradient(135deg,#E3F2FD,#E8F5E9);border:none">
     <b>محتاج تعمل حاجة؟ اتكلم بس</b>
     <div class="muted" style="font-size:12.5px;margin:4px 0 12px">مش لازم تكتب — دوس واتكلم والنظام يفهمك.</div>
-    <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button><button class="btn ghost sm" data-quick="leaves">الإجازات</button>${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}</div></div>`;
+    <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button><button class="btn ghost sm" data-quick="leaves">الإجازات</button>${PROFILE.dept==="reception"?'<button class="btn sm" data-quick="visitor">تسجيل زائر</button><button class="btn ghost sm" data-quick="newreq">تسجيل مكالمة</button><button class="btn ghost sm" data-quick="attlog">مين موجود النهاردة</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}</div></div>`;
   body+=`<div class="sec-h">المهام اللي عليك <span class="ln"></span></div>`;
   if(myTasks.length){
     body+=myTasks.slice(0,6).map(t=>`<button class="card flat" data-task="${t.id}" style="width:100%;text-align:right;cursor:pointer${t.deadline&&new Date(t.deadline)<new Date()?';border-right:4px solid var(--red)':''}"><b>${esc(t.title)}</b><div class="meta">${t.deadline?`<span>${fmtDate(t.deadline)}</span>`:`<span class="muted">من غير موعد</span>`}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}<span class="dot"></span><span class="muted">${t.progress||0}%</span></div></button>`).join("");
@@ -2406,6 +2454,8 @@ function wireHome(el){
     else if(q==="leads"){ openLeadsFeed(); }
     else if(q==="leaves"){ openLeaves(); }
     else if(q==="addemp"){ openAddEmployee(); }
+    else if(q==="visitor"){ openVisitorLog(); }
+    else if(q==="attlog"){ openAttendanceLog(); }
     else if(q==="adminhub"){ openAdminHub(); }
     else if(q==="meeting"){ openMeetingReport(); }
     else if(q==="projects"){ openProjects(); }
