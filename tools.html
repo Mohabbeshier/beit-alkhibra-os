@@ -1412,7 +1412,7 @@ async function openProjects(){
     +(canAddPrj?'<div class="sec-h">مشروع جديد <span class="ln"></span></div>'
       +'<div class="field"><label>اسم المشروع</label><input id="pjName" placeholder="فيلا الشيخ زايد — عميل X"/></div>'
       +'<div class="field"><label>القسم</label><select id="pjDept">'+DEPTS.map(d=>'<option value="'+d.key+'"'+(d.key===PROFILE.dept?" selected":"")+'>'+esc(d.name)+'</option>').join("")+'</select></div>'
-      +'<div class="field"><label>المرحلة</label><select id="pjStage"><option value="design">تصميم</option><option value="license">ترخيص</option><option value="execution">تنفيذ</option><option value="handover">تسليم</option></select></div>'
+      +'<div class="field"><label>المرحلة</label><select id="pjStage"><option value="جديد">جديد</option><option value="تسعير">تسعير</option><option value="تنفيذ">تنفيذ</option><option value="تسليم">تسليم</option><option value="مغلق">مغلق</option></select></div>'
       +'<div class="field"><label>القيمة (جنيه — اختياري)</label><input id="pjVal" type="number" inputmode="numeric"/></div>'
       +'<div class="row-actions"><button class="btn green" id="pjGo">أضف المشروع</button></div>':"")
     +'<button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
@@ -1428,7 +1428,7 @@ async function openProjects(){
   }
   await paintProjects();
 }
-const PRJ_STAGE={design:"تصميم",license:"ترخيص",execution:"تنفيذ",handover:"تسليم"};
+const PRJ_STAGE={"جديد":"جديد","تسعير":"تسعير","تنفيذ":"تنفيذ","تسليم":"تسليم","مغلق":"مغلق"};
 async function paintProjects(){
   try{
     const [{ data },{ data:meta },{ data:fls }]=await Promise.all([
