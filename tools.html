@@ -2095,8 +2095,10 @@ function wireHRActions(){
 }
 async function openHRBoard(){
   if(!["owner","ops","manager"].includes(ME.role)){ toast("الشاشة دي للإدارة بس","bad"); return; }
-  openSheet('<h3>كفاءة الفريق</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">درجة من 100 بتتحسب تلقائيًا من الشغل الفعلي (إنجاز 55% + ردود 30% + التزام بالمواعيد 15%)</div><div id="hrBox"><div class="skel"></div><div class="skel"></div></div><div class="row-actions" style="margin-top:10px">'+((isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="hr"))?'<button class="btn green sm" id="hrFreeze">اعتمد تقييم الشهر</button>':'')+'<button class="btn ghost sm" id="hrHistory">تقييمات سابقة</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+  const canArchive=isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="hr");
+  openSheet('<h3>كفاءة الفريق</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">درجة من 100 بتتحسب تلقائيًا من الشغل الفعلي (إنجاز 55% + ردود 30% + التزام بالمواعيد 15%)</div><div id="hrBox"><div class="skel"></div><div class="skel"></div></div><div class="row-actions" style="margin-top:10px">'+(canArchive?'<button class="btn sm" id="hrArchive">🗂️ أرشيف الموظفين</button>':'')+((isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="hr"))?'<button class="btn green sm" id="hrFreeze">اعتمد تقييم الشهر</button>':'')+'<button class="btn ghost sm" id="hrHistory">تقييمات سابقة</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
   wireHRActions();
+  const ha=$("hrArchive"); if(ha) ha.onclick=()=>openEmployeeArchive();
   try{
     const { data }=await sb.from("os_hr_scores").select("*").order("score",{ascending:false});
     const rows=data||[];
@@ -2120,6 +2122,58 @@ async function openHRBoard(){
         +'</div></details>';
     }).join("");
   }catch(e){ $("hrBox").innerHTML=failBox("معرفناش نجيب الدرجات.",openHRBoard); }
+}
+/* ===== أرشيف الموظفين — بيانات العقد والاختبار ورصيد الإجازات ===== */
+let _earSearch="";
+async function openEmployeeArchive(){
+  openSheet('<h3>أرشيف الموظفين</h3><div class="muted" style="margin:-6px 0 10px;font-size:12px">عقود، فترة الاختبار، رصيد الإجازات، والنائب وقت الغياب.</div>'
+    +'<div class="field" style="margin-bottom:10px"><input id="earSearch" placeholder="دوّر بالاسم…" value="'+esc(_earSearch)+'"/></div>'
+    +'<div id="earBox"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>'
+    +'<button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
+  $("earSearch").oninput=()=>{ _earSearch=$("earSearch").value; paintEmployeeArchive(_earArchive); };
+  addMicTo("earSearch");
+  try{
+    const { data, error }=await sb.from("os_profiles").select("id,name,email,dept,role,position,contract_start,contract_end,probation_end,leave_balance").order("dept").order("name");
+    if(error) throw error;
+    window._earArchive=data||[];
+    paintEmployeeArchive(window._earArchive);
+  }catch(e){ $("earBox").innerHTML=failBox("معرفناش نجيب أرشيف الموظفين.",openEmployeeArchive); }
+}
+function paintEmployeeArchive(rows){
+  rows=rows||window._earArchive||[];
+  const q=_earSearch.trim();
+  const filtered=q?rows.filter(p=>(p.name||"").includes(q)):rows;
+  if(!filtered.length){ $("earBox").innerHTML='<div class="empty">مفيش نتايج.</div>'; return; }
+  const today=new Date();
+  $("earBox").innerHTML=filtered.map(p=>{
+    let flag="";
+    if(p.probation_end){ const d=new Date(p.probation_end); const days=Math.ceil((d-today)/86400000); if(days>=0&&days<=14) flag='<span class="badge b-amber" style="font-size:10px">الاختبار بيخلص قريب</span>'; }
+    if(p.contract_end){ const d=new Date(p.contract_end); const days=Math.ceil((d-today)/86400000); if(days>=0&&days<=30) flag+=' <span class="badge b-red" style="font-size:10px">العقد بيخلص قريب</span>'; }
+    return '<button class="card flat" data-ear="'+p.id+'" style="width:100%;text-align:right;cursor:pointer">'
+      +'<div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(p.name)+'</b>'+flag+'</div>'
+      +'<div class="muted" style="font-size:11.5px;margin-top:3px">'+esc((DEPT_BY_KEY[p.dept]&&DEPT_BY_KEY[p.dept].name)||p.dept||"—")+' · رصيد إجازات: '+(p.leave_balance??"—")+' يوم</div>'
+      +'</button>';
+  }).join("");
+  $("earBox").querySelectorAll("[data-ear]").forEach(b=>b.onclick=()=>openEmployeeFile(b.dataset.ear));
+}
+function openEmployeeFile(id){
+  const p=(window._earArchive||[]).find(x=>x.id===id); if(!p) return;
+  const others=(window._earArchive||[]).filter(x=>x.id!==id);
+  openSheet('<h3>'+esc(p.name)+'</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">'+esc(p.email)+' · '+esc((DEPT_BY_KEY[p.dept]&&DEPT_BY_KEY[p.dept].name)||p.dept||"—")+'</div>'
+    +'<div class="field"><label>بداية العقد</label><input id="efStart" type="date" value="'+(p.contract_start||"")+'"/></div>'
+    +'<div class="field"><label>نهاية العقد (لو محدّدة)</label><input id="efEnd" type="date" value="'+(p.contract_end||"")+'"/></div>'
+    +'<div class="field"><label>نهاية فترة الاختبار</label><input id="efProb" type="date" value="'+(p.probation_end||"")+'"/></div>'
+    +'<div class="field"><label>رصيد الإجازات (يوم)</label><input id="efBal" type="number" min="0" value="'+(p.leave_balance??21)+'"/></div>'
+    +'<div class="field"><label>النائب وقت الغياب</label><select id="efBackup"><option value="">بدون تحديد</option>'+others.map(o=>'<option value="'+o.id+'">'+esc(o.name)+'</option>').join("")+'</select></div>'
+    +'<div class="row-actions"><button class="btn green" id="efSave">احفظ</button><button class="btn ghost" onclick="openEmployeeArchive()">رجوع للأرشيف</button></div>');
+  $("efSave").onclick=async()=>{
+    const btn=$("efSave"); btn.disabled=true; btn.textContent="بيحفظ…";
+    const upd={ contract_start:$("efStart").value||null, contract_end:$("efEnd").value||null, probation_end:$("efProb").value||null, leave_balance:$("efBal").value?parseInt($("efBal").value,10):null, backup_person:$("efBackup").value||null };
+    const { error }=await sb.from("os_profiles").update(upd).eq("id",id);
+    if(error){ toast("معرفناش نحفظ: "+error.message,"bad"); btn.disabled=false; btn.textContent="احفظ"; return; }
+    Object.assign(p,upd);
+    toast("اتحفظ ✓","ok"); closeSheet();
+  };
 }
 const IMP_STATUS={approved:["معتمد","b-amber"],in_progress:["شغّالين فيه","b-blue"],done:["خلص \u2713","b-green"]};
 const IMP_CAT={quality:"جودة",automation:"أتمتة",protection:"حماية",growth:"نمو"};
