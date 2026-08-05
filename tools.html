@@ -2139,7 +2139,7 @@ async function openCustody(){
   if(go) go.onclick=async()=>{
     const item=$("cuItem").value.trim(); if(!item){ toast("اكتب الصنف","bad"); return; }
     const sel=$("cuTo"); const nm=sel.options[sel.selectedIndex].dataset.nm;
-    const { error }=await sb.from("os_custody").insert({ item, serial_no:$("cuSer").value.trim()||null, assigned_to:sel.value, assigned_name:nm, status:"out", handed_at:new Date().toISOString() });
+    const { error }=await sb.from("os_custody").insert({ item, serial_no:$("cuSer").value.trim()||null, assigned_to:sel.value, assigned_name:nm, status:"مسلَّمة", handed_at:new Date().toISOString() });
     if(error){ toast("معرفناش نسجل: "+error.message,"bad"); return; }
     toast("اتسلّمت واتسجلت","ok"); paintCustody(); $("cuItem").value=""; $("cuSer").value="";
   };
@@ -2151,12 +2151,12 @@ async function paintCustody(){
     if(!isOwnerOps()) q=q.eq("assigned_to",ME.id);
     const { data }=await q; const rows=data||[];
     if(!rows.length){ $("cuBox").innerHTML='<div class="empty">مفيش عهدة مسجلة'+(isOwnerOps()?'':' عليك')+'.</div>'; return; }
-    $("cuBox").innerHTML=rows.map(c=>'<div class="card flat"><div style="display:flex;gap:8px;align-items:center"><b style="flex:1">'+esc(c.item)+'</b>'+(c.status==="out"?'<span class="badge b-blue">في العهدة</span>':'<span class="badge b-green">اترجعت \u2713</span>')+'</div>'
+    $("cuBox").innerHTML=rows.map(c=>'<div class="card flat"><div style="display:flex;gap:8px;align-items:center"><b style="flex:1">'+esc(c.item)+'</b>'+(c.status==="مسلَّمة"?'<span class="badge b-blue">في العهدة</span>':c.status==="تالفة"?'<span class="badge b-red">تالفة</span>':'<span class="badge b-green">اترجعت \u2713</span>')+'</div>'
       +'<div class="meta"><span>'+esc(c.assigned_name||"")+'</span>'+(c.serial_no?'<span class="dot"></span><span>#'+esc(c.serial_no)+'</span>':'')+'<span class="dot"></span><span>'+relativeTime(c.handed_at)+'</span></div>'
-      +(isOwnerOps()&&c.status==="out"?'<div class="row-actions" style="margin-top:8px"><button class="btn ghost sm" data-cur="'+c.id+'">استرجاع</button></div>':'')
+      +(isOwnerOps()&&c.status==="مسلَّمة"?'<div class="row-actions" style="margin-top:8px"><button class="btn ghost sm" data-cur="'+c.id+'">استرجاع</button></div>':'')
       +'</div>').join("");
     $("cuBox").querySelectorAll("[data-cur]").forEach(b=>b.onclick=async()=>{
-      const { error }=await sb.from("os_custody").update({ status:"returned", returned_at:new Date().toISOString() }).eq("id",b.dataset.cur);
+      const { error }=await sb.from("os_custody").update({ status:"مُرجَعة", returned_at:new Date().toISOString() }).eq("id",b.dataset.cur);
       if(error){ toast("معرفناش نسجل الاسترجاع","bad"); return; }
       toast("اترجعت","ok"); paintCustody();
     });
