@@ -733,6 +733,62 @@ async function openAttendanceLog(){
   }catch(e){ $("attLogBox").innerHTML=failBox("معرفناش نجيب السجل.",openAttendanceLog); }
 }
 /* ===== الاستقبال — سجل الزوار ===== */
+/* ===== تسجيل مكالمة — نموذج مخصص لموظفة الاستقبال + اقتراح القسم بالذكاء ===== */
+async function openCallLog(){
+  const deptOpts=DEPTS.map(d=>'<option value="'+d.key+'">'+esc(d.name)+'</option>').join("");
+  openSheet('<h3>تسجيل مكالمة</h3>'
+    +'<div class="field"><label>اسم المتصل</label><input id="clName" placeholder="اسم المتصل"/></div>'
+    +'<div class="field"><label>رقم التليفون</label><input id="clPhone" type="tel" placeholder="01xxxxxxxxx"/></div>'
+    +'<div class="field"><label>سبب الاتصال</label><textarea id="clReason" placeholder="اكتب أو سجّل بصوتك…"></textarea></div>'
+    +'<div class="row-actions" style="margin:-6px 0 12px"><button class="btn ghost sm" id="clMic">سجّل بصوتك</button><button class="btn sm" id="clSuggest" style="background:linear-gradient(135deg,#7C3AED,#5B21B6);color:#fff">🧠 اقترح القسم</button></div>'
+    +'<div class="field"><label>موجّهة لأي قسم؟</label><select id="clDept"><option value="">بدون تحديد</option>'+deptOpts+'</select></div>'
+    +'<div class="row-actions"><button class="btn green" id="clGo">سجّل المكالمة ✓</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>'
+    +'<div class="sec-h" style="margin-top:16px">آخر المكالمات <span class="ln"></span></div>'
+    +'<div id="clBox"><div class="skel"></div></div>');
+  bindSheetMic("clMic","clReason");
+  $("clSuggest").onclick=async()=>{
+    const reason=$("clReason").value.trim();
+    if(!reason){ toast("اكتب سبب الاتصال الأول","bad"); return; }
+    const btn=$("clSuggest"); btn.disabled=true; btn.textContent="بيفكّر…";
+    try{
+      const names=DEPTS.map(d=>d.key+":"+d.name).join("، ");
+      const prompt=`مكتب استشارات هندسية مصري. متصل قال السبب ده: "${reason}". أنهي قسم من القايمة دي الأنسب يستلم المكالمة؟ القايمة: ${names}. رجّع الـkey بس من غير أي شرح، مثال: engineering`;
+      const res=await askAI({prompt,dept:null,mode:"fast",max_tokens:20});
+      const key=res.trim().replace(/[^a-z_]/g,"");
+      if(DEPT_BY_KEY[key]){ $("clDept").value=key; toast("اقترحنا: "+DEPT_BY_KEY[key].name,"ok"); }
+      else toast("معرفناش نحدد — اختار بنفسك","bad");
+    }catch(e){ toast("معرفناش نقترح دلوقتي","bad"); }
+    btn.disabled=false; btn.textContent="🧠 اقترح القسم";
+  };
+  $("clGo").onclick=async()=>{
+    await stopSheetMic();
+    const btn=$("clGo");
+    const name=$("clName").value.trim(), phone=$("clPhone").value.trim(), reason=$("clReason").value.trim(), dept=$("clDept").value||null;
+    if(!name){ toast("اكتب اسم المتصل","bad"); return; }
+    btn.disabled=true; btn.textContent="بيسجّل…";
+    const mgr=dept?PROFILES.find(p=>p.dept===dept&&p.role==="manager"):null;
+    const title="📞 مكالمة: "+name;
+    const details="من: "+name+(phone?" — تليفون: "+phone:"")+(reason?"\nالسبب: "+reason:"");
+    const { error }=await sb.from("os_requests").insert({ from_id:ME.id, to_id:mgr?mgr.id:null, kind:"info", title, details, priority:"normal", status:"pending" });
+    if(error){ toast("معرفناش نسجّل: "+error.message,"bad"); btn.disabled=false; btn.textContent="سجّل المكالمة ✓"; return; }
+    toast(mgr?"اتسجّلت — وصلت لـ"+mgr.name:"اتسجّلت ✓","ok");
+    $("clName").value=""; $("clPhone").value=""; $("clReason").value=""; $("clDept").value="";
+    btn.disabled=false; btn.textContent="سجّل المكالمة ✓";
+    paintCallLog();
+  };
+  paintCallLog();
+}
+async function paintCallLog(){
+  const box=$("clBox"); if(!box) return;
+  try{
+    const { data }=await sb.from("os_requests").select("*").eq("from_id",ME.id).ilike("title","📞 مكالمة:%").order("created_at",{ascending:false}).limit(20);
+    const rows=data||[];
+    if(!rows.length){ box.innerHTML='<div class="empty">مفيش مكالمات مسجّلة النهاردة.</div>'; return; }
+    box.innerHTML=rows.map(r=>'<div class="card flat"><b>'+esc(r.title.replace("📞 مكالمة: ",""))+'</b>'
+      +'<div class="muted" style="font-size:11.5px;margin-top:2px;white-space:pre-line">'+esc(r.details||"")+'</div>'
+      +'<div class="muted" style="font-size:10.5px;margin-top:4px">'+relativeTime(r.created_at)+'</div></div>').join("");
+  }catch(e){ box.innerHTML=failBox("معرفناش نجيب السجل.",paintCallLog); }
+}
 /* ===== سجل الوارد والصادر ===== */
 let _corrDir="all";
 async function openCorrespondence(){
@@ -877,7 +933,7 @@ function renderEmployeeHome(d){
   body+=`<div class="card" style="background:linear-gradient(135deg,#E3F2FD,#E8F5E9);border:none">
     <b>محتاج تعمل حاجة؟ اتكلم بس</b>
     <div class="muted" style="font-size:12.5px;margin:4px 0 12px">مش لازم تكتب — دوس واتكلم والنظام يفهمك.</div>
-    <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button><button class="btn ghost sm" data-quick="leaves">الإجازات</button>${PROFILE.dept==="reception"?'<button class="btn sm" data-quick="visitor">تسجيل زائر</button><button class="btn ghost sm" data-quick="newreq">تسجيل مكالمة</button><button class="btn ghost sm" data-quick="corr">الوارد والصادر</button><button class="btn ghost sm" data-quick="docs">خزنة المستندات</button><button class="btn ghost sm" data-quick="attlog">مين موجود النهاردة</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}</div></div>`;
+    <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button><button class="btn ghost sm" data-quick="leaves">الإجازات</button>${PROFILE.dept==="reception"?'<button class="btn sm" data-quick="visitor">تسجيل زائر</button><button class="btn ghost sm" data-quick="call">تسجيل مكالمة</button><button class="btn ghost sm" data-quick="corr">الوارد والصادر</button><button class="btn ghost sm" data-quick="docs">خزنة المستندات</button><button class="btn ghost sm" data-quick="attlog">مين موجود النهاردة</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}</div></div>`;
   body+=`<div class="sec-h">المهام اللي عليك <span class="ln"></span></div>`;
   if(myTasks.length){
     body+=myTasks.slice(0,6).map(t=>`<button class="card flat" data-task="${t.id}" style="width:100%;text-align:right;cursor:pointer${t.deadline&&new Date(t.deadline)<new Date()?';border-right:4px solid var(--red)':''}"><b>${esc(t.title)}</b><div class="meta">${t.deadline?`<span>${fmtDate(t.deadline)}</span>`:`<span class="muted">من غير موعد</span>`}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}<span class="dot"></span><span class="muted">${t.progress||0}%</span></div></button>`).join("");
@@ -2501,6 +2557,7 @@ function wireHome(el){
     else if(q==="leaves"){ openLeaves(); }
     else if(q==="addemp"){ openAddEmployee(); }
     else if(q==="visitor"){ openVisitorLog(); }
+    else if(q==="call"){ openCallLog(); }
     else if(q==="corr"){ openCorrespondence(); }
     else if(q==="docs"){ openDocsVault(); }
     else if(q==="attlog"){ openAttendanceLog(); }
