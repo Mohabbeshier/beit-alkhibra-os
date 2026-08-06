@@ -1449,7 +1449,7 @@ async function paintProjects(){
         +((p.tasks_overdue||0)?'<span class="dot"></span><span style="color:var(--red);font-weight:800">'+p.tasks_overdue+' متأخرة</span>':'')
         +(p.value_egp?'<span class="dot"></span><span>'+Number(p.value_egp).toLocaleString("en")+' ج</span>':'')
         +((DEPT_BY_KEY[p.dept]&&'<span class="dot"></span><span>'+esc(DEPT_BY_KEY[p.dept].name)+'</span>')||'')
-        +'<span class="dot"></span><span style="color:var(--green-d);font-weight:800">📎 '+nf+' • افتح للملفات ›</span>'
+        +'<span class="dot"></span><span style="color:var(--green-d);font-weight:800">📎 '+nf+' • افتح للملفات ‹</span>'
         +'</div></div>';
     }).join("");
     $("prjBox").querySelectorAll("[data-prj]").forEach(el=>el.onclick=()=>openProjectDetail(el.getAttribute("data-prj")));
