@@ -771,7 +771,7 @@ async function openCallLog(){
     +'<div class="row-actions"><button class="btn green" id="clGo">سجّل المكالمة ✓</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>'
     +'<div class="sec-h" style="margin-top:16px">آخر المكالمات <span class="ln"></span></div>'
     +'<div id="clBox"><div class="skel"></div></div>');
-  bindSheetMic("clMic","clReason");
+  addMicTo("clName"); bindSheetMic("clMic","clReason");
   $("clSuggest").onclick=async()=>{
     const reason=$("clReason").value.trim();
     if(!reason){ toast("اكتب سبب الاتصال الأول","bad"); return; }
@@ -829,7 +829,7 @@ async function openCorrespondence(){
     +'<div class="sec-h" style="margin-top:16px">آخر القيود <span class="ln"></span></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="coFilters"><button class="chip on" data-cf="all">الكل</button><button class="chip" data-cf="in">وارد</button><button class="chip" data-cf="out">صادر</button></div>'
     +'<div id="coBox"><div class="skel"></div></div>');
-  addMicTo("coSubj");
+  addMicTo("coSubj"); addMicTo("coCounter");
   _corrDir="all";
   $("coFilters").querySelectorAll("[data-cf]").forEach(b=>b.onclick=()=>{ _corrDir=b.dataset.cf; $("coFilters").querySelectorAll(".chip").forEach(x=>x.classList.toggle("on",x===b)); paintCorrespondence(); });
   $("coGo").onclick=async()=>{
@@ -966,7 +966,7 @@ async function openVisitorLog(){
     +'<div class="row-actions"><button class="btn green" id="viGo">سجّل الزيارة ✓</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>'
     +'<div class="sec-h" style="margin-top:16px">زوار النهاردة <span class="ln"></span></div>'
     +'<div id="viBox"><div class="skel"></div></div>');
-  addMicTo("viPurpose");
+  addMicTo("viName"); addMicTo("viPurpose");
   $("viGo").onclick=async()=>{
     const btn=$("viGo");
     const name=$("viName").value.trim(), purpose=$("viPurpose").value.trim(), hostId=$("viHost").value||null;
@@ -1859,7 +1859,7 @@ async function openGovCaseNew(){
     +'<div class="field"><label>موعد مستهدف (اختياري)</label><input id="gcTarget" type="date" min="'+todayStr()+'"/></div>'
     +'<div class="field"><label>ملاحظات</label><textarea id="gcNotes"></textarea></div>'
     +'<div class="row-actions"><button class="btn green" id="gcGo">أضف المعاملة</button><button class="btn ghost" onclick="openGovCases()">إلغاء</button></div>');
-  addMicTo("gcTitle");
+  addMicTo("gcTitle"); addMicTo("gcBody");
   $("gcGo").onclick=async()=>{
     const title=$("gcTitle").value.trim(); if(!title){ toast("اكتب عنوان المعاملة","bad"); return; }
     const btn=$("gcGo"); btn.disabled=true; btn.textContent="بيضيف…";
@@ -2209,15 +2209,40 @@ async function openLeaves(){
   openSheet('<h3>الإجازات</h3><div id="lvBal" class="card flat" style="margin-bottom:10px"><div class="skel" style="height:20px"></div></div><div id="lvBox"><div class="skel"></div></div>'
     +'<div class="sec-h">اطلب إجازة <span class="ln"></span></div>'
     +'<div class="field"><label>النوع</label><select id="lvKind">'+LEAVE_KINDS.map(k=>'<option value="'+k[0]+'">'+k[1]+'</option>').join("")+'</select></div>'
-    +'<div class="field"><label>من</label><input id="lvFrom" type="date"/></div>'
-    +'<div class="field"><label>إلى</label><input id="lvTo" type="date"/></div>'
+    +'<div class="field"><label>من</label><input id="lvFrom" type="date" min="'+todayStr()+'"/></div>'
+    +'<div class="field"><label>إلى</label><input id="lvTo" type="date" min="'+todayStr()+'"/></div>'
+    +'<div class="row-actions" style="margin:-4px 0 8px"><button class="btn ghost sm" data-lvq="1">يوم</button><button class="btn ghost sm" data-lvq="3">3 أيام</button><button class="btn ghost sm" data-lvq="7">أسبوع</button></div>'
+    +'<div id="lvCalc" class="muted" style="font-size:12.5px;margin-bottom:10px"></div>'
     +'<div class="field"><label>السبب (اختياري)</label><input id="lvWhy" placeholder=""/></div>'
     +'<div class="row-actions"><button class="btn green" id="lvGo">ابعت الطلب</button><button class="btn ghost" onclick="closeSheet()">قفل</button></div>');
   addMicTo("lvWhy");
+  let _lvBal=null;
+  const lvCalc=()=>{
+    const f=$("lvFrom").value, t=$("lvTo").value, box=$("lvCalc");
+    if(!box) return;
+    if(!f||!t){ box.innerHTML=""; return; }
+    const days=Math.round((new Date(t)-new Date(f))/86400000)+1;
+    if(days<1){ box.innerHTML='<span style="color:var(--red);font-weight:700">تاريخ النهاية قبل البداية</span>'; return; }
+    const over=(_lvBal!=null&&days>_lvBal);
+    box.innerHTML='<b style="color:'+(over?"var(--red)":"var(--green-d)")+'">'+days+' يوم</b>'
+      +(_lvBal!=null?'<span class="muted"> — رصيدك '+_lvBal+' يوم'+(over?' (مش كفاية!)':' · هيتبقى '+(_lvBal-days))+'</span>':'');
+  };
+  $("lvFrom").onchange=()=>{ if($("lvTo").value&&$("lvTo").value<$("lvFrom").value) $("lvTo").value=$("lvFrom").value; $("lvTo").min=$("lvFrom").value||todayStr(); lvCalc(); };
+  $("lvTo").onchange=lvCalc;
+  document.querySelectorAll("[data-lvq]").forEach(b=>b.onclick=()=>{
+    const n=parseInt(b.dataset.lvq,10);
+    const from=$("lvFrom").value||todayStr();
+    const d=new Date(from); d.setDate(d.getDate()+n-1);
+    $("lvFrom").value=from;
+    $("lvTo").value=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+    lvCalc();
+  });
   (async()=>{ try{
     const { data }=await sb.from("os_profiles").select("leave_balance").eq("id",ME.id).single();
     const bal=(data&&data.leave_balance!=null)?data.leave_balance:"\u2014";
+    _lvBal=(data&&data.leave_balance!=null)?data.leave_balance:null;
     $("lvBal").innerHTML='<b>رصيدك: '+bal+' يوم</b><span class="muted" style="font-size:11.5px"> — بيتخصم أوتوماتيك مع كل موافقة</span>';
+    lvCalc();
   }catch(e){ $("lvBal").innerHTML=""; } })();
   $("lvGo").onclick=async()=>{
     const f=$("lvFrom").value, t=$("lvTo").value;
@@ -3576,6 +3601,7 @@ function openAddEmployee(){
     <div class="field"><label>الدور</label>${fullAccess?`<select id="neRole"><option value="employee">موظف</option><option value="manager">مدير</option></select>`:`<div class="muted" style="font-size:12.5px">موظف <input type="hidden" id="neRole" value="employee"/></div>`}</div>
     <div class="field"><label>المسمى (اختياري)</label><select id="nePos"><option value="">بدون تحديد</option>${posOpts}</select></div>
     <div class="row-actions"><button class="btn green" id="neGo">أنشئ الحساب ✓</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+  addMicTo("neName");
   $("neGo").onclick=async()=>{
     const btn=$("neGo");
     const name=$("neName").value.trim(), email=$("neEmail").value.trim(), pass=$("nePass").value.trim();
