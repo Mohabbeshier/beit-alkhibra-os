@@ -1046,7 +1046,7 @@ function renderManagerHome(d){
     body+=myDeptTasks.slice(0,5).map(t=>`<div class="card flat"${t.deadline&&new Date(t.deadline)<new Date()?' style="border-right:4px solid var(--red)"':''}><b>${esc(t.title)}</b><div class="meta"><span>${esc(t.assignee_name||nameOf(t.assignee_id)||"—")}</span>${t.deadline?`<span class="dot"></span><span>${fmtDate(t.deadline)}</span>`:""}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}</div></div>`).join("");
   } else body+=`<div class="empty" style="padding:18px">مفيش مهام بالقسم لسه.</div>`;
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
-    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="finance"?'<button class="btn sm" data-quick="finance">المالية</button><button class="btn ghost sm" data-quick="approvals">الموافقات</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب</button>':""}${PROFILE.dept==="legal"?'<button class="btn sm" data-quick="contracts">إدارة العقود</button><button class="btn ghost sm" data-quick="docs">خزنة المستندات</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب</button>':""}${PROFILE.dept==="ops_marketing"?'<button class="btn sm" data-quick="followups">متابعات مستحقة</button><button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${PROFILE.dept==="hr"?'<button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}<button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button><button class="btn ghost sm" data-quick="addemp">إضافة موظف</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${PROFILE.dept==="engineering"?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}<button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
+    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="finance"?'<button class="btn sm" data-quick="finance">المالية</button><button class="btn ghost sm" data-quick="approvals">الموافقات</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب</button>':""}${PROFILE.dept==="legal"?'<button class="btn sm" data-quick="contracts">إدارة العقود</button><button class="btn ghost sm" data-quick="docs">خزنة المستندات</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب</button>':""}${PROFILE.dept==="ops_marketing"?'<button class="btn sm" data-quick="followups">متابعات مستحقة</button><button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${PROFILE.dept==="hr"?'<button class="btn sm" data-quick="hrhub">الأوبريشن</button><button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}<button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button><button class="btn ghost sm" data-quick="addemp">إضافة موظف</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${PROFILE.dept==="engineering"?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}<button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   el.innerHTML=body;
   paintAttendance();
@@ -2143,6 +2143,49 @@ function openFollowupNext(id){
     if(error){ toast("معرفناش نحفظ: "+error.message,"bad"); btn.disabled=false; btn.textContent="احفظ"; return; }
     toast("اتسجّلت ✓","ok"); openFollowups();
   };
+}
+/* ===================== الأوبريشن — لوحة موحّدة ===================== */
+function isHRUser(){ return isOwnerOps()||(PROFILE.dept==="hr"&&PROFILE.role==="manager"); }
+async function openHRHub(){
+  if(!isHRUser()){ toast("الشاشة دي للأوبريشن والإدارة","bad"); return; }
+  openSheet('<h3>الأوبريشن — نظرة شاملة</h3><div id="hhBox"><div class="skel"></div><div class="skel"></div></div>'
+    +'<div class="row-actions" style="margin-top:10px;flex-wrap:wrap;gap:8px"><button class="btn sm" id="hhAtt">الحضور</button><button class="btn sm" id="hhLeaves">الإجازات</button><button class="btn ghost sm" id="hhArch">أرشيف الموظفين</button><button class="btn ghost sm" id="hhCust">العهدة</button><button class="btn ghost sm" id="hhScore">كفاءة الفريق</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+  $("hhAtt").onclick=()=>openAttendanceLog();
+  $("hhLeaves").onclick=()=>openLeaves();
+  $("hhArch").onclick=()=>openEmployeeArchive();
+  $("hhCust").onclick=()=>openCustody();
+  $("hhScore").onclick=()=>openHRBoard();
+  await paintHRHub();
+}
+async function paintHRHub(){
+  const box=$("hhBox"); if(!box) return;
+  try{
+    const { data }=await sb.from("os_hr_dashboard").select("*").single();
+    const d=data||{};
+    const card=(val,lbl,color,hot)=>'<div class="card flat" style="flex:1;min-width:calc(33% - 7px);text-align:center'+(hot?';border-right:4px solid var(--red)':'')+'"><b style="font-size:18px;color:'+color+';display:block">'+val+'</b><span class="muted" style="font-size:10.5px">'+lbl+'</span></div>';
+    let h='<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">'
+      +card(d.headcount||0,"إجمالي الفريق","var(--ink)",false)
+      +card(d.present_now||0,"موجود دلوقتي","var(--green-d)",false)
+      +card(d.on_leave_now||0,"في إجازة","var(--blue)",false)
+      +'</div>';
+    /* اللي محتاج تدخّل */
+    const items=[
+      {n:d.leaves_pending||0, lbl:"طلب إجازة مستني موافقتك", go:()=>openLeaves(), hot:true},
+      {n:d.probation_ending||0, lbl:"فترة اختبار بتخلص خلال 30 يوم", go:()=>openEmployeeArchive(), hot:true},
+      {n:d.contracts_ending||0, lbl:"عقد عمل بيخلص خلال 60 يوم", go:()=>openEmployeeArchive(), hot:false},
+      {n:d.inactive_3d||0, lbl:"موظف مش داخل النظام من 3 أيام", go:()=>openHRBoard(), hot:false},
+      {n:d.low_leave_balance||0, lbl:"رصيد إجازاته خلص تقريبًا", go:()=>openEmployeeArchive(), hot:false},
+      {n:d.custody_out||0, lbl:"عهدة مسلَّمة لسه مرجعتش", go:()=>openCustody(), hot:false}
+    ].filter(x=>x.n>0);
+    if(items.length){
+      h+='<div class="sec-h" style="color:var(--red)">محتاج تدخّلك <span class="ln"></span></div>'
+       +items.map((x,i)=>'<button class="card flat hr-item" data-hi="'+i+'" style="width:100%;text-align:right;cursor:pointer'+(x.hot?';border-right:4px solid var(--red)':'')+'"><div style="display:flex;align-items:center;gap:10px"><b style="font-size:18px;color:'+(x.hot?"var(--red)":"#B45309")+';min-width:30px">'+x.n+'</b><span style="flex:1;font-size:13px;font-weight:700">'+x.lbl+'</span><span style="color:var(--muted)">‹</span></div></button>').join("");
+    } else {
+      h+='<div class="card flat" style="background:#F1F8F2;border-color:#A5D6A7"><b style="font-size:13px">✅ مفيش حاجة مستنية — الفريق تمام</b></div>';
+    }
+    box.innerHTML=h;
+    box.querySelectorAll("[data-hi]").forEach(b=>b.onclick=()=>items[+b.dataset.hi].go());
+  }catch(e){ box.innerHTML=failBox("معرفناش نجيب بيانات الفريق.",paintHRHub); }
 }
 /* ===================== القانونية — إدارة دورة حياة العقود ===================== */
 const CONTRACT_STATE={
@@ -3350,6 +3393,7 @@ function wireHome(el){
     else if(q==="approvals"){ openApprovals(); }
     else if(q==="finance"){ openFinance(); }
     else if(q==="contracts"){ openContracts(); }
+    else if(q==="hrhub"){ openHRHub(); }
     else if(q==="expiring"){ openExpiring(); }
     else if(q==="followups"){ openFollowups(); }
     else if(q==="govcases"){ openGovCases(); }
