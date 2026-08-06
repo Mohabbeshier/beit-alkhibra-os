@@ -6015,9 +6015,14 @@ async function renderSmartPreview(arr){
   }catch(e){}
   const _wlTxt=(id)=>_wl[id]!=null?" · "+_wl[id]+" مهمة":"";
   const opts=(sel)=>`<option value="">ليّا (${esc(PROFILE.name)})</option>`+PROFILES.filter(p=>p.id!==ME.id).map(p=>`<option value="${p.id}" ${sel===p.id?"selected":""}>${esc(p.name)}${_wlTxt(p.id)}</option>`).join("");
+  /* ربط كل المهام بمشروع واحد (اختياري) */
+  let _prjOpts='<option value="">من غير مشروع</option>';
+  try{ const { data:_ps }=await sb.from("os_projects").select("id,name").eq("status","open").order("created_at",{ascending:false}).limit(100);
+    _prjOpts+=(_ps||[]).map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join(""); }catch(e){}
   const okDate=(v)=>/^\d{4}-\d{2}-\d{2}$/.test(v||"")?v:"";
   $("stPrev").innerHTML=`<div class="sec-h">راجع المهام (${arr.length}) <span class="ln"></span></div>`+
     (_topId?`<div class="muted" style="font-size:11.5px;margin:-4px 0 8px">الأرقام جنب الأسماء = مهام مفتوحة دلوقتي. اللي الذكاء مش لاقيله حد، رشّحنا أقل واحد مشغول.</div>`:"")+
+    `<div class="field" style="margin-bottom:10px"><label>كلها مربوطة بمشروع؟ (اختياري)</label><select id="stPrj">${_prjOpts}</select></div>`+
     arr.map((t,i)=>{ const m=matchProfile(t.assignee); const _selId=m?m.id:(_topId||""); const pr=["high","low"].includes(t.priority)?t.priority:"medium";
       return `<div class="card flat" data-row="${i}" data-prio="${pr}" style="background:var(--soft)">
       <div class="field" style="margin-bottom:8px"><input class="st-title" value="${esc(t.title)}"/></div>
@@ -6028,11 +6033,13 @@ async function renderSmartPreview(arr){
         <button class="qbtn st-del" title="حذف">${ICONS.trash}</button>
       </div></div>`; }).join("")+
     `<button class="btn green" id="stSave">احفظ المهام ✓</button>`;
+  makeSearchable("stPrj","دوّر باسم المشروع…");
   $("stPrev").querySelectorAll(".st-del").forEach(b=>b.onclick=()=>{ b.closest("[data-row]").remove(); if(!$("stPrev").querySelector("[data-row]")) $("stPrev").innerHTML=""; });
   $("stSave").onclick=saveSmartTasks;
   setTimeout(()=>{ const el=$("stSave"); if(el) el.scrollIntoView({behavior:"smooth",block:"nearest"}); },60);
 }
 async function saveSmartTasks(){
+  const _stPrjEl=$("stPrj"); const _stPrjVal=_stPrjEl?_stPrjEl.value:"";
   const rows=[...$("stPrev").querySelectorAll("[data-row]")];
   const payloads=rows.map(r=>{
     const title=r.querySelector(".st-title").value.trim(); if(!title) return null;
@@ -6040,7 +6047,7 @@ async function saveSmartTasks(){
     const ap=assId?BY_ID[assId]:PROFILE;
     return { title, assignee_id:ap.id, assignee_name:ap.name, dept:ap.dept,
       deadline:r.querySelector(".st-due").value||null, priority:r.dataset.prio||"medium",
-      type:"task", status:"new", progress:0, created_by:ME.id, created_by_name:PROFILE.name };
+      type:"task", status:"new", progress:0, project_id:_stPrjVal||null, created_by:ME.id, created_by_name:PROFILE.name };
   }).filter(Boolean);
   if(!payloads.length){ toast("مفيش مهام تتحفظ","bad"); return; }
   const btn=$("stSave"); btn.disabled=true; btn.textContent="بيحفظ…";
