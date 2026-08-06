@@ -995,7 +995,7 @@ function renderManagerHome(d){
     body+=myDeptTasks.slice(0,5).map(t=>`<div class="card flat"${t.deadline&&new Date(t.deadline)<new Date()?' style="border-right:4px solid var(--red)"':''}><b>${esc(t.title)}</b><div class="meta"><span>${esc(t.assignee_name||nameOf(t.assignee_id)||"—")}</span>${t.deadline?`<span class="dot"></span><span>${fmtDate(t.deadline)}</span>`:""}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}</div></div>`).join("");
   } else body+=`<div class="empty" style="padding:18px">مفيش مهام بالقسم لسه.</div>`;
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
-    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="hr"?'<button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}<button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button><button class="btn ghost sm" data-quick="addemp">إضافة موظف</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${PROFILE.dept==="engineering"?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}<button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
+    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="finance"?'<button class="btn sm" data-quick="approvals">الموافقات المالية</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب</button>':""}${PROFILE.dept==="legal"?'<button class="btn sm" data-quick="docs">العقود والمستندات</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب</button>':""}${PROFILE.dept==="hr"?'<button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}<button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button><button class="btn ghost sm" data-quick="addemp">إضافة موظف</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${PROFILE.dept==="engineering"?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}<button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   el.innerHTML=body;
   paintAttendance();
@@ -2038,16 +2038,26 @@ function openLinkedTask(tid){
   try{ if(isOwnerOps()) taskFilter="all"; }catch(e){}
   switchTab("tasks");
 }
-/* ===== بينتهي قريب ===== */
+/* ===== بينتهي قريب — تدرج 30/60/90 يوم (معيار عالمي) ===== */
 async function openExpiring(){
-  openSheet('<h3>بينتهي خلال 30 يوم</h3><div id="expBox"><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
+  openSheet('<h3>بينتهي قريب</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">عقود، تراخيص، ومستندات — مرتّبة بالأولوية عشان تلحق تجدّدها في وقتها.</div><div id="expBox"><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
   try{
-    const { data }=await sb.from("os_expiring_soon").select("*");
+    const { data }=await sb.from("os_expiring_soon").select("*").order("days_left",{ascending:true});
     const rows=data||[];
-    $("expBox").innerHTML= rows.length? rows.map(x=>{
-      const days=Math.ceil((new Date(x.expires)-Date.now())/86400000);
-      return '<div class="card flat"><div style="display:flex;gap:8px;align-items:center"><b style="flex:1">'+esc(x.item)+'</b><span class="badge '+(days<=7?"b-red":"b-amber")+'">'+(days<=0?"انتهى!":"باقي "+days+" يوم")+'</span></div><div class="meta"><span>'+esc(x.kind||"")+'</span>'+(x.dept&&DEPT_BY_KEY[x.dept]?'<span class="dot"></span><span>'+esc(DEPT_BY_KEY[x.dept].name)+'</span>':'')+'<span class="dot"></span><span>'+fmtDate(x.expires)+'</span></div></div>';
-    }).join("") : '<div class="empty">مفيش حاجة بتنتهي قريب — مطمّن.</div>';
+    if(!rows.length){ $("expBox").innerHTML='<div class="empty">مفيش حاجة بتنتهي خلال 90 يوم — مطمّن.</div>'; return; }
+    const KIND_LBL={document:"مستند",contract:"عقد عمل",probation:"فترة اختبار"};
+    const card=(x)=>{
+      const d=x.days_left!=null?x.days_left:Math.ceil((new Date(x.expires)-Date.now())/86400000);
+      const badge=d<=7?"b-red":d<=30?"b-amber":"b-blue";
+      return '<div class="card flat"'+(d<=7?' style="border-right:4px solid var(--red)"':'')+'><div style="display:flex;gap:8px;align-items:center"><b style="flex:1">'+esc(x.item)+'</b><span class="badge '+badge+'">'+(d<=0?"انتهى!":"باقي "+d+" يوم")+'</span></div><div class="meta"><span>'+(KIND_LBL[x.kind]||esc(x.kind||""))+'</span>'+(x.dept&&DEPT_BY_KEY[x.dept]?'<span class="dot"></span><span>'+esc(DEPT_BY_KEY[x.dept].name)+'</span>':'')+'<span class="dot"></span><span>'+fmtDate(x.expires)+'</span></div></div>';
+    };
+    const groups=[["urgent","خلال 30 يوم — لازم تتحرك دلوقتي","var(--red)"],["soon","خلال 60 يوم — جهّز نفسك","#B45309"],["watch","خلال 90 يوم — تحت النظر","var(--ink-soft)"]];
+    let h="";
+    groups.forEach(([key,label,color])=>{
+      const g=rows.filter(r=>r.urgency===key);
+      if(g.length) h+='<div class="sec-h" style="color:'+color+'">'+label+' ('+g.length+') <span class="ln"></span></div>'+g.map(card).join("");
+    });
+    $("expBox").innerHTML=h||rows.map(card).join("");
   }catch(e){ $("expBox").innerHTML=failBox("معرفناش نجيبها.",openExpiring); }
 }
 /* ===== البدلاء ===== */
@@ -2960,6 +2970,8 @@ function wireHome(el){
     else if(q==="corr"){ openCorrespondence(); }
     else if(q==="clientfiles"){ openClientFiles(); }
     else if(q==="docs"){ openDocsVault(); }
+    else if(q==="approvals"){ openApprovals(); }
+    else if(q==="expiring"){ openExpiring(); }
     else if(q==="govcases"){ openGovCases(); }
     else if(q==="attlog"){ openAttendanceLog(); }
     else if(q==="adminhub"){ openAdminHub(); }
