@@ -221,6 +221,7 @@ button.stat,button.dept-card{font-family:inherit;cursor:pointer;}
 .modal.open{display:flex;animation:fade .2s both;}
 @keyframes fade{from{opacity:0;}to{opacity:1;}}
 .sheet{width:100%;max-width:560px;background:#fff;border-radius:24px 24px 0 0;padding:18px 18px calc(20px + env(safe-area-inset-bottom));max-height:92dvh;overflow:auto;animation:up .26s cubic-bezier(.2,.8,.2,1) both;}
+.sheet > .row-actions:last-child{position:sticky;bottom:calc(-20px - env(safe-area-inset-bottom));background:#fff;padding:12px 0 calc(14px + env(safe-area-inset-bottom));margin-bottom:calc(-20px - env(safe-area-inset-bottom));box-shadow:0 -10px 20px -12px rgba(0,0,0,.18);z-index:5;}
 @keyframes up{from{transform:translateY(40px);}to{transform:none;}}
 .sheet h3{font-size:17px;font-weight:800;margin-bottom:14px;color:var(--blue-d);}
 .sheet .x{position:absolute;}
@@ -936,7 +937,7 @@ async function paintClientFileDetail(id){
     }).join(""); }
     h+='</div>';
     $("cdBox").innerHTML=h;
-    addMicTo("cfTitle");
+    addMicTo("cfTitle"); makeSearchable("cfToDept","دوّر باسم القسم…"); allowCustom("cfCat","تصنيف تاني — اكتبه");
     $("cfUp").onclick=async()=>{
       const title=$("cfTitle").value.trim(); const fe=$("cfFile");
       if(!title){ toast("اكتب اسم المستند","bad"); return; }
@@ -950,7 +951,7 @@ async function paintClientFileDetail(id){
           revision=Math.max(...dupes.map(d=>d.revision||1))+1;
           await sb.from("os_files").update({ archived:true, archived_at:new Date().toISOString(), archived_by:ME.id }).in("id",dupes.map(d=>d.id));
         }
-        await registerFile({ title, kind:"file", category:$("cfCat").value, client_id:id, to_dept:$("cfToDept").value||null, url:up.url, storage_path:up.path, size_bytes:up.size, mime:up.mime, revision });
+        await registerFile({ title, kind:"file", category:readSelect("cfCat"), client_id:id, to_dept:$("cfToDept").value||null, url:up.url, storage_path:up.path, size_bytes:up.size, mime:up.mime, revision });
         toast(revision>1?"اترفعت نسخة جديدة (Rev "+revision+")":"اترفع لملف العميل ✓","ok");
         paintClientFileDetail(id);
       }catch(e){ $("cfStatus").textContent=""+(e.message||"فشل"); toast(e.message||"فشل الرفع","bad"); b.disabled=false; }
@@ -966,7 +967,7 @@ async function openVisitorLog(){
     +'<div class="row-actions"><button class="btn green" id="viGo">سجّل الزيارة ✓</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>'
     +'<div class="sec-h" style="margin-top:16px">زوار النهاردة <span class="ln"></span></div>'
     +'<div id="viBox"><div class="skel"></div></div>');
-  addMicTo("viName"); addMicTo("viPurpose");
+  addMicTo("viName"); addMicTo("viPurpose"); makeSearchable("viHost","دوّر باسم الموظف…");
   $("viGo").onclick=async()=>{
     const btn=$("viGo");
     const name=$("viName").value.trim(), purpose=$("viPurpose").value.trim(), hostId=$("viHost").value||null;
@@ -1503,7 +1504,7 @@ async function openHandoff(t){
     const mates=PROFILES.filter(p=>p.dept===dk);
     $("hoAss").innerHTML='<option value="">رشّح لي الأقل تحميلًا</option>'+mates.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
   };
-  $("hoDept").onchange=fillAss; fillAss();
+  $("hoDept").onchange=()=>{ fillAss(); makeSearchable("hoAss","دوّر باسم الموظف…"); }; fillAss();
   $("hoGo").onclick=async()=>{
     const btn=$("hoGo"); btn.disabled=true; btn.textContent="بيسلّم…";
     const dk=$("hoDept").value;
@@ -1543,7 +1544,7 @@ function openProjectMilestoneNew(projectId,prj){
     <div class="field"><label>الموعد المستهدف</label><input id="msDue" type="date" min="${todayStr()}"/></div>
     <div class="field"><label>الأولوية</label><select id="msPrio"><option value="medium">عادي</option><option value="high">عاجل</option></select></div>
     <div class="row-actions"><button class="btn green" id="msGo">أضف</button><button class="btn ghost" onclick="openProjectDetail('${projectId}')">إلغاء</button></div>`);
-  addMicTo("msTitle");
+  addMicTo("msTitle"); makeSearchable("msAss","دوّر باسم الموظف…");
   $("msGo").onclick=async()=>{
     const title=$("msTitle").value.trim(); if(!title){ toast("اكتب العنوان","bad"); return; }
     const btn=$("msGo"); btn.disabled=true; btn.textContent="بيضيف…";
@@ -1859,11 +1860,11 @@ async function openGovCaseNew(){
     +'<div class="field"><label>موعد مستهدف (اختياري)</label><input id="gcTarget" type="date" min="'+todayStr()+'"/></div>'
     +'<div class="field"><label>ملاحظات</label><textarea id="gcNotes"></textarea></div>'
     +'<div class="row-actions"><button class="btn green" id="gcGo">أضف المعاملة</button><button class="btn ghost" onclick="openGovCases()">إلغاء</button></div>');
-  addMicTo("gcTitle"); addMicTo("gcBody");
+  addMicTo("gcTitle"); addMicTo("gcBody"); allowCustom("gcType","نوع معاملة تاني — اكتبه");
   $("gcGo").onclick=async()=>{
     const title=$("gcTitle").value.trim(); if(!title){ toast("اكتب عنوان المعاملة","bad"); return; }
     const btn=$("gcGo"); btn.disabled=true; btn.textContent="بيضيف…";
-    const payload={ title, case_type:$("gcType").value, government_body:$("gcBody").value.trim()||null, project_id:$("gcProject").value||null, target_date:$("gcTarget").value||null, notes:$("gcNotes").value.trim()||null, dept:PROFILE.dept||null, assigned_to:ME.id, assigned_to_name:PROFILE.name, created_by:ME.id, created_by_name:PROFILE.name };
+    const payload={ title, case_type:readSelect("gcType"), government_body:$("gcBody").value.trim()||null, project_id:$("gcProject").value||null, target_date:$("gcTarget").value||null, notes:$("gcNotes").value.trim()||null, dept:PROFILE.dept||null, assigned_to:ME.id, assigned_to_name:PROFILE.name, created_by:ME.id, created_by_name:PROFILE.name };
     const { error }=await sb.from("os_gov_cases").insert(payload);
     if(error){ toast("معرفناش نضيف: "+error.message,"bad"); btn.disabled=false; btn.textContent="أضف المعاملة"; return; }
     toast("المعاملة اتضافت","ok"); openGovCases();
@@ -2215,7 +2216,7 @@ async function openLeaves(){
     +'<div id="lvCalc" class="muted" style="font-size:12.5px;margin-bottom:10px"></div>'
     +'<div class="field"><label>السبب (اختياري)</label><input id="lvWhy" placeholder=""/></div>'
     +'<div class="row-actions"><button class="btn green" id="lvGo">ابعت الطلب</button><button class="btn ghost" onclick="closeSheet()">قفل</button></div>');
-  addMicTo("lvWhy");
+  addMicTo("lvWhy"); allowCustom("lvKind","نوع إجازة تاني — اكتبه");
   let _lvBal=null;
   const lvCalc=()=>{
     const f=$("lvFrom").value, t=$("lvTo").value, box=$("lvCalc");
@@ -2254,7 +2255,7 @@ async function openLeaves(){
       const bal=(bp&&bp.leave_balance!=null)?bp.leave_balance:21;
       if(days>bal){ toast("رصيدك "+bal+" يوم بس وطلبت "+days+"","bad"); return; }
     }catch(e){}
-    const { error }=await sb.from("os_leaves").insert({ user_id:ME.id, user_name:PROFILE.name, dept:PROFILE.dept||null, kind:$("lvKind").value, from_date:f, to_date:t, days, reason:$("lvWhy").value.trim()||null, status:"pending" });
+    const { error }=await sb.from("os_leaves").insert({ user_id:ME.id, user_name:PROFILE.name, dept:PROFILE.dept||null, kind:readSelect("lvKind"), from_date:f, to_date:t, days, reason:$("lvWhy").value.trim()||null, status:"pending" });
     if(error){ toast("معرفناش نبعت: "+error.message,"bad"); return; }
     toast("اتبعت — في انتظار الاعتماد","ok"); paintLeaves();
   };
@@ -2378,6 +2379,7 @@ async function openCustody(){
     +'<div class="field"><label>الرقم التسلسلي (اختياري)</label><input id="cuSer" placeholder=""/></div>'
     +'<div class="field"><label>لمين؟</label><select id="cuTo">'+PROFILES.filter(p=>p.id!==ME.id).map(p=>'<option value="'+p.id+'" data-nm="'+esc(p.name)+'">'+esc(p.name)+'</option>').join("")+'</select></div>'
     +'<div class="row-actions"><button class="btn green" id="cuGo">سلّم</button><button class="btn ghost" onclick="closeSheet()">قفل</button></div>':'<button class="btn ghost" onclick="closeSheet()">قفل</button>'));
+  makeSearchable("cuTo","دوّر باسم الموظف…");
   const go=$("cuGo");
   if(go) go.onclick=async()=>{
     const item=$("cuItem").value.trim(); if(!item){ toast("اكتب الصنف","bad"); return; }
@@ -3492,6 +3494,54 @@ function showVoiceUndo(ta, prevValue){
 }
 /*مايك في أي حتة: يحقن زرار صوت جنب أي حقل بسطر واحد */
 let _micSeq=0;
+/* ===== بحث داخل أي قايمة طويلة — بيتفعّل تلقائي لو العناصر كتير ===== */
+function makeSearchable(selectId, placeholder){
+  const sel=$(selectId); if(!sel) return;
+  if(sel.options.length<8) return;              /* القوايم القصيرة متحتاجش بحث */
+  if(sel.dataset.searchable==="1") return;
+  sel.dataset.searchable="1";
+  const inp=document.createElement("input");
+  inp.type="search"; inp.placeholder=placeholder||"دوّر…";
+  inp.setAttribute("inputmode","search");
+  inp.style.cssText="width:100%;padding:9px 12px;border:1.5px solid var(--line);border-radius:10px;font-family:inherit;font-size:13px;margin-bottom:6px";
+  sel.parentNode.insertBefore(inp,sel);
+  const all=[...sel.options].map(o=>({v:o.value,t:o.textContent,g:o.dataset||{}}));
+  inp.oninput=()=>{
+    const q=inp.value.trim();
+    const keep=q?all.filter(o=>o.t.includes(q)):all;
+    const cur=sel.value;
+    sel.innerHTML=keep.map(o=>'<option value="'+esc(o.v)+'"'+(o.v===cur?" selected":"")+'>'+esc(o.t)+'</option>').join("");
+    if(!keep.length) sel.innerHTML='<option value="">مفيش نتايج</option>';
+  };
+}
+/* ===== السماح بكتابة اختيار مش موجود في القايمة ===== */
+function allowCustom(selectId, label){
+  const sel=$(selectId); if(!sel) return;
+  if(sel.dataset.custom==="1") return;
+  sel.dataset.custom="1";
+  const opt=document.createElement("option");
+  opt.value="__custom__"; opt.textContent="✏️ "+(label||"حاجة تانية — اكتبها بنفسك");
+  sel.appendChild(opt);
+  const inp=document.createElement("input");
+  inp.type="text"; inp.placeholder=label||"اكتب اختيارك…";
+  inp.style.cssText="width:100%;padding:9px 12px;border:1.5px solid var(--line);border-radius:10px;font-family:inherit;font-size:13px;margin-top:6px;display:none";
+  inp.dataset.customFor=selectId;
+  sel.parentNode.insertBefore(inp,sel.nextSibling);
+  sel.addEventListener("change",()=>{
+    const on=sel.value==="__custom__";
+    inp.style.display=on?"block":"none";
+    if(on) setTimeout(()=>inp.focus(),50);
+  });
+}
+/* بيرجّع القيمة الفعلية سواء من القايمة أو من الكتابة الحرة */
+function readSelect(selectId){
+  const sel=$(selectId); if(!sel) return "";
+  if(sel.value==="__custom__"){
+    const inp=document.querySelector('[data-custom-for="'+selectId+'"]');
+    return inp?inp.value.trim():"";
+  }
+  return sel.value;
+}
 function addMicTo(fieldId, opts){
   try{
     const f=$(fieldId); if(!f||document.getElementById("amic-"+fieldId)) return;
@@ -3601,11 +3651,11 @@ function openAddEmployee(){
     <div class="field"><label>الدور</label>${fullAccess?`<select id="neRole"><option value="employee">موظف</option><option value="manager">مدير</option></select>`:`<div class="muted" style="font-size:12.5px">موظف <input type="hidden" id="neRole" value="employee"/></div>`}</div>
     <div class="field"><label>المسمى (اختياري)</label><select id="nePos"><option value="">بدون تحديد</option>${posOpts}</select></div>
     <div class="row-actions"><button class="btn green" id="neGo">أنشئ الحساب ✓</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
-  addMicTo("neName");
+  addMicTo("neName"); allowCustom("nePos","مسمى وظيفي تاني — اكتبه");
   $("neGo").onclick=async()=>{
     const btn=$("neGo");
     const name=$("neName").value.trim(), email=$("neEmail").value.trim(), pass=$("nePass").value.trim();
-    const dept=$("neDept").value, role=$("neRole").value, position=$("nePos").value||null;
+    const dept=$("neDept").value, role=$("neRole").value, position=readSelect("nePos")||null;
     if(!name||!email||!pass){ toast("كمّل البيانات الأساسية","bad"); return; }
     btn.disabled=true; btn.textContent="بينشئ الحساب…";
     const r=await createUserViaFn({ name, email, password:pass, role, dept, position });
@@ -5524,6 +5574,7 @@ async function openNewTask(){
     <div class="field"><label>الأولوية</label><select id="tPrio"><option value="medium">عادي</option><option value="high">عاجل</option><option value="low">منخفض</option></select></div>
     <div class="row-actions"><button class="btn green" id="tCreate">إنشاء المهمة</button><button class="btn sm" id="tCreateMore" style="background:var(--blue);color:#fff">احفظ وضيف تانية</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
   addMicTo("tTitle"); addMicTo("tDetails");
+  makeSearchable("tAss","دوّر باسم الموظف…"); makeSearchable("tProject","دوّر باسم المشروع…");
   const _tConf=()=>loadConflictHint($("tAss").value,$("tDue").value,$("tDueHint"));
   $("tDue").onchange=_tConf; $("tAss").onchange=_tConf;
   document.querySelectorAll("[data-tq]").forEach(b=>b.onclick=()=>{
