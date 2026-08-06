@@ -684,40 +684,25 @@ function statCard(go,n,label,opts){ opts=opts||{}; return `<button class="stat${
 async function paintCompanyPulse(){
   const box=$("pulseBox"); if(!box) return;
   try{
-    const [fu,exp,gov,prj,fin,ctr,apr]=await Promise.all([
-      sb.from("os_followups_due").select("due_state").eq("due_state","overdue"),
-      sb.from("os_expiring_soon").select("urgency").eq("urgency","urgent"),
-      sb.from("os_gov_cases").select("id,target_date,status").neq("status","archived").neq("status","approved"),
-      sb.from("os_projects").select("id,updated_at").eq("status","open"),
-      sb.from("os_finance_dashboard").select("*").single(),
-      sb.from("os_contracts_action").select("action_state"),
-      sb.from("os_approvals").select("amount").eq("status","pending")
-    ]);
-    const fuLate=(fu.data||[]).length;
-    const expUrgent=(exp.data||[]).length;
-    const govLate=(gov.data||[]).filter(g=>g.target_date&&new Date(g.target_date)<new Date()).length;
-    const prjStale=(prj.data||[]).filter(p=>p.updated_at&&(Date.now()-new Date(p.updated_at).getTime())/86400000>=14).length;
-    const F=fin.data||{};
-    const ctrAct=(ctr.data||[]).filter(c=>["expired","notice_passed","notice_soon","renew_now"].includes(c.action_state)).length;
-    const aprList=apr.data||[];
-    const aprAmt=aprList.reduce((s,a)=>s+Number(a.amount||0),0);
+    /* استعلام واحد بدل 7 — أسرع بكتير على الموبايل */
+    const { data:P }=await sb.from("os_company_pulse").select("*").single();
+    const F=P||{};
     const money=(n)=>Number(n||0).toLocaleString("en")+" ج";
     const items=[
-      {n:aprList.length, lbl:"طلب موافقة مستني قرارك"+(aprAmt?" ("+money(aprAmt)+")":""), go:()=>openApprovals(), hot:true},
-      {n:Number(F.overdue_count||0), lbl:"دفعة متأخرة على العملاء ("+money(F.overdue_amount)+")", go:()=>openReceivables(), hot:true},
-      {n:Number(F.ready_to_invoice_count||0), lbl:"دفعة جاهزة للفوترة ("+money(F.ready_to_invoice)+")", go:()=>openFinance(), hot:true},
-      {n:ctrAct, lbl:"عقد/ترخيص محتاج قرار", go:()=>openContracts(), hot:true},
-      {n:fuLate, lbl:"متابعة مبيعات متأخرة", go:()=>openFollowups(), hot:true},
-      {n:expUrgent, lbl:"بينتهي خلال 30 يوم", go:()=>openExpiring(), hot:false},
-      {n:govLate, lbl:"معاملة حكومية فات موعدها", go:()=>openGovCases(), hot:true},
-      {n:prjStale, lbl:"مشروع واقف من أسبوعين", go:()=>openProjects(), hot:false}
+      {n:Number(F.approvals_pending||0), lbl:"طلب موافقة مستني قرارك"+(Number(F.approvals_amount)?" ("+money(F.approvals_amount)+")":""), go:()=>openApprovals(), hot:true},
+      {n:Number(F.fin_overdue_count||0), lbl:"دفعة متأخرة على العملاء ("+money(F.fin_overdue_amount)+")", go:()=>openReceivables(), hot:true},
+      {n:Number(F.fin_ready_count||0), lbl:"دفعة جاهزة للفوترة ("+money(F.fin_ready_amount)+")", go:()=>openFinance(), hot:true},
+      {n:Number(F.contracts_action||0), lbl:"عقد/ترخيص محتاج قرار", go:()=>openContracts(), hot:true},
+      {n:Number(F.followups_overdue||0), lbl:"متابعة مبيعات متأخرة", go:()=>openFollowups(), hot:true},
+      {n:Number(F.expiring_urgent||0), lbl:"بينتهي خلال 30 يوم", go:()=>openExpiring(), hot:false},
+      {n:Number(F.gov_overdue||0), lbl:"معاملة حكومية فات موعدها", go:()=>openGovCases(), hot:true},
+      {n:Number(F.projects_stale||0), lbl:"مشروع واقف من أسبوعين", go:()=>openProjects(), hot:false}
     ].filter(x=>x.n>0);
-    /* ملخص مالي دايمًا ظاهر */
     let head="";
-    if(Number(F.total_outstanding||0)>0||Number(F.collected_this_month||0)>0){
+    if(Number(F.fin_outstanding||0)>0||Number(F.fin_collected_month||0)>0){
       head='<div class="card flat" style="background:linear-gradient(135deg,#EEF4FF,#F3FBF3);border-color:#C7D9F5;margin-bottom:10px"><div style="display:flex;gap:12px;text-align:center">'
-        +'<div style="flex:1"><b style="font-size:15px;color:var(--blue-d);display:block">'+money(F.total_outstanding)+'</b><span class="muted" style="font-size:10.5px">مستحق على العملاء</span></div>'
-        +'<div style="flex:1"><b style="font-size:15px;color:var(--green-d);display:block">'+money(F.collected_this_month)+'</b><span class="muted" style="font-size:10.5px">محصّل الشهر ده</span></div>'
+        +'<div style="flex:1"><b style="font-size:15px;color:var(--blue-d);display:block">'+money(F.fin_outstanding)+'</b><span class="muted" style="font-size:10.5px">مستحق على العملاء</span></div>'
+        +'<div style="flex:1"><b style="font-size:15px;color:var(--green-d);display:block">'+money(F.fin_collected_month)+'</b><span class="muted" style="font-size:10.5px">محصّل الشهر ده</span></div>'
         +'</div></div>';
     }
     if(!items.length){ box.innerHTML=head+'<div class="card flat" style="background:#F1F8F2;border-color:#A5D6A7"><b style="font-size:13px">✅ مفيش إشارات حرجة — الشركة ماشية تمام</b></div>'; return; }
