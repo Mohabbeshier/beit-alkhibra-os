@@ -1442,7 +1442,7 @@ async function openProjects(){
       +'<div class="field"><label>اسم المشروع</label><input id="pjName" placeholder="فيلا الشيخ زايد — عميل X"/></div>'
       +'<div class="field"><label>القسم</label><select id="pjDept">'+DEPTS.map(d=>'<option value="'+d.key+'"'+(d.key===PROFILE.dept?" selected":"")+'>'+esc(d.name)+'</option>').join("")+'</select></div>'
       +'<div class="field"><label>المرحلة</label><select id="pjStage"><option value="جديد">جديد</option><option value="تسعير">تسعير</option><option value="تنفيذ">تنفيذ</option><option value="تسليم">تسليم</option><option value="مغلق">مغلق</option></select></div>'
-      +'<div class="field"><label>القيمة (جنيه — اختياري)</label><input id="pjVal" type="number" inputmode="numeric"/></div>'
+      +'<div class="field"><label>القيمة (جنيه — اختياري)</label><input id="pjVal" type="number" inputmode="numeric" min="0"/></div>'
       +'<div class="row-actions"><button class="btn green" id="pjGo">أضف المشروع</button></div>':"")
     +'<button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
   if(canAddPrj){
@@ -1744,14 +1744,14 @@ function openStructElementNew(projectId){
     +'<div class="field"><label>نوع القاعدة (لو العنصر قاعدة)</label><select id="elFooting"><option value="">—</option>'+Object.entries(FOOTING_LBL).map(([k,v])=>'<option value="'+k+'">'+v+'</option>').join("")+'</select></div>'
     +'<div class="field"><label>المقطع</label><input id="elSection" placeholder="مثلاً: 25×60 سم"/></div>'
     +'<div class="field"><label>التسليح</label><input id="elReinf" placeholder="مثلاً: 6⌀16"/></div>'
-    +'<div class="field"><label>سُمك البلاطة (سم — لو بلاطة)</label><input id="elThick" type="number" inputmode="decimal"/></div>'
+    +'<div class="field"><label>سُمك البلاطة (سم — لو بلاطة)</label><input id="elThick" type="number" inputmode="decimal" min="0"/></div>'
     +'<div class="field"><label>حالة التحميل</label><select id="elLoadCase">'+Object.entries(LOADCASE_LBL).map(([k,v])=>'<option value="'+k+'">'+v+'</option>').join("")+'</select></div>'
-    +'<div class="field"><label>قيمة الحمل (طن)</label><input id="elLoadVal" type="number" inputmode="decimal"/></div>'
+    +'<div class="field"><label>قيمة الحمل (طن)</label><input id="elLoadVal" type="number" inputmode="decimal" min="0"/></div>'
     +'<div class="sec-h">نتايج التشيك (نسبة الطلب/السعة — أكبر من ١ = فشل) <span class="ln"></span></div>'
-    +'<div class="field"><label>عزم رئيسي (Major)</label><input id="elChkM1" type="number" inputmode="decimal" step="0.01"/></div>'
-    +'<div class="field"><label>عزم ثانوي (Minor)</label><input id="elChkM2" type="number" inputmode="decimal" step="0.01"/></div>'
-    +'<div class="field"><label>قص (Shear)</label><input id="elChkV" type="number" inputmode="decimal" step="0.01"/></div>'
-    +'<div class="field"><label>ثقب (Punching)</label><input id="elChkP" type="number" inputmode="decimal" step="0.01"/></div>'
+    +'<div class="field"><label>عزم رئيسي (Major)</label><input id="elChkM1" type="number" inputmode="decimal" step="0.01" min="0"/></div>'
+    +'<div class="field"><label>عزم ثانوي (Minor)</label><input id="elChkM2" type="number" inputmode="decimal" step="0.01" min="0"/></div>'
+    +'<div class="field"><label>قص (Shear)</label><input id="elChkV" type="number" inputmode="decimal" step="0.01" min="0"/></div>'
+    +'<div class="field"><label>ثقب (Punching)</label><input id="elChkP" type="number" inputmode="decimal" step="0.01" min="0"/></div>'
     +'<div class="field"><label>ملاحظات</label><textarea id="elNotes"></textarea></div>'
     +'<div class="row-actions"><button class="btn green" id="elGo">أضف العنصر</button><button class="btn ghost" onclick="openStructProjectDetail(\''+projectId+'\')">إلغاء</button></div>');
   addMicTo("elLabel");
@@ -2159,7 +2159,7 @@ async function openApprovals(){
     +'<div class="sec-h">اطلب موافقة <span class="ln"></span></div>'
     +'<div class="field"><label>النوع</label><select id="apKind">'+APPROVAL_KINDS.map(k=>'<option value="'+k[0]+'">'+k[1]+'</option>').join("")+'</select></div>'
     +'<div class="field"><label>العنوان</label><input id="apTitle" placeholder="مثلًا: شراء طابعة للقسم"/></div>'
-    +'<div class="field"><label>المبلغ (بالجنيه) *</label><input id="apAmt" type="number" inputmode="numeric" placeholder="مثلاً: 3500"/><div class="muted" id="apAmtHint" style="font-size:12px;display:none;margin-top:4px"></div></div>'
+    +'<div class="field"><label>المبلغ (بالجنيه) *</label><input id="apAmt" type="number" inputmode="numeric" min="0" placeholder="مثلاً: 3500"/><div class="muted" id="apAmtHint" style="font-size:12px;display:none;margin-top:4px"></div></div>'
     +'<div class="field"><label>تفاصيل</label><textarea id="apDet" placeholder="ليه محتاجها؟"></textarea></div>'
     +'<div class="row-actions"><button class="btn green" id="apGo">ابعت للموافقة</button><button class="btn ghost" onclick="closeSheet()">قفل</button></div>');
   addMicTo("apDet");
@@ -2445,9 +2445,11 @@ async function paintDelegations(){
         +(meMgr?'<div class="row-actions" style="margin-top:8px"><button class="btn ghost sm" data-dgx="'+d.id+'" style="color:var(--red)">إلغاء</button></div>':'')
         +'</div>';
     }).join("");
-    $("dgBox").querySelectorAll("[data-dgx]").forEach(b=>b.onclick=async()=>{
-      await sb.from("os_delegations").delete().eq("id",b.dataset.dgx);
-      toast("اتلغى","ok"); paintDelegations();
+    $("dgBox").querySelectorAll("[data-dgx]").forEach(b=>b.onclick=()=>{
+      confirmDlg("تلغي التفويض ده؟",async()=>{
+        await sb.from("os_delegations").delete().eq("id",b.dataset.dgx);
+        toast("اتلغى","ok"); paintDelegations();
+      });
     });
   }catch(e){ $("dgBox").innerHTML=failBox("معرفناش نجيب التفويضات.",paintDelegations); }
 }
@@ -5442,7 +5444,7 @@ async function loadClientJourney(taskId){
     tl.parentNode.insertBefore(card,tl);
     const c1=card.querySelector("#cjCall"); if(c1) c1.onclick=()=>{ location.href="tel:"+phoneClean; };
     const c2=card.querySelector("#cjWa"); if(c2) c2.onclick=()=>{ window.open("https://wa.me/"+phoneClean.replace("+",""),"_blank"); };
-    const c3=card.querySelector("#cjReply"); if(c3) c3.onclick=()=>{ const msg="أهلًا "+(data.name||"")+"، معاك مهاب من بيت الخبرة للاستشارات الهندسية. استلمنا طلبك بخصوص "+(data.service||"مشروعك")+" وجاهزين نساعدك فورًا 🌟"; window.open("https://wa.me/"+phoneClean.replace("+","")+"?text="+encodeURIComponent(msg),"_blank"); };
+    const c3=card.querySelector("#cjReply"); if(c3) c3.onclick=()=>{ const msg="أهلًا "+(data.name||"")+"، معاك "+(PROFILE.name||"")+" من بيت الخبرة للاستشارات الهندسية. استلمنا طلبك بخصوص "+(data.service||"مشروعك")+" وجاهزين نساعدك فورًا 🌟"; window.open("https://wa.me/"+phoneClean.replace("+","")+"?text="+encodeURIComponent(msg),"_blank"); };
     if(data.file_url){ const fb=document.createElement("button"); fb.type="button"; fb.textContent="\ud83d\udcce افتح الملف المرفق"; fb.style.cssText="margin-top:8px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#0D2538;background:#EAF2FB;border:1px solid #CFE0F3;border-radius:8px;padding:7px 12px;cursor:pointer"; fb.onclick=()=>{ window.open(data.file_url,"_blank","noopener"); }; card.appendChild(fb); }
   }catch(e){}
 }
