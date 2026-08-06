@@ -670,7 +670,7 @@ function renderOwnerHome(d){
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:10px 2px 3px;opacity:.85">أنشئ بسرعة</div>
     <div class="row-actions" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button></div>
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:11px 2px 3px;opacity:.85">روح لـ</div>
-    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية</button><button class="btn ghost sm" data-quick="contracts">العقود</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية</button><button class="btn ghost sm" data-quick="followups">متابعات مستحقة</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
+    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية</button><button class="btn ghost sm" data-quick="contracts">العقود</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية</button><button class="btn ghost sm" data-quick="followups">متابعات مستحقة</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
   if(d.evs.length){
     body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   }
@@ -706,7 +706,7 @@ function renderOpsHome(d){
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:10px 2px 3px;opacity:.85">أنشئ بسرعة</div>
     <div class="row-actions" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn ghost sm" data-quick="event">موعد</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button></div>
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:11px 2px 3px;opacity:.85">روح لـ</div>
-    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية</button><button class="btn ghost sm" data-quick="contracts">العقود</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية</button><button class="btn ghost sm" data-quick="followups">متابعات مستحقة</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
+    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية</button><button class="btn ghost sm" data-quick="contracts">العقود</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية</button><button class="btn ghost sm" data-quick="followups">متابعات مستحقة</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   body+='<div id="presBox"></div><div id="wwBox"></div><div id="wlBox"></div><div id="activityBox"></div>';
   el.innerHTML=body;
@@ -1046,7 +1046,7 @@ function renderManagerHome(d){
     body+=myDeptTasks.slice(0,5).map(t=>`<div class="card flat"${t.deadline&&new Date(t.deadline)<new Date()?' style="border-right:4px solid var(--red)"':''}><b>${esc(t.title)}</b><div class="meta"><span>${esc(t.assignee_name||nameOf(t.assignee_id)||"—")}</span>${t.deadline?`<span class="dot"></span><span>${fmtDate(t.deadline)}</span>`:""}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}</div></div>`).join("");
   } else body+=`<div class="empty" style="padding:18px">مفيش مهام بالقسم لسه.</div>`;
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
-    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="finance"?'<button class="btn sm" data-quick="finance">المالية</button><button class="btn ghost sm" data-quick="approvals">الموافقات</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب</button>':""}${PROFILE.dept==="legal"?'<button class="btn sm" data-quick="contracts">إدارة العقود</button><button class="btn ghost sm" data-quick="docs">خزنة المستندات</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب</button>':""}${PROFILE.dept==="ops_marketing"?'<button class="btn sm" data-quick="followups">متابعات مستحقة</button><button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${PROFILE.dept==="hr"?'<button class="btn sm" data-quick="hrhub">الأوبريشن</button><button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}<button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button><button class="btn ghost sm" data-quick="addemp">إضافة موظف</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${PROFILE.dept==="engineering"?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}<button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
+    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="finance"?'<button class="btn sm" data-quick="finance">المالية</button><button class="btn ghost sm" data-quick="approvals">الموافقات</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب</button>':""}${PROFILE.dept==="legal"?'<button class="btn sm" data-quick="contracts">إدارة العقود</button><button class="btn ghost sm" data-quick="docs">خزنة المستندات</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب</button>':""}${PROFILE.dept==="ops_marketing"?'<button class="btn sm" data-quick="pipeline">قمع المبيعات</button><button class="btn ghost sm" data-quick="followups">متابعات مستحقة</button><button class="btn ghost sm" data-quick="sales">الليدز</button>':""}${PROFILE.dept==="hr"?'<button class="btn sm" data-quick="hrhub">الأوبريشن</button><button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}<button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button><button class="btn ghost sm" data-quick="addemp">إضافة موظف</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${PROFILE.dept==="engineering"?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}<button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   el.innerHTML=body;
   paintAttendance();
@@ -2143,6 +2143,74 @@ function openFollowupNext(id){
     if(error){ toast("معرفناش نحفظ: "+error.message,"bad"); btn.disabled=false; btn.textContent="احفظ"; return; }
     toast("اتسجّلت ✓","ok"); openFollowups();
   };
+}
+/* ===================== التسويق — لوحة الـpipeline الذكية ===================== */
+const PIPE_STATE={
+  overdue:["متأخرة — اتحرك دلوقتي","var(--red)",true],
+  today:["النهاردة","#B45309",true],
+  scheduled:["مجدولة","var(--blue)",false],
+  active:["نشطة من غير موعد","#7C3AED",false],
+  stalled:["متوقفة +30 يوم","#B45309",true],
+  raw:["قايمة خام — محدش كلّمهم","var(--ink-soft)",false],
+  closed:["مقفولة","var(--ink-soft)",false]
+};
+function isMarketingUser(){ return isOwnerOps()||PROFILE.dept==="ops_marketing"; }
+async function openPipeline(){
+  if(!isMarketingUser()){ toast("الشاشة دي للتسويق والإدارة","bad"); return; }
+  openSheet('<h3>قمع المبيعات</h3><div id="mkBox"><div class="skel"></div><div class="skel"></div></div>'
+    +'<div class="row-actions" style="margin-top:10px;flex-wrap:wrap;gap:8px"><button class="btn sm" id="mkFollow">متابعات مستحقة</button><button class="btn sm" id="mkRaw">القايمة الخام</button><button class="btn ghost sm" id="mkStalled">المتوقفة</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+  $("mkFollow").onclick=()=>openFollowups();
+  $("mkRaw").onclick=()=>openPipelineList("raw","القايمة الخام — محدش كلّمهم");
+  $("mkStalled").onclick=()=>openPipelineList("stalled","فرص متوقفة أكتر من 30 يوم");
+  await paintMarketingDash();
+}
+async function paintMarketingDash(){
+  const box=$("mkBox"); if(!box) return;
+  try{
+    const { data }=await sb.from("os_marketing_dashboard").select("*").single();
+    const d=data||{};
+    const card=(val,lbl,color,hot)=>'<div class="card flat" style="flex:1;min-width:calc(50% - 5px);text-align:center'+(hot?';border-right:4px solid var(--red)':'')+'"><b style="font-size:17px;color:'+color+';display:block">'+val+'</b><span class="muted" style="font-size:11px">'+lbl+'</span></div>';
+    let h='<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px">'
+      +card(d.active_pipeline||0,"فرصة نشطة","var(--blue-d)",false)
+      +card(egp(d.pipeline_value),"قيمة القمع","var(--green-d)",false)
+      +card(d.followups_overdue||0,"متابعة متأخرة","var(--red)",(d.followups_overdue||0)>0)
+      +card(d.web_leads_open||0,"عميل من الموقع مفتوح","#B45309",(d.web_leads_open||0)>0)
+      +'</div>';
+    const items=[
+      {n:d.followups_overdue||0, lbl:"متابعة فات موعدها", go:()=>openFollowups(), hot:true},
+      {n:d.followups_today||0, lbl:"متابعة مستحقة النهاردة", go:()=>openFollowups(), hot:true},
+      {n:d.stalled||0, lbl:"فرصة متوقفة +30 يوم", go:()=>openPipelineList("stalled","فرص متوقفة"), hot:false},
+      {n:d.raw_leads||0, lbl:"ليد خام محدش كلّمه", go:()=>openPipelineList("raw","القايمة الخام"), hot:false}
+    ].filter(x=>x.n>0);
+    if(items.length){
+      h+='<div class="sec-h" style="color:var(--red)">محتاج تحرّك <span class="ln"></span></div>'
+       +items.map((x,i)=>'<button class="card flat mk-item" data-mi="'+i+'" style="width:100%;text-align:right;cursor:pointer'+(x.hot?';border-right:4px solid var(--red)':'')+'"><div style="display:flex;align-items:center;gap:10px"><b style="font-size:18px;color:'+(x.hot?"var(--red)":"#B45309")+';min-width:34px">'+x.n+'</b><span style="flex:1;font-size:13px;font-weight:700">'+x.lbl+'</span><span style="color:var(--muted)">‹</span></div></button>').join("");
+    }
+    if((d.new_clients_week||0)>0) h+='<div class="card flat" style="background:#F1F8F2;border-color:#A5D6A7;margin-top:8px"><b style="font-size:13px">'+d.new_clients_week+' عميل جديد من الموقع الأسبوع ده</b></div>';
+    box.innerHTML=h;
+    box.querySelectorAll("[data-mi]").forEach(b=>b.onclick=()=>items[+b.dataset.mi].go());
+  }catch(e){ box.innerHTML=failBox("معرفناش نجيب بيانات القمع.",paintMarketingDash); }
+}
+async function openPipelineList(state,title){
+  openSheet('<h3>'+esc(title)+'</h3><div id="plBox"><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="openPipeline()">رجوع للقمع</button>');
+  try{
+    const { data }=await sb.from("os_pipeline_smart").select("*").eq("pipeline_state",state).order("days_since_touch",{ascending:false,nullsFirst:false}).limit(60);
+    const rows=data||[];
+    if(!rows.length){ $("plBox").innerHTML='<div class="empty">مفيش حاجة هنا.</div>'; return; }
+    $("plBox").innerHTML=rows.map(o=>{
+      const st=PIPE_STATE[o.pipeline_state]||PIPE_STATE.active;
+      return '<div class="card flat"'+(st[2]?' style="border-right:4px solid '+st[1]+'"':'')+'>'
+        +'<div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:13px">'+esc(o.org_name||o.title||"فرصة")+'</b>'
+        +(o.value_egp?'<span style="font-size:12px;color:var(--blue-d);font-weight:700">'+egp(o.value_egp)+'</span>':'')+'</div>'
+        +(o.next_action?'<div style="font-size:12px;margin-top:3px">📌 '+esc(o.next_action)+'</div>':'')
+        +'<div class="meta"><span>'+(OPP_STAGE_LBL[o.stage]||esc(o.stage||""))+'</span>'
+        +(o.days_since_touch!=null?'<span class="dot"></span><span>آخر تواصل من '+o.days_since_touch+' يوم</span>':'<span class="dot"></span><span>لسه محدش كلّمه</span>')+'</div>'
+        +'<div class="row-actions" style="margin-top:8px">'+(o.org_phone?'<a class="btn sm" href="tel:'+esc(o.org_phone)+'" style="background:var(--green);color:#fff">اتصل</a>':'')
+        +'<button class="btn ghost sm" data-plnext="'+o.id+'">سجّل تواصل</button></div></div>';
+    }).join("");
+    $("plBox").querySelectorAll("[data-plnext]").forEach(b=>b.onclick=()=>openFollowupNext(b.dataset.plnext));
+    attachListSearch("plSearch","plBox","دوّر بالاسم…");
+  }catch(e){ $("plBox").innerHTML=failBox("معرفناش نجيب القايمة.",()=>openPipelineList(state,title)); }
 }
 /* ===================== الأوبريشن — لوحة موحّدة ===================== */
 function isHRUser(){ return isOwnerOps()||(PROFILE.dept==="hr"&&PROFILE.role==="manager"); }
@@ -3394,6 +3462,7 @@ function wireHome(el){
     else if(q==="finance"){ openFinance(); }
     else if(q==="contracts"){ openContracts(); }
     else if(q==="hrhub"){ openHRHub(); }
+    else if(q==="pipeline"){ openPipeline(); }
     else if(q==="expiring"){ openExpiring(); }
     else if(q==="followups"){ openFollowups(); }
     else if(q==="govcases"){ openGovCases(); }
