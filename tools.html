@@ -643,7 +643,7 @@ function renderOwnerHome(d){
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:10px 2px 3px;opacity:.85">أنشئ بسرعة</div>
     <div class="row-actions" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button></div>
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:11px 2px 3px;opacity:.85">روح لـ</div>
-    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
+    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية</button><button class="btn ghost sm" data-quick="followups">متابعات مستحقة</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
   if(d.evs.length){
     body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   }
@@ -679,7 +679,7 @@ function renderOpsHome(d){
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:10px 2px 3px;opacity:.85">أنشئ بسرعة</div>
     <div class="row-actions" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn ghost sm" data-quick="event">موعد</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button></div>
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:11px 2px 3px;opacity:.85">روح لـ</div>
-    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
+    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية</button><button class="btn ghost sm" data-quick="followups">متابعات مستحقة</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   body+='<div id="presBox"></div><div id="wwBox"></div><div id="wlBox"></div><div id="activityBox"></div>';
   el.innerHTML=body;
@@ -995,7 +995,7 @@ function renderManagerHome(d){
     body+=myDeptTasks.slice(0,5).map(t=>`<div class="card flat"${t.deadline&&new Date(t.deadline)<new Date()?' style="border-right:4px solid var(--red)"':''}><b>${esc(t.title)}</b><div class="meta"><span>${esc(t.assignee_name||nameOf(t.assignee_id)||"—")}</span>${t.deadline?`<span class="dot"></span><span>${fmtDate(t.deadline)}</span>`:""}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}</div></div>`).join("");
   } else body+=`<div class="empty" style="padding:18px">مفيش مهام بالقسم لسه.</div>`;
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
-    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="finance"?'<button class="btn sm" data-quick="approvals">الموافقات المالية</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب</button>':""}${PROFILE.dept==="legal"?'<button class="btn sm" data-quick="docs">العقود والمستندات</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب</button>':""}${PROFILE.dept==="hr"?'<button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}<button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button><button class="btn ghost sm" data-quick="addemp">إضافة موظف</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${PROFILE.dept==="engineering"?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}<button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
+    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="finance"?'<button class="btn sm" data-quick="approvals">الموافقات المالية</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب</button>':""}${PROFILE.dept==="legal"?'<button class="btn sm" data-quick="docs">العقود والمستندات</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب</button>':""}${PROFILE.dept==="ops_marketing"?'<button class="btn sm" data-quick="followups">متابعات مستحقة</button><button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${PROFILE.dept==="hr"?'<button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}<button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button><button class="btn ghost sm" data-quick="addemp">إضافة موظف</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${PROFILE.dept==="engineering"?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}<button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   el.innerHTML=body;
   paintAttendance();
@@ -2038,6 +2038,56 @@ function openLinkedTask(tid){
   try{ if(isOwnerOps()) taskFilter="all"; }catch(e){}
   switchTab("tasks");
 }
+/* ===== متابعات المبيعات المستحقة — الخطوة التالية بموعد (معيار CRM عالمي) ===== */
+const OPP_STAGE_LBL={new:"جديدة",contacted:"اتكلمنا معاه",replied:"رد علينا",qualified:"مؤهّلة",proposal_sent:"عرض مرسل",negotiation:"تفاوض",won:"فوز",lost:"خسارة"};
+async function openFollowups(){
+  openSheet('<h3>متابعات مستحقة</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">كل فرصة ليها خطوة تالية بموعد — دي اللي بتمنع العملاء إنهم يضيعوا.</div><div id="fuBox"><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
+  await paintFollowups();
+}
+async function paintFollowups(){
+  const box=$("fuBox"); if(!box) return;
+  try{
+    const { data }=await sb.from("os_followups_due").select("*").order("next_action_due",{ascending:true});
+    const rows=data||[];
+    if(!rows.length){ box.innerHTML='<div class="empty">مفيش متابعات مستحقة — تمام.</div>'; return; }
+    const card=(o)=>{
+      const d=o.days_left;
+      const badge=o.due_state==="overdue"?'<span class="badge b-red">متأخرة '+Math.abs(d)+' يوم</span>':o.due_state==="today"?'<span class="badge b-amber">النهاردة</span>':'<span class="badge b-blue">خلال '+d+' يوم</span>';
+      return '<div class="card flat" data-fu="'+o.id+'"'+(o.due_state==="overdue"?' style="border-right:4px solid var(--red)"':'')+'>'
+        +'<div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(o.org_name||o.title||"فرصة")+'</b>'+badge+'</div>'
+        +(o.next_action?'<div style="font-size:12.5px;margin-top:4px">📌 '+esc(o.next_action)+'</div>':'')
+        +'<div class="meta"><span>'+(OPP_STAGE_LBL[o.stage]||esc(o.stage||""))+'</span>'+(o.value_egp?'<span class="dot"></span><span>'+Number(o.value_egp).toLocaleString("en")+' ج</span>':'')+(o.org_phone?'<span class="dot"></span><span>'+esc(o.org_phone)+'</span>':'')+'</div>'
+        +'<div class="row-actions" style="margin-top:8px">'+(o.org_phone?'<a class="btn sm" href="tel:'+esc(o.org_phone)+'" style="background:var(--green);color:#fff">اتصل</a>':'')+'<button class="btn ghost sm" data-fudone="'+o.id+'">تمت — حدّد التالي</button></div>'
+        +'</div>';
+    };
+    const groups=[["overdue","متأخرة — لازم تتحرك دلوقتي","var(--red)"],["today","النهاردة","#B45309"],["upcoming","الأيام الجاية","var(--ink-soft)"]];
+    let h="";
+    groups.forEach(([k,lbl,color])=>{
+      const g=rows.filter(r=>r.due_state===k);
+      if(g.length) h+='<div class="sec-h" style="color:'+color+'">'+lbl+' ('+g.length+') <span class="ln"></span></div>'+g.map(card).join("");
+    });
+    box.innerHTML=h;
+    box.querySelectorAll("[data-fudone]").forEach(b=>b.onclick=()=>openFollowupNext(b.dataset.fudone));
+  }catch(e){ box.innerHTML=failBox("معرفناش نجيب المتابعات.",paintFollowups); }
+}
+function openFollowupNext(id){
+  const d=new Date(); d.setDate(d.getDate()+3);
+  const nextDue=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  openSheet('<h3>سجّل النتيجة والخطوة التالية</h3>'
+    +'<div class="field"><label>حصل إيه؟</label><textarea id="fuResult" placeholder="مثلاً: اتكلمنا وطلب عرض سعر"></textarea></div>'
+    +'<div class="field"><label>المرحلة دلوقتي</label><select id="fuStage">'+Object.entries(OPP_STAGE_LBL).map(([k,v])=>'<option value="'+k+'">'+v+'</option>').join("")+'</select></div>'
+    +'<div class="field"><label>الخطوة التالية</label><input id="fuNext" placeholder="مثلاً: إرسال عرض السعر"/></div>'
+    +'<div class="field"><label>موعدها</label><input id="fuDue" type="date" value="'+nextDue+'"/></div>'
+    +'<div class="row-actions"><button class="btn green" id="fuGo">احفظ</button><button class="btn ghost" onclick="openFollowups()">إلغاء</button></div>');
+  addMicTo("fuResult");
+  $("fuGo").onclick=async()=>{
+    const btn=$("fuGo"); btn.disabled=true; btn.textContent="بيحفظ…";
+    const upd={ stage:$("fuStage").value, next_action:$("fuNext").value.trim()||null, next_action_due:$("fuDue").value||null, last_activity_at:new Date().toISOString() };
+    const { error }=await sb.from("opportunities").update(upd).eq("id",id);
+    if(error){ toast("معرفناش نحفظ: "+error.message,"bad"); btn.disabled=false; btn.textContent="احفظ"; return; }
+    toast("اتسجّلت ✓","ok"); openFollowups();
+  };
+}
 /* ===== بينتهي قريب — تدرج 30/60/90 يوم (معيار عالمي) ===== */
 async function openExpiring(){
   openSheet('<h3>بينتهي قريب</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">عقود، تراخيص، ومستندات — مرتّبة بالأولوية عشان تلحق تجدّدها في وقتها.</div><div id="expBox"><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
@@ -2972,6 +3022,7 @@ function wireHome(el){
     else if(q==="docs"){ openDocsVault(); }
     else if(q==="approvals"){ openApprovals(); }
     else if(q==="expiring"){ openExpiring(); }
+    else if(q==="followups"){ openFollowups(); }
     else if(q==="govcases"){ openGovCases(); }
     else if(q==="attlog"){ openAttendanceLog(); }
     else if(q==="adminhub"){ openAdminHub(); }
