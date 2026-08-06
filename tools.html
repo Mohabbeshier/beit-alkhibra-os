@@ -1080,7 +1080,7 @@ function renderEmployeeHome(d){
   body+=`<div class="card" style="background:linear-gradient(135deg,#E3F2FD,#E8F5E9);border:none">
     <b>محتاج تعمل حاجة؟ اتكلم بس</b>
     <div class="muted" style="font-size:12.5px;margin:4px 0 12px">مش لازم تكتب — دوس واتكلم والنظام يفهمك.</div>
-    <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button><button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="newreq">طلب</button>${PROFILE.position==="gov"?'<button class="btn sm" data-quick="govcases">المعاملات الحكومية</button><button class="btn ghost sm" data-quick="expiring">تراخيص بتنتهي</button>':""}${PROFILE.dept==="reception"?'<button class="btn sm" data-quick="visitor">تسجيل زائر</button><button class="btn ghost sm" data-quick="call">تسجيل مكالمة</button><button class="btn ghost sm" data-quick="corr">الوارد والصادر</button><button class="btn ghost sm" data-quick="clientfiles">ملفات العملاء</button><button class="btn ghost sm" data-quick="docs">خزنة المستندات</button><button class="btn ghost sm" data-quick="attlog">مين موجود النهاردة</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}</div></div>`;
+    <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button><button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="newreq">طلب</button>${PROFILE.position==="gov"?'<button class="btn sm" data-quick="govcases">المعاملات الحكومية</button><button class="btn ghost sm" data-quick="expiring">تراخيص بتنتهي</button>':""}${PROFILE.dept==="engineering"?'<button class="btn sm" data-quick="myelements">عناصري الإنشائية</button><button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${PROFILE.dept==="reception"?'<button class="btn sm" data-quick="visitor">تسجيل زائر</button><button class="btn ghost sm" data-quick="call">تسجيل مكالمة</button><button class="btn ghost sm" data-quick="corr">الوارد والصادر</button><button class="btn ghost sm" data-quick="clientfiles">ملفات العملاء</button><button class="btn ghost sm" data-quick="docs">خزنة المستندات</button><button class="btn ghost sm" data-quick="attlog">مين موجود النهاردة</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}</div></div>`;
   body+=`<div class="sec-h">المهام اللي عليك <span class="ln"></span></div>`;
   if(myTasks.length){
     body+=myTasks.slice(0,6).map(t=>`<button class="card flat" data-task="${t.id}" style="width:100%;text-align:right;cursor:pointer${t.deadline&&new Date(t.deadline)<new Date()?';border-right:4px solid var(--red)':''}"><b>${esc(t.title)}</b><div class="meta">${t.deadline?`<span>${fmtDate(t.deadline)}</span>`:`<span class="muted">من غير موعد</span>`}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}<span class="dot"></span><span class="muted">${t.progress||0}%</span></div></button>`).join("");
@@ -2143,6 +2143,39 @@ function openFollowupNext(id){
     if(error){ toast("معرفناش نحفظ: "+error.message,"bad"); btn.disabled=false; btn.textContent="احفظ"; return; }
     toast("اتسجّلت ✓","ok"); openFollowups();
   };
+}
+/* ===================== المهندس — عناصري ومراجعاتها ===================== */
+async function openMyElements(){
+  if(PROFILE.dept!=="engineering"&&!isOwnerOps()){ toast("الشاشة دي للقسم الهندسي","bad"); return; }
+  openSheet('<h3>عناصري الإنشائية</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">حالة مراجعة كل عنصر سجّلته — واللي محتاج تعديل.</div><div id="myElBox"><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
+  try{
+    const { data }=await sb.from("os_struct_element_status").select("*").eq("created_by",ME.id).order("created_at",{ascending:false}).limit(60);
+    const rows=data||[];
+    if(!rows.length){ $("myElBox").innerHTML='<div class="empty">لسه ما سجّلتش عناصر. افتح "الإنشائي" وابدأ.</div>'; return; }
+    let projNames={};
+    try{ const { data:ps }=await sb.from("os_struct_projects").select("id,name"); (ps||[]).forEach(p=>projNames[p.id]=p.name); }catch(e){}
+    const card=(e)=>{
+      const rv=REVIEW_LBL[e.review_status]||REVIEW_LBL.pending;
+      const cs=e.check_status;
+      const csBadge=cs==="fail"?'<span class="badge b-red">فشل ✕</span>':cs==="pass"?'<span class="badge b-green">تمام ✓</span>':'<span class="badge b-grey">من غير تشيك</span>';
+      const needsFix=e.review_status==="needs_edit"||cs==="fail";
+      return '<div class="card flat"'+(needsFix?' style="border-right:4px solid var(--red)"':'')+'>'
+        +'<div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(e.label)+' — '+(ETYPE_LBL[e.etype]||e.etype)+'</b>'+csBadge+'</div>'
+        +'<div class="muted" style="font-size:11.5px;margin-top:2px">'+esc(projNames[e.project_id]||"مشروع")+(e.level?" · "+esc(e.level):"")+'</div>'
+        +'<div class="meta"><span style="color:'+(e.review_status==="approved"?"var(--green-d)":e.review_status==="needs_edit"?"var(--red)":"var(--ink-soft)")+';font-weight:700">'+rv[0]+'</span>'
+        +(e.worst_ratio!=null?'<span class="dot"></span><span>أسوأ نسبة: '+Number(e.worst_ratio).toFixed(2)+'</span>':'')+'</div>'
+        +(e.review_note?'<div class="card flat" style="background:#FFF5F5;border-color:#FCA5A5;margin-top:8px;padding:8px"><b style="font-size:11.5px;color:#7A1F1D">ملاحظة المراجعة</b><div style="font-size:12px;margin-top:2px">'+esc(e.review_note)+'</div></div>':'')
+        +'</div>';
+    };
+    const needFix=rows.filter(e=>e.review_status==="needs_edit"||e.check_status==="fail");
+    const pending=rows.filter(e=>e.review_status==="pending"&&e.check_status!=="fail");
+    const done=rows.filter(e=>e.review_status==="approved"&&e.check_status!=="fail");
+    let h="";
+    if(needFix.length) h+='<div class="sec-h" style="color:var(--red)">محتاج تعديل منك ('+needFix.length+') <span class="ln"></span></div>'+needFix.map(card).join("");
+    if(pending.length) h+='<div class="sec-h">مستنية مراجعة المدير ('+pending.length+') <span class="ln"></span></div>'+pending.map(card).join("");
+    if(done.length) h+='<div class="sec-h" style="color:var(--green-d)">معتمدة ('+done.length+') <span class="ln"></span></div>'+done.map(card).join("");
+    $("myElBox").innerHTML=h;
+  }catch(e){ $("myElBox").innerHTML=failBox("معرفناش نجيب عناصرك.",openMyElements); }
 }
 /* ===================== التسويق — لوحة الـpipeline الذكية ===================== */
 const PIPE_STATE={
@@ -3480,6 +3513,7 @@ function wireHome(el){
     else if(q==="contracts"){ openContracts(); }
     else if(q==="hrhub"){ openHRHub(); }
     else if(q==="pipeline"){ openPipeline(); }
+    else if(q==="myelements"){ openMyElements(); }
     else if(q==="expiring"){ openExpiring(); }
     else if(q==="followups"){ openFollowups(); }
     else if(q==="govcases"){ openGovCases(); }
@@ -4134,6 +4168,7 @@ function openApprove(id){
 /* ===================== REALTIME ===================== */
 /* ===================== NOTIFICATIONS (live engine) ===================== */
 const NOTIF_META={
+  struct_fail:["","var(--red)","تشيك إنشائي فاشل"],
   contract_notice:["","var(--red)","إخطار عقد"],
   contract_expired:["","var(--red)","عقد منتهي"],
   billing_due:["","var(--green-d)","دفعة مستحقة"],
