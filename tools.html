@@ -705,7 +705,22 @@ async function paintCompanyPulse(){
         +'<div style="flex:1"><b style="font-size:15px;color:var(--green-d);display:block">'+money(F.fin_collected_month)+'</b><span class="muted" style="font-size:10.5px">محصّل الشهر ده</span></div>'
         +'</div></div>';
     }
-    if(!items.length){ box.innerHTML=head+'<div class="card flat" style="background:#F1F8F2;border-color:#A5D6A7"><b style="font-size:13px">✅ مفيش إشارات حرجة — الشركة ماشية تمام</b></div>'; return; }
+    if(!items.length){
+      /* نظام فاضي تمامًا؟ اعرض إرشاد بداية بدل رسالة "كله تمام" المضللة */
+      const totallyEmpty = !Number(F.fin_outstanding||0) && !Number(F.approvals_pending||0) && !Number(F.contracts_action||0);
+      if(totallyEmpty){
+        box.innerHTML='<div class="card flat" style="background:linear-gradient(135deg,#EEF4FF,#F3FBF3);border-color:#C7D9F5">'
+          +'<b style="font-size:14px;display:block;margin-bottom:6px">النظام جاهز للشغل 🚀</b>'
+          +'<div class="muted" style="font-size:12.5px;line-height:1.9">لسه مفيش بيانات. ابدأ بواحدة من دول:</div>'
+          +'<div class="row-actions" style="margin-top:10px;flex-wrap:wrap;gap:8px">'
+          +'<button class="btn sm" data-quick="smart">وزّع أول مهمة</button>'
+          +'<button class="btn green sm" data-quick="projects">أضف مشروع</button>'
+          +'<button class="btn ghost sm" data-quick="addemp">أضف موظف</button>'
+          +'</div></div>';
+        return;
+      }
+      box.innerHTML=head+'<div class="card flat" style="background:#F1F8F2;border-color:#A5D6A7"><b style="font-size:13px">✅ مفيش إشارات حرجة — الشركة ماشية تمام</b></div>'; return;
+    }
     box.innerHTML=head+'<div class="sec-h" style="color:var(--red)">نبض الشركة — محتاج تدخّلك <span class="ln"></span></div>'
       +items.map((x,i)=>'<button class="card flat pulse-item" data-pi="'+i+'" style="width:100%;text-align:right;cursor:pointer'+(x.hot?';border-right:4px solid var(--red)':'')+'"><div style="display:flex;align-items:center;gap:10px"><b style="font-size:19px;color:'+(x.hot?"var(--red)":"#B45309")+';min-width:32px">'+x.n+'</b><span style="flex:1;font-size:12.5px;font-weight:700">'+x.lbl+'</span><span style="color:var(--muted)">‹</span></div></button>').join("");
     box.querySelectorAll("[data-pi]").forEach(b=>b.onclick=()=>items[+b.dataset.pi].go());
@@ -3353,7 +3368,7 @@ async function openHRBoard(){
   try{
     const { data }=await sb.from("os_hr_scores").select("*").order("score",{ascending:false});
     const rows=data||[];
-    if(!rows.length){ $("hrBox").innerHTML='<div class="empty">مفيش بيانات لسه.</div>'; return; }
+    if(!rows.length){ $("hrBox").innerHTML='<div class="empty">مفيش درجات لسه — الدرجة بتتحسب أول ما يبدأ الفريق ينفّذ مهام.</div>'; return; }
     const avg=Math.round(rows.reduce((a,r)=>a+(r.score||0),0)/rows.length);
     let hdr='<div class="card flat" style="text-align:center;background:#F4F9FF"><div class="muted" style="font-size:11.5px">متوسط الفريق</div><b style="font-size:21px;color:'+(avg>=70?"var(--green-d)":avg>=40?"var(--blue)":"#F59E0B")+'">'+avg+'</b><span class="muted" style="font-size:11px"> / 100</span></div>';
     $("hrBox").innerHTML=hdr+rows.map((r,_i)=>{
@@ -4494,7 +4509,7 @@ async function openSysHealth(){
   try{
     const { data }=await sb.from("os_cron_health").select("*").order("jobname");
     const rows=data||[];
-    if(!rows.length){ $("shCron").innerHTML='<div class="empty">مفيش بيانات.</div>'; }
+    if(!rows.length){ $("shCron").innerHTML='<div class="empty">مفيش سجلات تشغيل لسه — بتظهر بعد أول دورة ليلية.</div>'; }
     else $("shCron").innerHTML=rows.map(c=>{
       const st=c.last_status;
       const col=st==="succeeded"?"var(--green-d)":st==="failed"?"var(--red)":"#94a3b8";
