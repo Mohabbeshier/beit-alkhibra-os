@@ -1494,7 +1494,7 @@ async function openHandoff(t){
     <div class="field"><label>القسم المستلم</label><select id="hoDept">${depts.map(d=>`<option value="${esc(d.key)}">${esc(d.name)}</option>`).join("")}</select></div>
     <div class="field"><label>المسؤول</label><select id="hoAss"><option value="">رشّح لي الأقل تحميلًا</option></select></div>
     <div class="field"><label>المطلوب بالظبط</label><textarea id="hoNote" placeholder="مثلاً: الرسمة اتعتمدت — مطلوب تقديمها للترخيص"></textarea></div>
-    <div class="field"><label>الموعد المستهدف</label><input id="hoDue" type="date"/></div>
+    <div class="field"><label>الموعد المستهدف</label><input id="hoDue" type="date" min="${todayStr()}"/></div>
     <div class="field"><label>الأولوية</label><select id="hoPrio"><option value="medium">عادي</option><option value="high">عاجل</option></select></div>
     <div class="row-actions"><button class="btn green" id="hoGo">سلّم المهمة</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
   addMicTo("hoNote");
@@ -1540,7 +1540,7 @@ function openProjectMilestoneNew(projectId,prj){
     <div class="muted" style="font-size:12px;margin:-6px 0 12px">${esc(prj.name)}</div>
     <div class="field"><label>العنوان</label><input id="msTitle" placeholder="مثلاً: تسليم الرسم المعماري النهائي"/></div>
     <div class="field"><label>المسؤول</label><select id="msAss">${opts}</select></div>
-    <div class="field"><label>الموعد المستهدف</label><input id="msDue" type="date"/></div>
+    <div class="field"><label>الموعد المستهدف</label><input id="msDue" type="date" min="${todayStr()}"/></div>
     <div class="field"><label>الأولوية</label><select id="msPrio"><option value="medium">عادي</option><option value="high">عاجل</option></select></div>
     <div class="row-actions"><button class="btn green" id="msGo">أضف</button><button class="btn ghost" onclick="openProjectDetail('${projectId}')">إلغاء</button></div>`);
   addMicTo("msTitle");
@@ -1856,7 +1856,7 @@ async function openGovCaseNew(){
     +'<div class="field"><label>النوع</label><select id="gcType">'+Object.entries(GOV_TYPE).map(([k,v])=>'<option value="'+k+'">'+v+'</option>').join("")+'</select></div>'
     +'<div class="field"><label>الجهة الحكومية</label><input id="gcBody" placeholder="مثلاً: حي الشيخ زايد"/></div>'
     +'<div class="field"><label>مربوطة بمشروع؟ (اختياري)</label><select id="gcProject">'+prjOpts+'</select></div>'
-    +'<div class="field"><label>موعد مستهدف (اختياري)</label><input id="gcTarget" type="date"/></div>'
+    +'<div class="field"><label>موعد مستهدف (اختياري)</label><input id="gcTarget" type="date" min="'+todayStr()+'"/></div>'
     +'<div class="field"><label>ملاحظات</label><textarea id="gcNotes"></textarea></div>'
     +'<div class="row-actions"><button class="btn green" id="gcGo">أضف المعاملة</button><button class="btn ghost" onclick="openGovCases()">إلغاء</button></div>');
   addMicTo("gcTitle");
@@ -5484,25 +5484,45 @@ async function loadConflictHint(assId, dateStr, hintEl){
     hintEl.textContent = who+" عنده "+n+(n===1?" تسليمة":" تسليمات")+" تانية نفس اليوم"+(n>=3?" — اليوم محمّل، فكّر في موعد تاني":"");
   }catch(e){ hintEl.style.display="none"; }
 }
-function openNewTask(){
+async function openNewTask(){
   const opts=PROFILES.map(p=>`<option value="${p.id}">${esc(p.name)} — ${esc((DEPT_BY_KEY[p.dept]&&DEPT_BY_KEY[p.dept].name)||p.dept||"")}</option>`).join("");
+  let prjOpts='<option value="">من غير مشروع</option>';
+  try{ const { data:prjs }=await sb.from("os_projects").select("id,name").eq("status","open").order("created_at",{ascending:false}).limit(100); prjOpts+=(prjs||[]).map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join(""); }catch(e){}
   openSheet(`<h3>مهمة جديدة</h3>
     <div class="field"><label>العنوان</label><input id="tTitle" placeholder="اكتب المهمة…"/></div>
+    <div class="field"><label>تفاصيل المطلوب <span class="muted" style="font-size:11px">(اختياري — بس بيوفر أسئلة كتير بعدين)</span></label><textarea id="tDetails" placeholder="إيه المطلوب بالظبط؟ فيه حاجة لازم ياخد باله منها؟"></textarea></div>
     <div class="field"><label>مسندة لمين؟</label><select id="tAss"><option value="${ME.id}">أنا (${esc(PROFILE.name)})</option>${opts}</select></div>
-    <div class="field"><label>الموعد النهائي</label><input id="tDue" type="date"/><div class="muted" id="tDueHint" style="font-size:12px;display:none;margin-top:4px"></div></div>
+    <div class="field"><label>مربوطة بمشروع؟</label><select id="tProject">${prjOpts}</select></div>
+    <div class="field"><label>الموعد النهائي</label><input id="tDue" type="date" min="${todayStr()}"/><div class="muted" id="tDueHint" style="font-size:12px;display:none;margin-top:4px"></div></div>
+    <div class="row-actions" style="margin:-4px 0 10px"><button class="btn ghost sm" data-tq="1">بكرة</button><button class="btn ghost sm" data-tq="3">بعد 3 أيام</button><button class="btn ghost sm" data-tq="7">أسبوع</button></div>
     <div class="field"><label>الأولوية</label><select id="tPrio"><option value="medium">عادي</option><option value="high">عاجل</option><option value="low">منخفض</option></select></div>
-    <div class="row-actions"><button class="btn green" id="tCreate">إنشاء المهمة</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+    <div class="row-actions"><button class="btn green" id="tCreate">إنشاء المهمة</button><button class="btn sm" id="tCreateMore" style="background:var(--blue);color:#fff">احفظ وضيف تانية</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+  addMicTo("tTitle"); addMicTo("tDetails");
   const _tConf=()=>loadConflictHint($("tAss").value,$("tDue").value,$("tDueHint"));
   $("tDue").onchange=_tConf; $("tAss").onchange=_tConf;
-  $("tCreate").onclick=async()=>{
+  document.querySelectorAll("[data-tq]").forEach(b=>b.onclick=()=>{
+    const d=new Date(); d.setDate(d.getDate()+parseInt(b.dataset.tq,10));
+    $("tDue").value=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+    _tConf();
+  });
+  const doSave=async(keepOpen)=>{
     const title=$("tTitle").value.trim(); if(!title){ toast("اكتب عنوان المهمة","bad"); return; }
     const assId=$("tAss").value; const ap=BY_ID[assId];
-    const btn=$("tCreate"); btn.disabled=true; btn.textContent="بيتحفظ…";
-    const payload={ title, assignee_id:assId, assignee_name:ap?ap.name:PROFILE.name, dept:ap?ap.dept:PROFILE.dept, deadline:$("tDue").value||null, priority:$("tPrio").value, type:"task", status:"new", progress:0, created_by:ME.id, created_by_name:PROFILE.name };
-    const { error }=await sb.from("os_tasks").insert(payload);
-    if(error){ toast("معرفناش نحفظ: "+error.message,"bad"); btn.disabled=false; btn.textContent="إنشاء المهمة"; return; }
-    closeSheet(); toast("اتحفظت ✓","ok"); renderTasks();
+    const btn=keepOpen?$("tCreateMore"):$("tCreate"); const orig=btn.textContent;
+    btn.disabled=true; btn.textContent="بيتحفظ…";
+    const details=$("tDetails").value.trim();
+    const payload={ title, assignee_id:assId, assignee_name:ap?ap.name:PROFILE.name, dept:ap?ap.dept:PROFILE.dept, deadline:$("tDue").value||null, priority:$("tPrio").value, project_id:$("tProject").value||null, type:"task", status:"new", progress:0, created_by:ME.id, created_by_name:PROFILE.name };
+    const { data:nt, error }=await sb.from("os_tasks").insert(payload).select("id").single();
+    if(error){ toast("معرفناش نحفظ: "+error.message,"bad"); btn.disabled=false; btn.textContent=orig; return; }
+    if(details&&nt&&nt.id){ try{ await sb.from("os_task_updates").insert({ task_id:nt.id, by_id:ME.id, by_name:PROFILE.name, note:"المطلوب: "+details, percent:null }); }catch(e){} }
+    if(keepOpen){
+      toast("اتحفظت ✓ — كمّل التانية","ok");
+      $("tTitle").value=""; $("tDetails").value="";
+      btn.disabled=false; btn.textContent=orig; $("tTitle").focus(); renderTasks();
+    } else { closeSheet(); toast("اتحفظت ✓","ok"); renderTasks(); }
   };
+  $("tCreate").onclick=()=>doSave(false);
+  $("tCreateMore").onclick=()=>doSave(true);
 }
 
 /* ===================== FAB (context: new request / new task) ===================== */
