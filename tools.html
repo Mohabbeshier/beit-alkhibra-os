@@ -864,7 +864,7 @@ async function openAttendanceLog(){
       +'<div style="flex:1"><b style="font-size:19px;color:var(--muted)">'+notYet.length+'</b><div class="muted" style="font-size:11px">لسه</div></div>'
       +'</div></div>';
     if(inNow.length) h+='<div class="sec-h" style="color:var(--green-d)">موجودين دلوقتي <span class="ln"></span></div>'+inNow.map(o=>card(o,'<span class="badge b-green">من '+timeStr(o.r.check_in)+'</span>')).join("");
-    if(leftNow.length) h+='<div class="sec-h">انصرفوا <span class="ln"></span></div>'+leftNow.map(o=>card(o,'<span class="badge b-blue">'+timeStr(o.r.check_out)+'</span>')).join("");
+    if(leftNow.length) h+='<div class="sec-h">انصرفوا <span class="ln"></span></div>'+leftNow.map(o=>card(o,'<span class="badge '+(o.r.auto_closed?'b-grey':'b-blue')+'">'+timeStr(o.r.check_out)+(o.r.auto_closed?' (تلقائي)':'')+'</span>')).join("");
     if(notYet.length) h+='<div class="sec-h">لسه ما سجّلوش <span class="ln"></span></div>'+notYet.map(o=>card(o,'<span class="badge b-grey">لسه</span>')).join("");
     $("attLogBox").innerHTML=h||'<div class="empty">مفيش موظفين.</div>';
   }catch(e){ $("attLogBox").innerHTML=failBox("معرفناش نجيب السجل.",openAttendanceLog); }
@@ -4268,6 +4268,7 @@ function openApprove(id){
 /* ===================== REALTIME ===================== */
 /* ===================== NOTIFICATIONS (live engine) ===================== */
 const NOTIF_META={
+  attendance_missing:["","#B45309","نسيت تسجّل انصرافك"],
   struct_fail:["","var(--red)","تشيك إنشائي فاشل"],
   contract_notice:["","var(--red)","إخطار عقد"],
   contract_expired:["","var(--red)","عقد منتهي"],
