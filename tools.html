@@ -1459,6 +1459,55 @@ async function openProjectDetail(id){
   openSheet('<h3>تفاصيل المشروع</h3><div id="pdBox"><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="openProjects()">رجوع للمشاريع</button>');
   await paintProjectDetail(id);
 }
+/* ===== تسليم مهمة لقسم تاني — الفلو بين الأقسام ===== */
+async function openHandoff(t){
+  const depts=Object.values(DEPT_BY_KEY).filter(d=>d.key!==t.dept).sort((a,b)=>(a.sort_order??500)-(b.sort_order??500));
+  openSheet(`<h3>سلّمها لقسم تاني</h3>
+    <div class="muted" style="font-size:12px;margin:-6px 0 12px">هتتعمل مهمة جديدة في القسم اللي تختاره، مربوطة بالمهمة دي وبنفس المشروع — من غير ما تكتب حاجة من الأول.</div>
+    <div class="card flat" style="margin-bottom:12px"><b style="font-size:13px">${esc(t.title)}</b><div class="muted" style="font-size:11.5px;margin-top:3px">من: ${esc((DEPT_BY_KEY[t.dept]&&DEPT_BY_KEY[t.dept].name)||t.dept||"—")}</div></div>
+    <div class="field"><label>القسم المستلم</label><select id="hoDept">${depts.map(d=>`<option value="${esc(d.key)}">${esc(d.name)}</option>`).join("")}</select></div>
+    <div class="field"><label>المسؤول</label><select id="hoAss"><option value="">رشّح لي الأقل تحميلًا</option></select></div>
+    <div class="field"><label>المطلوب بالظبط</label><textarea id="hoNote" placeholder="مثلاً: الرسمة اتعتمدت — مطلوب تقديمها للترخيص"></textarea></div>
+    <div class="field"><label>الموعد المستهدف</label><input id="hoDue" type="date"/></div>
+    <div class="field"><label>الأولوية</label><select id="hoPrio"><option value="medium">عادي</option><option value="high">عاجل</option></select></div>
+    <div class="row-actions"><button class="btn green" id="hoGo">سلّم المهمة</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+  addMicTo("hoNote");
+  const fillAss=()=>{
+    const dk=$("hoDept").value;
+    const mates=PROFILES.filter(p=>p.dept===dk);
+    $("hoAss").innerHTML='<option value="">رشّح لي الأقل تحميلًا</option>'+mates.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
+  };
+  $("hoDept").onchange=fillAss; fillAss();
+  $("hoGo").onclick=async()=>{
+    const btn=$("hoGo"); btn.disabled=true; btn.textContent="بيسلّم…";
+    const dk=$("hoDept").value;
+    let assId=$("hoAss").value, ap=null;
+    if(!assId){
+      /* ترشيح ذكي: الأقل تحميلًا في القسم المستلم */
+      try{
+        const { data:tk }=await sb.from("os_tasks").select("assignee_id").neq("status","done").limit(2000);
+        const wl={}; (tk||[]).forEach(x=>{ if(x.assignee_id) wl[x.assignee_id]=(wl[x.assignee_id]||0)+1; });
+        const mates=PROFILES.filter(p=>p.dept===dk);
+        if(mates.length){ mates.sort((a,b)=>(wl[a.id]||0)-(wl[b.id]||0)); assId=mates[0].id; }
+      }catch(e){}
+    }
+    ap=assId?BY_ID[assId]:null;
+    if(!ap){ toast("مفيش موظفين في القسم ده","bad"); btn.disabled=false; btn.textContent="سلّم المهمة"; return; }
+    const note=$("hoNote").value.trim();
+    const newTitle="↪ "+t.title;
+    const { data:nt, error }=await sb.from("os_tasks").insert({
+      title:newTitle, dept:dk, assignee_id:ap.id, assignee_name:ap.name,
+      project_id:t.project_id||null, client_id:t.client_id||null,
+      deadline:$("hoDue").value||null, priority:$("hoPrio").value, type:"task", status:"new", progress:0,
+      created_by:ME.id, created_by_name:PROFILE.name
+    }).select("id").single();
+    if(error){ toast("معرفناش نسلّم: "+error.message,"bad"); btn.disabled=false; btn.textContent="سلّم المهمة"; return; }
+    /* سجّل التسليم على المهمتين */
+    await sb.from("os_task_updates").insert({ task_id:t.id, by_id:ME.id, by_name:PROFILE.name, note:"سلّمها لـ"+((DEPT_BY_KEY[dk]&&DEPT_BY_KEY[dk].name)||dk)+" — "+ap.name+(note?" | "+note:""), percent:null });
+    if(nt&&nt.id&&note) await sb.from("os_task_updates").insert({ task_id:nt.id, by_id:ME.id, by_name:PROFILE.name, note:"جاية من "+((DEPT_BY_KEY[t.dept]&&DEPT_BY_KEY[t.dept].name)||t.dept||"قسم تاني")+": "+note, percent:null });
+    closeSheet(); toast("اتسلّمت لـ"+ap.name+" ✓","ok"); renderTasks();
+  };
+}
 function openProjectMilestoneNew(projectId,prj){
   const opts=PROFILES.map(p=>`<option value="${p.id}" ${p.dept===prj.dept?"selected":""}>${esc(p.name)}</option>`).join("");
   openSheet(`<h3>معلم/مهمة جديدة للمشروع</h3>
@@ -4968,6 +5017,7 @@ function openTask(id,all){
     <div class="muted" style="margin-bottom:10px">التقدّم: ${t.progress||0}%</div>
     <div id="tlBox" style="margin-bottom:14px"><div class="skel" style="height:34px"></div><div class="skel" style="height:34px;width:80%"></div></div>
     ${(isOwnerOps()||(PROFILE.role==="manager"&&t.dept===myDeptKey()))&&t.status==="review"?`<div class="card" style="border-color:#E9D5FF;background:#FBF7FF;margin-bottom:10px"><b>${esc(firstName(t.assignee_name||"الموظف"))} سلّمها للمراجعة</b><div class="row-actions" style="margin-top:8px"><button class="btn green sm" id="tApprove">اعتمد الإنجاز</button><button class="btn ghost sm" id="tReturn">رجّعها بملاحظة</button></div></div>`:""}
+    ${(isOwnerOps()||PROFILE.role==="manager")&&t.status!=="done"?`<div class="row-actions" style="margin-bottom:10px"><button class="btn sm" id="tHandoff" style="background:linear-gradient(135deg,#7C3AED,#5B21B6);color:#fff">سلّمها لقسم تاني</button></div>`:""}
     ${mine&&t.status==="review"&&!(isOwnerOps()||(PROFILE.role==="manager"&&t.dept===myDeptKey()))?`<div class="muted" style="margin-bottom:10px;font-size:12px">مستنية اعتماد المدير</div>`:""}
     ${mine&&t.status==="done"?`<button class="btn ghost sm" id="tReopen" style="margin-bottom:10px">رجّعها شغّالة</button>`:""}
     ${(isOwnerOps()||(PROFILE.role==="manager"&&t.dept===myDeptKey()))&&t.assignee_id&&t.assignee_id!==ME.id&&t.status!=="done"?`<button class="btn ghost sm" id="tNudge" style="margin-bottom:10px">نبّه ${esc(firstName(t.assignee_name||""))}</button>`:""}
@@ -5049,6 +5099,8 @@ function openTask(id,all){
       closeSheet(); toast("اتسلّمت لـ"+firstName(rec.name)+" — "+toD,"ok"); renderTasks();
     };
   };
+  const hoBtn=$("tHandoff");
+  if(hoBtn) hoBtn.onclick=()=>openHandoff(t);
   const ap=$("tApprove");
   if(ap) ap.onclick=async()=>{
     ap.disabled=true;
