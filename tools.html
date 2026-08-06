@@ -600,6 +600,32 @@ function relativeTime(iso){
 function statCard(go,n,label,opts){ opts=opts||{}; return `<button class="stat${opts.hot&&n>0?' stat-hot':''}" data-go="${go}"${opts.ev?' data-ev="1"':''}><div class="n">${n}</div><div class="l">${label}</div></button>`; }
 
 /* ---------- OWNER: full company command center ---------- */
+/* ===== نبض الشركة — الاستثناءات الحرجة من كل الأقسام في مكان واحد (معيار Executive Dashboard) ===== */
+async function paintCompanyPulse(){
+  const box=$("pulseBox"); if(!box) return;
+  try{
+    const [fu,exp,gov,prj]=await Promise.all([
+      sb.from("os_followups_due").select("due_state").eq("due_state","overdue"),
+      sb.from("os_expiring_soon").select("urgency").eq("urgency","urgent"),
+      sb.from("os_gov_cases").select("id,target_date,status").neq("status","archived").neq("status","approved"),
+      sb.from("os_projects").select("id,updated_at").eq("status","open")
+    ]);
+    const fuLate=(fu.data||[]).length;
+    const expUrgent=(exp.data||[]).length;
+    const govLate=(gov.data||[]).filter(g=>g.target_date&&new Date(g.target_date)<new Date()).length;
+    const prjStale=(prj.data||[]).filter(p=>p.updated_at&&(Date.now()-new Date(p.updated_at).getTime())/86400000>=14).length;
+    const items=[
+      {n:fuLate, lbl:"متابعة مبيعات متأخرة", go:()=>openFollowups(), hot:true},
+      {n:expUrgent, lbl:"عقد/ترخيص بينتهي خلال 30 يوم", go:()=>openExpiring(), hot:true},
+      {n:govLate, lbl:"معاملة حكومية فات موعدها", go:()=>openGovCases(), hot:true},
+      {n:prjStale, lbl:"مشروع واقف من أسبوعين", go:()=>openProjects(), hot:false}
+    ].filter(x=>x.n>0);
+    if(!items.length){ box.innerHTML='<div class="card flat" style="background:#F1F8F2;border-color:#A5D6A7"><b style="font-size:13px">✅ مفيش إشارات حرجة — الشركة ماشية تمام</b></div>'; return; }
+    box.innerHTML='<div class="sec-h" style="color:var(--red)">نبض الشركة — محتاج تدخّلك <span class="ln"></span></div>'
+      +items.map((x,i)=>'<button class="card flat pulse-item" data-pi="'+i+'" style="width:100%;text-align:right;cursor:pointer'+(x.hot?';border-right:4px solid var(--red)':'')+'"><div style="display:flex;align-items:center;gap:10px"><b style="font-size:19px;color:'+(x.hot?"var(--red)":"#B45309")+';min-width:32px">'+x.n+'</b><span style="flex:1;font-size:13px;font-weight:700">'+x.lbl+'</span><span style="color:var(--muted)">‹</span></div></button>').join("");
+    box.querySelectorAll("[data-pi]").forEach(b=>b.onclick=()=>items[+b.dataset.pi].go());
+  }catch(e){ box.innerHTML=""; }
+}
 function renderOwnerHome(d){
   const el=$("hBody");
   // per-department breakdown
@@ -613,7 +639,7 @@ function renderOwnerHome(d){
     statCard("req",d.pendIn.length,"طلب مستنيك",{hot:true})+
     statCard("tasks",d.openTasks.length,"مهمة شغّالة")+
     statCard("tasks",overdue.length,"مهمة متأخرة",{hot:true});
-  let body='<div id="alertsBox"></div>';
+  let body='<div id="alertsBox"></div><div id="pulseBox"></div>';
   if(d.joins.length){
     body+=`<div class="card" style="border-color:#FCD9A1;background:#FFFBF2"><b>${d.joins.length} طلب انضمام مستني موافقتك</b>
       <div class="muted" style="font-size:12.5px;margin:4px 0 10px">${d.joins.map(j=>esc(j.manager_name)).join("، ")}</div>
@@ -683,7 +709,7 @@ function renderOpsHome(d){
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   body+='<div id="presBox"></div><div id="wwBox"></div><div id="wlBox"></div><div id="activityBox"></div>';
   el.innerHTML=body;
-  loadAlerts(); loadPresence(); loadWeekWins(); loadWorkload(); loadActivity();
+  loadAlerts(); loadPresence(); loadWeekWins(); loadWorkload(); loadActivity(); paintCompanyPulse();
   HOME_SUMMARY=`${d.greet} يا ${PROFILE.name}. عندك ${d.pendIn.length} طلب مستني ردك و${d.openTasks.length} مهمة شغّالة في الشركة. ${d.evTxt}${d.joins.length?(" وفيه "+d.joins.length+" طلب انضمام للإدارة."):""}`;
 }
 
