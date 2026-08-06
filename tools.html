@@ -670,7 +670,7 @@ function renderOwnerHome(d){
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:10px 2px 3px;opacity:.85">أنشئ بسرعة</div>
     <div class="row-actions" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button></div>
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:11px 2px 3px;opacity:.85">روح لـ</div>
-    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية</button><button class="btn ghost sm" data-quick="followups">متابعات مستحقة</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
+    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية</button><button class="btn ghost sm" data-quick="followups">متابعات مستحقة</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
   if(d.evs.length){
     body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   }
@@ -706,7 +706,7 @@ function renderOpsHome(d){
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:10px 2px 3px;opacity:.85">أنشئ بسرعة</div>
     <div class="row-actions" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn ghost sm" data-quick="event">موعد</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع</button></div>
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:11px 2px 3px;opacity:.85">روح لـ</div>
-    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية</button><button class="btn ghost sm" data-quick="followups">متابعات مستحقة</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
+    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية</button><button class="btn ghost sm" data-quick="followups">متابعات مستحقة</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام</button>':""}</div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   body+='<div id="presBox"></div><div id="wwBox"></div><div id="wlBox"></div><div id="activityBox"></div>';
   el.innerHTML=body;
@@ -1046,7 +1046,7 @@ function renderManagerHome(d){
     body+=myDeptTasks.slice(0,5).map(t=>`<div class="card flat"${t.deadline&&new Date(t.deadline)<new Date()?' style="border-right:4px solid var(--red)"':''}><b>${esc(t.title)}</b><div class="meta"><span>${esc(t.assignee_name||nameOf(t.assignee_id)||"—")}</span>${t.deadline?`<span class="dot"></span><span>${fmtDate(t.deadline)}</span>`:""}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}</div></div>`).join("");
   } else body+=`<div class="empty" style="padding:18px">مفيش مهام بالقسم لسه.</div>`;
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
-    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="finance"?'<button class="btn sm" data-quick="approvals">الموافقات المالية</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب</button>':""}${PROFILE.dept==="legal"?'<button class="btn sm" data-quick="docs">العقود والمستندات</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب</button>':""}${PROFILE.dept==="ops_marketing"?'<button class="btn sm" data-quick="followups">متابعات مستحقة</button><button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${PROFILE.dept==="hr"?'<button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}<button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button><button class="btn ghost sm" data-quick="addemp">إضافة موظف</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${PROFILE.dept==="engineering"?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}<button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
+    <div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك</button><button class="btn green sm" data-quick="ask">اسأل القسم</button>${PROFILE.dept==="finance"?'<button class="btn sm" data-quick="finance">المالية</button><button class="btn ghost sm" data-quick="approvals">الموافقات</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب</button>':""}${PROFILE.dept==="legal"?'<button class="btn sm" data-quick="docs">العقود والمستندات</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب</button>':""}${PROFILE.dept==="ops_marketing"?'<button class="btn sm" data-quick="followups">متابعات مستحقة</button><button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${PROFILE.dept==="hr"?'<button class="btn ghost sm" data-quick="sales">المبيعات والليدز</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}<button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="hr">كفاءة الفريق</button><button class="btn ghost sm" data-quick="addemp">إضافة موظف</button><button class="btn ghost sm" data-quick="projects">المشاريع</button><button class="btn ghost sm" data-quick="adminhub">الإدارية</button>${PROFILE.dept==="engineering"?'<button class="btn ghost sm" data-quick="structeng">الإنشائي</button>':""}<button class="btn ghost sm" data-quick="newreq">طلب</button></div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   el.innerHTML=body;
   paintAttendance();
@@ -2144,6 +2144,151 @@ function openFollowupNext(id){
     toast("اتسجّلت ✓","ok"); openFollowups();
   };
 }
+/* ===================== المالية — نظام محاسبة المشاريع ===================== */
+const PAY_STATUS={planned:["مخططة","b-grey"],due:["مستحقة — جاهزة للفوترة","b-amber"],invoiced:["مفوترة","b-blue"],partial:["محصّلة جزئيًا","#7C3AED"],paid:["محصّلة ✓","b-green"],cancelled:["ملغية","b-grey"]};
+const COST_CAT={salary:"أجور",subcontractor:"مقاول باطن",permit:"رسوم ورخص",materials:"مواد وطباعة",transport:"انتقالات",other:"أخرى"};
+const egp=(n)=>Number(n||0).toLocaleString("en")+" ج";
+function isFinanceUser(){ return isOwnerOps()||PROFILE.dept==="finance"; }
+async function openFinance(){
+  if(!isFinanceUser()&&PROFILE.role!=="manager"){ toast("الشاشة دي للمالية والإدارة","bad"); return; }
+  openSheet('<h3>المالية — نظرة شاملة</h3><div id="finBox"><div class="skel"></div><div class="skel"></div></div>'
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn sm" id="finRecv">المستحقات</button><button class="btn sm" id="finProj">ربحية المشاريع</button>'+(isFinanceUser()?'<button class="btn green sm" id="finNewPay">دفعة جديدة</button><button class="btn ghost sm" id="finNewCost">سجّل مصروف</button>':'')+'<button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+  $("finRecv").onclick=()=>openReceivables();
+  $("finProj").onclick=()=>openProjectFinance();
+  const np=$("finNewPay"); if(np) np.onclick=()=>openPaymentNew();
+  const nc=$("finNewCost"); if(nc) nc.onclick=()=>openCostNew();
+  await paintFinanceDash();
+}
+async function paintFinanceDash(){
+  const box=$("finBox"); if(!box) return;
+  try{
+    const { data }=await sb.from("os_finance_dashboard").select("*").single();
+    const d=data||{};
+    const card=(val,lbl,color,hot)=>'<div class="card flat" style="flex:1;min-width:calc(50% - 5px);text-align:center'+(hot?';border-right:4px solid var(--red)':'')+'"><b style="font-size:17px;color:'+color+';display:block">'+val+'</b><span class="muted" style="font-size:11px">'+lbl+'</span></div>';
+    let h='<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px">'
+      +card(egp(d.total_outstanding),"إجمالي المستحق على العملاء","var(--blue-d)",false)
+      +card(egp(d.overdue_amount),(d.overdue_count||0)+" دفعة متأخرة","var(--red)",(d.overdue_count||0)>0)
+      +card(egp(d.ready_to_invoice),(d.ready_to_invoice_count||0)+" جاهزة للفوترة","#B45309",(d.ready_to_invoice_count||0)>0)
+      +card(egp(d.collected_this_month),"محصّل الشهر ده","var(--green-d)",false)
+      +'</div>';
+    if((d.pending_approvals||0)>0) h+='<div class="card flat" style="background:#FFF8E1;border-color:#FFD54F"><b style="font-size:13px">'+d.pending_approvals+' طلب موافقة مستني ('+egp(d.pending_approvals_amount)+')</b><div class="row-actions" style="margin-top:8px"><button class="btn sm" id="finGoApr">راجعهم</button></div></div>';
+    box.innerHTML=h;
+    const ga=$("finGoApr"); if(ga) ga.onclick=()=>openApprovals();
+  }catch(e){ box.innerHTML=failBox("معرفناش نجيب البيانات المالية.",paintFinanceDash); }
+}
+async function openReceivables(){
+  openSheet('<h3>المستحقات على العملاء</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">مرتبة بالأقدم تأخيرًا — دي الفلوس اللي برّه.</div><div id="rcBox"><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="openFinance()">رجوع للمالية</button>');
+  try{
+    const { data }=await sb.from("os_receivables").select("*").order("days_overdue",{ascending:false});
+    const rows=data||[];
+    if(!rows.length){ $("rcBox").innerHTML='<div class="empty">مفيش مستحقات — كله محصّل ✓</div>'; return; }
+    const BUCKET={late_90plus:["متأخر +90 يوم","var(--red)"],late_60:["متأخر 31-60 يوم","#B45309"],late_30:["متأخر لحد 30 يوم","#F59E0B"],current:["لسه في الميعاد","var(--ink-soft)"],no_date:["من غير موعد","var(--ink-soft)"]};
+    const card=(r)=>'<div class="card flat"'+(r.days_overdue>0?' style="border-right:4px solid var(--red)"':'')+'>'
+      +'<div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(r.client_name||"عميل")+'</b><b style="color:var(--blue-d)">'+egp(r.remaining)+'</b></div>'
+      +'<div class="muted" style="font-size:11.5px;margin-top:3px">'+esc(r.title)+(r.project_code?" · "+esc(r.project_code):"")+(r.invoice_no?" · "+esc(r.invoice_no):"")+'</div>'
+      +'<div class="meta">'+(r.days_overdue>0?'<span style="color:var(--red);font-weight:800">متأخر '+r.days_overdue+' يوم</span>':'<span>الاستحقاق '+fmtDate(r.due_date)+'</span>')+'</div>'
+      +'<div class="row-actions" style="margin-top:8px">'+(r.client_phone?'<a class="btn sm" href="tel:'+esc(r.client_phone)+'" style="background:var(--green);color:#fff">اتصل</a>':'')+(isFinanceUser()?'<button class="btn ghost sm" data-paid="'+r.id+'" data-amt="'+r.remaining+'">سجّل تحصيل</button>':'')+'</div></div>';
+    const groups=[["late_90plus","متأخر أكتر من 90 يوم","var(--red)"],["late_60","متأخر 31-60 يوم","#B45309"],["late_30","متأخر لحد 30 يوم","#F59E0B"],["current","لسه في الميعاد","var(--ink-soft)"],["no_date","من غير موعد","var(--ink-soft)"]];
+    let h="";
+    groups.forEach(([k,lbl,color])=>{
+      const g=rows.filter(r=>r.aging_bucket===k);
+      if(g.length){
+        const tot=g.reduce((s,r)=>s+Number(r.remaining||0),0);
+        h+='<div class="sec-h" style="color:'+color+'">'+lbl+' — '+egp(tot)+' <span class="ln"></span></div>'+g.map(card).join("");
+      }
+    });
+    $("rcBox").innerHTML=h;
+    $("rcBox").querySelectorAll("[data-paid]").forEach(b=>b.onclick=()=>openCollect(b.dataset.paid,b.dataset.amt));
+  }catch(e){ $("rcBox").innerHTML=failBox("معرفناش نجيب المستحقات.",openReceivables); }
+}
+function openCollect(id,maxAmt){
+  openSheet('<h3>تسجيل تحصيل</h3>'
+    +'<div class="field"><label>المبلغ المحصّل</label><input id="clAmt" type="number" min="0" value="'+maxAmt+'"/><div class="muted" style="font-size:11.5px;margin-top:3px">المتبقي: '+egp(maxAmt)+'</div></div>'
+    +'<div class="field"><label>تاريخ التحصيل</label><input id="clDate" type="date" value="'+todayStr()+'"/></div>'
+    +'<div class="field"><label>رقم الفاتورة (اختياري)</label><input id="clInv" placeholder="INV-2026-..."/></div>'
+    +'<div class="row-actions"><button class="btn green" id="clGo">سجّل التحصيل</button><button class="btn ghost" onclick="openReceivables()">إلغاء</button></div>');
+  $("clGo").onclick=async()=>{
+    const amt=parseFloat($("clAmt").value); if(!amt||amt<=0){ toast("اكتب المبلغ","bad"); return; }
+    const btn=$("clGo"); btn.disabled=true; btn.textContent="بيسجّل…";
+    const full=amt>=parseFloat(maxAmt);
+    const { data:cur }=await sb.from("os_project_payments").select("paid_amount,amount").eq("id",id).single();
+    const newPaid=Number(cur&&cur.paid_amount||0)+amt;
+    const upd={ paid_amount:newPaid, paid_at:$("clDate").value||todayStr(), status:(newPaid>=Number(cur.amount)?"paid":"partial"), updated_at:new Date().toISOString() };
+    if($("clInv").value.trim()) upd.invoice_no=$("clInv").value.trim();
+    const { error }=await sb.from("os_project_payments").update(upd).eq("id",id);
+    if(error){ toast("معرفناش نسجّل: "+error.message,"bad"); btn.disabled=false; btn.textContent="سجّل التحصيل"; return; }
+    toast(full?"اتحصّلت كاملة ✓":"اتسجّل تحصيل جزئي ✓","ok"); openReceivables();
+  };
+}
+async function openProjectFinance(){
+  openSheet('<h3>ربحية المشاريع</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">المحصّل ناقص المصروفات — لحظيًا لكل مشروع.</div><div id="pfBox"><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="openFinance()">رجوع للمالية</button>');
+  try{
+    const { data }=await sb.from("os_project_finance").select("*").order("contract_value",{ascending:false});
+    const rows=(data||[]).filter(r=>Number(r.contract_value)>0||Number(r.planned_billing)>0);
+    if(!rows.length){ $("pfBox").innerHTML='<div class="empty">مفيش مشاريع عليها بيانات مالية لسه.</div>'; return; }
+    $("pfBox").innerHTML=rows.map(r=>{
+      const m=r.margin_pct;
+      const mColor=m==null?"var(--ink-soft)":(m>=30?"var(--green-d)":(m>=15?"#B45309":"var(--red)"));
+      const billPct=Number(r.contract_value)>0?Math.min(100,Math.round(Number(r.collected_total)/Number(r.contract_value)*100)):0;
+      return '<div class="card flat" data-pf="'+r.id+'" style="cursor:pointer">'
+        +'<div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:13px">'+esc(r.name)+'</b>'+(m!=null?'<span class="badge" style="background:transparent;color:'+mColor+';font-weight:800;padding:0">هامش '+m+'%</span>':'')+'</div>'
+        +'<div class="prog" style="margin:8px 0 4px"><i style="width:'+billPct+'%"></i></div>'
+        +'<div class="muted" style="font-size:11.5px">محصّل '+egp(r.collected_total)+' من '+egp(r.contract_value)+' ('+billPct+'%)</div>'
+        +'<div class="meta"><span>مصروفات: '+egp(r.costs_total)+'</span><span class="dot"></span><span style="color:'+(Number(r.net_profit)>=0?"var(--green-d)":"var(--red)")+';font-weight:700">صافي: '+egp(r.net_profit)+'</span>'
+        +(Number(r.outstanding)>0?'<span class="dot"></span><span style="color:var(--red)">مستحق: '+egp(r.outstanding)+'</span>':'')+'</div></div>';
+    }).join("");
+    $("pfBox").querySelectorAll("[data-pf]").forEach(el=>el.onclick=()=>openProjectDetail(el.getAttribute("data-pf")));
+  }catch(e){ $("pfBox").innerHTML=failBox("معرفناش نجيب الربحية.",openProjectFinance); }
+}
+async function openPaymentNew(){
+  let prjOpts='<option value="">اختار المشروع</option>';
+  try{ const { data:prjs }=await sb.from("os_projects").select("id,name,client_id").eq("status","open").order("created_at",{ascending:false}).limit(100);
+    prjOpts+=(prjs||[]).map(p=>'<option value="'+p.id+'" data-cl="'+(p.client_id||"")+'">'+esc(p.name)+'</option>').join(""); }catch(e){}
+  openSheet('<h3>دفعة جديدة</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">اربط الدفعة بمرحلة — والنظام هيفكّرك أول ما المشروع يوصلها.</div>'
+    +'<div class="field"><label>المشروع</label><select id="pyPrj">'+prjOpts+'</select></div>'
+    +'<div class="field"><label>وصف الدفعة</label><input id="pyTitle" placeholder="مثلاً: دفعة الرسومات التنفيذية (30%)"/></div>'
+    +'<div class="field"><label>مربوطة بمرحلة</label><select id="pyMs"><option value="">من غير ربط</option><option value="جديد">جديد</option><option value="تسعير">تسعير</option><option value="تنفيذ">تنفيذ</option><option value="تسليم">تسليم</option></select></div>'
+    +'<div class="field"><label>المبلغ (ج)</label><input id="pyAmt" type="number" min="0" inputmode="numeric"/></div>'
+    +'<div class="field"><label>الحالة</label><select id="pySt"><option value="planned">مخططة (لسه</option><option value="due">مستحقة دلوقتي</option></select></div>'
+    +'<div class="field"><label>تاريخ الاستحقاق (اختياري)</label><input id="pyDue" type="date"/></div>'
+    +'<div class="row-actions"><button class="btn green" id="pyGo">أضف الدفعة</button><button class="btn ghost" onclick="openFinance()">إلغاء</button></div>');
+  addMicTo("pyTitle"); makeSearchable("pyPrj","دوّر باسم المشروع…");
+  $("pyGo").onclick=async()=>{
+    const prj=$("pyPrj").value, title=$("pyTitle").value.trim(), amt=parseFloat($("pyAmt").value);
+    if(!prj){ toast("اختار المشروع","bad"); return; }
+    if(!title){ toast("اكتب وصف الدفعة","bad"); return; }
+    if(!amt||amt<=0){ toast("اكتب المبلغ","bad"); return; }
+    const btn=$("pyGo"); btn.disabled=true; btn.textContent="بيضيف…";
+    const sel=$("pyPrj").options[$("pyPrj").selectedIndex];
+    const clId=sel&&sel.dataset?sel.dataset.cl:null;
+    const { error }=await sb.from("os_project_payments").insert({ project_id:prj, client_id:clId||null, title, milestone:$("pyMs").value||null, amount:amt, status:$("pySt").value, due_date:$("pyDue").value||null, created_by:ME.id });
+    if(error){ toast("معرفناش نضيف: "+error.message,"bad"); btn.disabled=false; btn.textContent="أضف الدفعة"; return; }
+    toast("الدفعة اتضافت ✓","ok"); openFinance();
+  };
+}
+async function openCostNew(){
+  let prjOpts='<option value="">اختار المشروع</option>';
+  try{ const { data:prjs }=await sb.from("os_projects").select("id,name").eq("status","open").order("created_at",{ascending:false}).limit(100);
+    prjOpts+=(prjs||[]).map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join(""); }catch(e){}
+  openSheet('<h3>سجّل مصروف على مشروع</h3>'
+    +'<div class="field"><label>المشروع</label><select id="csPrj">'+prjOpts+'</select></div>'
+    +'<div class="field"><label>البند</label><input id="csTitle" placeholder="مثلاً: أتعاب مهندس إنشائي"/></div>'
+    +'<div class="field"><label>التصنيف</label><select id="csCat">'+Object.entries(COST_CAT).map(([k,v])=>'<option value="'+k+'">'+v+'</option>').join("")+'</select></div>'
+    +'<div class="field"><label>المبلغ (ج)</label><input id="csAmt" type="number" min="0" inputmode="numeric"/></div>'
+    +'<div class="field"><label>تاريخ الصرف</label><input id="csDate" type="date" value="'+todayStr()+'"/></div>'
+    +'<div class="row-actions"><button class="btn green" id="csGo">سجّل المصروف</button><button class="btn ghost" onclick="openFinance()">إلغاء</button></div>');
+  addMicTo("csTitle"); makeSearchable("csPrj","دوّر باسم المشروع…"); allowCustom("csCat","تصنيف تاني — اكتبه");
+  $("csGo").onclick=async()=>{
+    const prj=$("csPrj").value, title=$("csTitle").value.trim(), amt=parseFloat($("csAmt").value);
+    if(!prj){ toast("اختار المشروع","bad"); return; }
+    if(!title){ toast("اكتب البند","bad"); return; }
+    if(!amt||amt<=0){ toast("اكتب المبلغ","bad"); return; }
+    const btn=$("csGo"); btn.disabled=true; btn.textContent="بيسجّل…";
+    const { error }=await sb.from("os_project_costs").insert({ project_id:prj, title, category:readSelect("csCat"), amount:amt, spent_on:$("csDate").value||todayStr(), created_by:ME.id });
+    if(error){ toast("معرفناش نسجّل: "+error.message,"bad"); btn.disabled=false; btn.textContent="سجّل المصروف"; return; }
+    toast("المصروف اتسجّل ✓","ok"); openFinance();
+  };
+}
 /* ===== بينتهي قريب — تدرج 30/60/90 يوم (معيار عالمي) ===== */
 async function openExpiring(){
   openSheet('<h3>بينتهي قريب</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">عقود، تراخيص، ومستندات — مرتّبة بالأولوية عشان تلحق تجدّدها في وقتها.</div><div id="expBox"><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
@@ -3106,6 +3251,7 @@ function wireHome(el){
     else if(q==="clientfiles"){ openClientFiles(); }
     else if(q==="docs"){ openDocsVault(); }
     else if(q==="approvals"){ openApprovals(); }
+    else if(q==="finance"){ openFinance(); }
     else if(q==="expiring"){ openExpiring(); }
     else if(q==="followups"){ openFollowups(); }
     else if(q==="govcases"){ openGovCases(); }
@@ -3760,6 +3906,10 @@ function openApprove(id){
 /* ===================== REALTIME ===================== */
 /* ===================== NOTIFICATIONS (live engine) ===================== */
 const NOTIF_META={
+  billing_due:["","var(--green-d)","دفعة مستحقة"],
+  receivable_late:["","var(--red)","مستحقات متأخرة"],
+  invoice_ready:["","#B45309","جاهز للفوترة"],
+  cost_pending:["","var(--blue)","مصروف محتاج تسجيل"],
   struct_review:["","#7C3AED","مراجعة إنشائية"],
   correspondence:["","var(--blue-d)","خطاب وارد/صادر"],
   gov_case:["","var(--green-d)","معاملة حكومية"],
