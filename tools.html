@@ -846,6 +846,7 @@ async function openCorrespondence(){
     paintCorrespondence();
   };
   paintCorrespondence();
+  attachListSearch("corrSearch","coBox","دوّر بالموضوع أو الرقم المرجعي…");
 }
 async function paintCorrespondence(){
   const box=$("coBox"); if(!box) return;
@@ -982,6 +983,7 @@ async function openVisitorLog(){
     paintVisitorsToday();
   };
   paintVisitorsToday();
+  attachListSearch("visSearch","viBox","دوّر باسم الزائر…");
 }
 async function paintVisitorsToday(){
   const box=$("viBox"); if(!box) return;
@@ -1454,6 +1456,7 @@ async function openProjects(){
     };
   }
   await paintProjects();
+  attachListSearch("prjSearch","prjBox","دوّر باسم المشروع أو الكود…");
 }
 const PRJ_STAGE={"جديد":"جديد","تسعير":"تسعير","تنفيذ":"تنفيذ","تسليم":"تسليم","مغلق":"مغلق"};
 async function paintProjects(){
@@ -1824,6 +1827,7 @@ async function openGovCases(){
   $("govFilters").querySelectorAll("[data-gf]").forEach(b=>b.onclick=()=>{ _govView=b.dataset.gf; $("govFilters").querySelectorAll(".chip").forEach(x=>x.classList.toggle("on",x===b)); paintGovCases(); });
   $("govNew").onclick=()=>openGovCaseNew();
   await paintGovCases();
+  attachListSearch("govSearch","govBox","دوّر بعنوان المعاملة أو الجهة…");
 }
 async function paintGovCases(){
   const box=$("govBox"); if(!box) return;
@@ -1847,6 +1851,7 @@ async function paintGovCases(){
         +'<div class="meta"><span>'+(GOV_TYPE[c.case_type]||c.case_type)+'</span>'+(c.government_body?'<span class="dot"></span><span>'+esc(c.government_body)+'</span>':'')+(dd?'<span class="dot"></span><span>'+dd+'</span>':'')+'</div></div>';
     }).join("");
     box.querySelectorAll("[data-gov]").forEach(el=>el.onclick=()=>openGovCaseDetail(el.getAttribute("data-gov")));
+    if(box._listSearchApply) box._listSearchApply();
   }catch(e){ box.innerHTML=failBox("معرفناش نجيب المعاملات.",paintGovCases); }
 }
 async function openGovCaseNew(){
@@ -2070,6 +2075,7 @@ const OPP_STAGE_LBL={new:"جديدة",contacted:"اتكلمنا معاه",replie
 async function openFollowups(){
   openSheet('<h3>متابعات مستحقة</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">كل فرصة ليها خطوة تالية بموعد — دي اللي بتمنع العملاء إنهم يضيعوا.</div><div id="fuBox"><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
   await paintFollowups();
+  attachListSearch("fuSearch","fuBox","دوّر باسم العميل أو الخطوة…");
 }
 async function paintFollowups(){
   const box=$("fuBox"); if(!box) return;
@@ -2095,6 +2101,7 @@ async function paintFollowups(){
     });
     box.innerHTML=h;
     box.querySelectorAll("[data-fudone]").forEach(b=>b.onclick=()=>openFollowupNext(b.dataset.fudone));
+    if(box._listSearchApply) box._listSearchApply();
   }catch(e){ box.innerHTML=failBox("معرفناش نجيب المتابعات.",paintFollowups); }
 }
 function openFollowupNext(id){
@@ -2389,6 +2396,7 @@ async function openCustody(){
     toast("اتسلّمت واتسجلت","ok"); paintCustody(); $("cuItem").value=""; $("cuSer").value="";
   };
   await paintCustody();
+  attachListSearch("cuSearch","cuBox","دوّر بالصنف أو اسم الموظف…");
 }
 async function paintCustody(){
   try{
@@ -3495,6 +3503,42 @@ function showVoiceUndo(ta, prevValue){
 /*مايك في أي حتة: يحقن زرار صوت جنب أي حقل بسطر واحد */
 let _micSeq=0;
 /* ===== بحث داخل أي قايمة طويلة — بيتفعّل تلقائي لو العناصر كتير ===== */
+/* ===== بحث موحّد داخل أي شاشة قوايم — بيفلتر الكروت المعروضة ===== */
+function attachListSearch(inputId, boxId, placeholder){
+  const box=$(boxId); if(!box) return;
+  const host=box.parentNode;
+  if(document.getElementById(inputId)) return;
+  const inp=document.createElement("input");
+  inp.id=inputId; inp.type="search"; inp.placeholder=placeholder||"دوّر…";
+  inp.setAttribute("inputmode","search");
+  inp.style.cssText="width:100%;padding:10px 13px;border:1.5px solid var(--line);border-radius:12px;font-family:inherit;font-size:13.5px;margin-bottom:10px";
+  host.insertBefore(inp,box);
+  const apply=()=>{
+    const q=inp.value.trim();
+    let shown=0, hiddenHeads=[];
+    [...box.children].forEach(el=>{
+      if(el.classList&&el.classList.contains("sec-h")){ hiddenHeads.push(el); el.style.display=""; return; }
+      const txt=el.textContent||"";
+      const ok=!q||txt.includes(q);
+      el.style.display=ok?"":"none";
+      if(ok) shown++;
+    });
+    /* اخفي عناوين الأقسام اللي مبقاش تحتها حاجة */
+    hiddenHeads.forEach(h=>{
+      let any=false;
+      let n=h.nextElementSibling;
+      while(n&&!(n.classList&&n.classList.contains("sec-h"))){ if(n.style.display!=="none"){ any=true; break; } n=n.nextElementSibling; }
+      h.style.display=any?"":"none";
+    });
+    let empty=document.getElementById(inputId+"__none");
+    if(!shown&&q){
+      if(!empty){ empty=document.createElement("div"); empty.id=inputId+"__none"; empty.className="empty"; empty.textContent="مفيش نتايج للبحث ده."; box.appendChild(empty); }
+      empty.style.display="";
+    } else if(empty) empty.style.display="none";
+  };
+  inp.oninput=apply;
+  box._listSearchApply=apply;   /* عشان يتنادى بعد إعادة الرسم */
+}
 function makeSearchable(selectId, placeholder){
   const sel=$(selectId); if(!sel) return;
   if(sel.options.length<8) return;              /* القوايم القصيرة متحتاجش بحث */
