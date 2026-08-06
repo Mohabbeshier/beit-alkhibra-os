@@ -1080,7 +1080,7 @@ function renderEmployeeHome(d){
   body+=`<div class="card" style="background:linear-gradient(135deg,#E3F2FD,#E8F5E9);border:none">
     <b>محتاج تعمل حاجة؟ اتكلم بس</b>
     <div class="muted" style="font-size:12.5px;margin:4px 0 12px">مش لازم تكتب — دوس واتكلم والنظام يفهمك.</div>
-    <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button><button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="newreq">طلب</button>${PROFILE.position==="gov"?'<button class="btn sm" data-quick="govcases">المعاملات الحكومية</button>':""}${PROFILE.dept==="reception"?'<button class="btn sm" data-quick="visitor">تسجيل زائر</button><button class="btn ghost sm" data-quick="call">تسجيل مكالمة</button><button class="btn ghost sm" data-quick="corr">الوارد والصادر</button><button class="btn ghost sm" data-quick="clientfiles">ملفات العملاء</button><button class="btn ghost sm" data-quick="docs">خزنة المستندات</button><button class="btn ghost sm" data-quick="attlog">مين موجود النهاردة</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}</div></div>`;
+    <div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك</button><button class="btn sm" data-quick="event">سجّل موعد</button><button class="btn ghost sm" data-quick="leaves">الإجازات</button><button class="btn ghost sm" data-quick="newreq">طلب</button>${PROFILE.position==="gov"?'<button class="btn sm" data-quick="govcases">المعاملات الحكومية</button><button class="btn ghost sm" data-quick="expiring">تراخيص بتنتهي</button>':""}${PROFILE.dept==="reception"?'<button class="btn sm" data-quick="visitor">تسجيل زائر</button><button class="btn ghost sm" data-quick="call">تسجيل مكالمة</button><button class="btn ghost sm" data-quick="corr">الوارد والصادر</button><button class="btn ghost sm" data-quick="clientfiles">ملفات العملاء</button><button class="btn ghost sm" data-quick="docs">خزنة المستندات</button><button class="btn ghost sm" data-quick="attlog">مين موجود النهاردة</button>':""}${canSeeLeads()?'<button class="btn ghost sm" data-quick="leads">📥 الليدز</button>':""}</div></div>`;
   body+=`<div class="sec-h">المهام اللي عليك <span class="ln"></span></div>`;
   if(myTasks.length){
     body+=myTasks.slice(0,6).map(t=>`<button class="card flat" data-task="${t.id}" style="width:100%;text-align:right;cursor:pointer${t.deadline&&new Date(t.deadline)<new Date()?';border-right:4px solid var(--red)':''}"><b>${esc(t.title)}</b><div class="meta">${t.deadline?`<span>${fmtDate(t.deadline)}</span>`:`<span class="muted">من غير موعد</span>`}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}<span class="dot"></span><span class="muted">${t.progress||0}%</span></div></button>`).join("");
@@ -2505,10 +2505,12 @@ async function openExpiring(){
     const rows=data||[];
     if(!rows.length){ $("expBox").innerHTML='<div class="empty">مفيش حاجة بتنتهي خلال 90 يوم — مطمّن.</div>'; return; }
     const KIND_LBL={document:"مستند",contract:"عقد عمل",probation:"فترة اختبار"};
+    const canGov=isOwnerOps()||PROFILE.position==="gov";
     const card=(x)=>{
       const d=x.days_left!=null?x.days_left:Math.ceil((new Date(x.expires)-Date.now())/86400000);
       const badge=d<=7?"b-red":d<=30?"b-amber":"b-blue";
-      return '<div class="card flat"'+(d<=7?' style="border-right:4px solid var(--red)"':'')+'><div style="display:flex;gap:8px;align-items:center"><b style="flex:1">'+esc(x.item)+'</b><span class="badge '+badge+'">'+(d<=0?"انتهى!":"باقي "+d+" يوم")+'</span></div><div class="meta"><span>'+(KIND_LBL[x.kind]||esc(x.kind||""))+'</span>'+(x.dept&&DEPT_BY_KEY[x.dept]?'<span class="dot"></span><span>'+esc(DEPT_BY_KEY[x.dept].name)+'</span>':'')+'<span class="dot"></span><span>'+fmtDate(x.expires)+'</span></div></div>';
+      const govBtn=(canGov&&x.kind==="document")?'<div class="row-actions" style="margin-top:8px"><button class="btn ghost sm" data-mkgov="'+esc(x.item)+'" data-days="'+d+'">حوّلها لمعاملة تجديد</button></div>':"";
+      return '<div class="card flat"'+(d<=7?' style="border-right:4px solid var(--red)"':'')+'><div style="display:flex;gap:8px;align-items:center"><b style="flex:1">'+esc(x.item)+'</b><span class="badge '+badge+'">'+(d<=0?"انتهى!":"باقي "+d+" يوم")+'</span></div><div class="meta"><span>'+(KIND_LBL[x.kind]||esc(x.kind||""))+'</span>'+(x.dept&&DEPT_BY_KEY[x.dept]?'<span class="dot"></span><span>'+esc(DEPT_BY_KEY[x.dept].name)+'</span>':'')+'<span class="dot"></span><span>'+fmtDate(x.expires)+'</span></div>'+govBtn+'</div>';
     };
     const groups=[["urgent","خلال 30 يوم — لازم تتحرك دلوقتي","var(--red)"],["soon","خلال 60 يوم — جهّز نفسك","#B45309"],["watch","خلال 90 يوم — تحت النظر","var(--ink-soft)"]];
     let h="";
@@ -2517,6 +2519,21 @@ async function openExpiring(){
       if(g.length) h+='<div class="sec-h" style="color:'+color+'">'+label+' ('+g.length+') <span class="ln"></span></div>'+g.map(card).join("");
     });
     $("expBox").innerHTML=h||rows.map(card).join("");
+    $("expBox").querySelectorAll("[data-mkgov]").forEach(b=>b.onclick=async()=>{
+      const item=b.dataset.mkgov, days=parseInt(b.dataset.days,10)||30;
+      b.disabled=true; b.textContent="بينشئ…";
+      const d=new Date(); d.setDate(d.getDate()+Math.max(7,Math.min(days,60)));
+      const target=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+      const { error }=await sb.from("os_gov_cases").insert({
+        title:"تجديد: "+item, case_type:"renewal", dept:PROFILE.dept||null,
+        status:"new", progress:0, target_date:target,
+        assigned_to:ME.id, assigned_to_name:PROFILE.name, created_by:ME.id, created_by_name:PROFILE.name,
+        notes:"اتعملت أوتوماتيك من تنبيه الانتهاء — باقي "+days+" يوم"
+      });
+      if(error){ toast("معرفناش ننشئ: "+error.message,"bad"); b.disabled=false; b.textContent="حوّلها لمعاملة تجديد"; return; }
+      toast("اتعملت معاملة تجديد ✓ — موعدها "+target,"ok");
+      b.textContent="✓ اتعملت"; b.disabled=true;
+    });
   }catch(e){ $("expBox").innerHTML=failBox("معرفناش نجيبها.",openExpiring); }
 }
 /* ===== البدلاء ===== */
