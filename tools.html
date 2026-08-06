@@ -750,13 +750,24 @@ async function openAttendanceLog(){
     const scope=wide?PROFILES:PROFILES.filter(p=>p.dept===PROFILE.dept);
     const { data }=await sb.from("os_attendance").select("*").eq("work_date",todayStr());
     const byUser={}; (data||[]).forEach(r=>byUser[r.user_id]=r);
-    const rows=scope.filter(p=>p.id!==ME.id||true).map(p=>{
+    const inNow=[], leftNow=[], notYet=[];
+    scope.forEach(p=>{
       const r=byUser[p.id];
-      const st=!r?'<span class="badge b-grey">لسه</span>':!r.check_out?'<span class="badge b-green">حضر '+timeStr(r.check_in)+'</span>':'<span class="badge b-blue">انصرف '+timeStr(r.check_out)+'</span>';
-      return '<div class="card flat"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(p.name)+'</b>'+st+'</div>'
-        +(wide?'<div class="muted" style="font-size:11px;margin-top:2px">'+esc((DEPT_BY_KEY[p.dept]&&DEPT_BY_KEY[p.dept].name)||p.dept||"—")+'</div>':'')+'</div>';
-    }).join("");
-    $("attLogBox").innerHTML=rows||'<div class="empty">مفيش موظفين.</div>';
+      if(!r) notYet.push({p});
+      else if(!r.check_out) inNow.push({p,r});
+      else leftNow.push({p,r});
+    });
+    const card=(o,st)=>'<div class="card flat"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(o.p.name)+'</b>'+st+'</div>'
+      +(wide?'<div class="muted" style="font-size:11px;margin-top:2px">'+esc((DEPT_BY_KEY[o.p.dept]&&DEPT_BY_KEY[o.p.dept].name)||o.p.dept||"—")+'</div>':'')+'</div>';
+    let h='<div class="card flat" style="background:linear-gradient(135deg,#E8F5E9,#E3F2FD);border:none;margin-bottom:10px"><div style="display:flex;gap:14px;text-align:center">'
+      +'<div style="flex:1"><b style="font-size:19px;color:var(--green-d)">'+inNow.length+'</b><div class="muted" style="font-size:11px">موجود دلوقتي</div></div>'
+      +'<div style="flex:1"><b style="font-size:19px;color:var(--blue)">'+leftNow.length+'</b><div class="muted" style="font-size:11px">انصرف</div></div>'
+      +'<div style="flex:1"><b style="font-size:19px;color:var(--muted)">'+notYet.length+'</b><div class="muted" style="font-size:11px">لسه</div></div>'
+      +'</div></div>';
+    if(inNow.length) h+='<div class="sec-h" style="color:var(--green-d)">موجودين دلوقتي <span class="ln"></span></div>'+inNow.map(o=>card(o,'<span class="badge b-green">من '+timeStr(o.r.check_in)+'</span>')).join("");
+    if(leftNow.length) h+='<div class="sec-h">انصرفوا <span class="ln"></span></div>'+leftNow.map(o=>card(o,'<span class="badge b-blue">'+timeStr(o.r.check_out)+'</span>')).join("");
+    if(notYet.length) h+='<div class="sec-h">لسه ما سجّلوش <span class="ln"></span></div>'+notYet.map(o=>card(o,'<span class="badge b-grey">لسه</span>')).join("");
+    $("attLogBox").innerHTML=h||'<div class="empty">مفيش موظفين.</div>';
   }catch(e){ $("attLogBox").innerHTML=failBox("معرفناش نجيب السجل.",openAttendanceLog); }
 }
 /* ===== الاستقبال — سجل الزوار ===== */
@@ -989,20 +1000,31 @@ async function paintVisitorsToday(){
   const box=$("viBox"); if(!box) return;
   try{
     const start=new Date(); start.setHours(0,0,0,0);
-    const { data }=await sb.from("os_visitors").select("*").gte("checked_in_at",start.toISOString()).order("checked_in_at",{ascending:false}).limit(30);
-    const rows=data||[];
-    if(!rows.length){ box.innerHTML='<div class="empty">مفيش زوار لسه النهاردة.</div>'; return; }
-    box.innerHTML=rows.map(v=>{
+    /* زوار النهاردة + أي زائر لسه مفتوح من أيام فاتت (عشان ميفضلش معلّق للأبد) */
+    const [todayRes, openRes]=await Promise.all([
+      sb.from("os_visitors").select("*").gte("checked_in_at",start.toISOString()).order("checked_in_at",{ascending:false}).limit(30),
+      sb.from("os_visitors").select("*").is("checked_out_at",null).lt("checked_in_at",start.toISOString()).order("checked_in_at",{ascending:false}).limit(20)
+    ]);
+    const rows=todayRes.data||[], stale=openRes.data||[];
+    if(!rows.length&&!stale.length){ box.innerHTML='<div class="empty">مفيش زوار لسه النهاردة.</div>'; return; }
+    const card=(v,isStale)=>{
       const out=v.checked_out_at?'<span class="badge b-blue">خرج '+timeStr(v.checked_out_at)+'</span>':'<button class="btn ghost sm" data-viout="'+v.id+'">سجّل خروج</button>';
-      return '<div class="card flat"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(v.visitor_name)+'</b>'+out+'</div>'
-        +'<div class="muted" style="font-size:11.5px;margin-top:2px">'+(v.host_name?"جاي يقابل: "+esc(v.host_name)+" · ":"")+"دخل "+timeStr(v.checked_in_at)+(v.purpose?" · "+esc(v.purpose):"")+'</div></div>';
-    }).join("");
+      const dayLbl=isStale?fmtDate(v.checked_in_at)+" · ":"";
+      return '<div class="card flat"'+(isStale?' style="border-right:4px solid #F59E0B"':'')+'><div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(v.visitor_name)+'</b>'+out+'</div>'
+        +'<div class="muted" style="font-size:11.5px;margin-top:2px">'+(v.host_name?"جاي يقابل: "+esc(v.host_name)+" · ":"")+dayLbl+"دخل "+timeStr(v.checked_in_at)+(v.purpose?" · "+esc(v.purpose):"")+'</div></div>';
+    };
+    let h="";
+    if(stale.length) h+='<div class="sec-h" style="color:#B45309">لسه مفتوحين من أيام فاتت ('+stale.length+') <span class="ln"></span></div>'+stale.map(v=>card(v,true)).join("");
+    if(rows.length) h+=(stale.length?'<div class="sec-h">النهاردة <span class="ln"></span></div>':"")+rows.map(v=>card(v,false)).join("");
+    else if(stale.length) h+='<div class="empty">مفيش زوار لسه النهاردة.</div>';
+    box.innerHTML=h;
     box.querySelectorAll("[data-viout]").forEach(b=>b.onclick=async()=>{
       b.disabled=true; b.textContent="…";
       const { error }=await sb.from("os_visitors").update({ checked_out_at:new Date().toISOString() }).eq("id",b.dataset.viout);
       if(error){ toast("معرفناش نسجّل الخروج","bad"); b.disabled=false; b.textContent="سجّل خروج"; return; }
       paintVisitorsToday();
     });
+    if(box._listSearchApply) box._listSearchApply();
   }catch(e){ box.innerHTML=failBox("معرفناش نجيب سجل الزوار.",paintVisitorsToday); }
 }
 function renderManagerHome(d){
