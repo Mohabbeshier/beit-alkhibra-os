@@ -2997,6 +2997,106 @@ async function receiveJob(routingId, prjId){
   toast("اتسجّل الاستلام \u2713","ok"); openRouteJob(prjId);
 }
 
+/* === ربحية الملفات (الجديدة) === */
+async function openProjectFinance(){
+  openSheet('<h3>ربحية الملفات</h3>'
+    +'<div class="muted" style="margin:-6px 0 10px;font-size:12px">التكلفة = مصروفات مباشرة + فواتير موردين.</div>'
+    +'<div class="field"><input id="pfQ" placeholder="دوّر بكود الملف أو العميل…"/></div>'
+    +'<div id="pfBox"><div class="skel"></div><div class="skel"></div></div>'
+    +'<button class="btn ghost" style="margin-top:10px" onclick="openFinance()">رجوع للمالية</button>');
+  let R=[];
+  try{
+    const { data }=await sb.from("os_job_profit").select("*").eq("archived",false)
+      .order("contracted",{ascending:false}).limit(200);
+    R=(data||[]).filter(x=>x.job_code);
+  }catch(e){ $("pfBox").innerHTML='<div class="empty">تعذّر التحميل.</div>'; return; }
+  const paint=()=>{
+    const q=($("pfQ").value||"").trim().toLowerCase();
+    const F=R.filter(x=>!q||((x.job_code||"")+" "+(x.name||"")+" "+(x.client_name||"")).toLowerCase().includes(q));
+    if(!F.length){ $("pfBox").innerHTML='<div class="empty">مفيش ملفات عليها حركة مالية.</div>'; return; }
+    const tc=F.reduce((a,b)=>a+Number(b.contracted||0),0);
+    const te=F.reduce((a,b)=>a+Number(b.expenses||0),0);
+    $("pfBox").innerHTML='<div class="card flat" style="display:flex;gap:6px;text-align:center">'
+      +'<div style="flex:1"><b style="display:block;font-size:14px">'+egp(tc)+'</b>'
+      +'<span class="muted" style="font-size:10.5px">متعاقد</span></div>'
+      +'<div style="flex:1"><b style="display:block;font-size:14px;color:var(--red)">'+egp(te)+'</b>'
+      +'<span class="muted" style="font-size:10.5px">تكلفة</span></div>'
+      +'<div style="flex:1"><b style="display:block;font-size:14px;color:'
+      +(tc-te>=0?'var(--green-d)':'var(--red)')+'">'+egp(tc-te)+'</b>'
+      +'<span class="muted" style="font-size:10.5px">الربح</span></div></div>'
+      +F.map(x=>{
+        const m=x.margin_pct;
+        const mc=m==null?"var(--ink-soft)":(m>=30?"var(--green-d)":(m>=15?"#B45309":"var(--red)"));
+        const pct=Number(x.contracted)>0?Math.min(100,Math.round(Number(x.collected)/Number(x.contracted)*100)):0;
+        return '<div class="card flat" style="cursor:pointer" onclick="paintProjectDetail(\''+x.project_id+'\')">'
+        +'<div style="display:flex;align-items:center;gap:8px">'
+        +'<b style="flex:1;min-width:0;font-size:12.5px">'+esc(x.job_code||"")+'</b>'
+        +(m!=null?'<span style="flex:none;color:'+mc+';font-weight:800;font-size:12px">هامش '+m+'%</span>':'')+'</div>'
+        +'<div class="muted" style="font-size:11px;margin-top:2px">'+esc(x.name||"")
+        +(x.client_name?' · '+esc(x.client_name):'')+'</div>'
+        +'<div class="prog" style="margin:7px 0 4px"><i style="width:'+pct+'%"></i></div>'
+        +'<div class="muted" style="font-size:11px">محصّل '+egp(x.collected)+' من '+egp(x.contracted)+' ('+pct+'%)</div>'
+        +'<div class="meta" style="font-size:11px"><span>مباشر '+egp(x.direct_costs)+'</span>'
+        +(Number(x.supplier_bills)?'<span class="dot"></span><span>موردين '+egp(x.supplier_bills)+'</span>':'')
+        +'<span class="dot"></span><span style="color:'+(Number(x.net_expected)>=0?'var(--green-d)':'var(--red)')
+        +';font-weight:700">ربح '+egp(x.net_expected)+'</span>'
+        +(Number(x.balance_due)>0?'<span class="dot"></span><span style="color:var(--red)">مستحق '+egp(x.balance_due)+'</span>':'')
+        +(Number(x.supplier_due)>0?'<span class="dot"></span><span style="color:#B45309">للموردين '+egp(x.supplier_due)+'</span>':'')
+        +'</div></div>';
+      }).join("");
+  };
+  $("pfQ").oninput=paint; paint();
+}
+
+/* === سجل الموردين === */
+async function openSuppliers(){
+  if(!isFinanceUser()&&!isOwnerOps()){ toast("الموردين للمالية والإدارة","bad"); return; }
+  openSheet('<h3>الموردين</h3><div id="spBox"><div class="skel"></div></div>'
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" onclick="addSupplier()">\u002b مورد</button>'
+    +'<button class="btn sm" onclick="openPayables()">الفواتير</button>'
+    +'<button class="btn ghost sm" onclick="openFinance()">رجوع</button></div>');
+  await paintSuppliers();
+}
+async function paintSuppliers(){
+  const box=$("spBox"); if(!box) return;
+  try{
+    const { data }=await sb.from("os_supplier_ledger").select("*").order("outstanding",{ascending:false});
+    const R=data||[];
+    if(!R.length){ box.innerHTML='<div class="empty">مفيش موردين متسجّلين.</div>'; return; }
+    box.innerHTML='<div class="card flat">'+R.map(x=>
+      '<div style="padding:8px 0;border-bottom:1px solid #eef2f7">'
+      +'<div style="display:flex;align-items:center;gap:8px">'
+      +'<b style="flex:1;min-width:0;font-size:12.5px">'+esc(x.name||"")+'</b>'
+      +(Number(x.outstanding)>0?'<span style="flex:none;font-weight:800;font-size:12.5px;color:var(--red)">'
+        +egp(x.outstanding)+'</span>':'<span class="muted" style="flex:none;font-size:11px">مسدّد</span>')+'</div>'
+      +'<div class="muted" style="font-size:10.5px;margin-top:2px">'
+      +(x.trade?esc(x.trade)+' · ':'')+(x.phone?esc(x.phone)+' · ':'')
+      +x.invoices+' فاتورة · إجمالي '+egp(x.billed)+'</div>'
+      +(Number(x.overdue)>0?'<div style="font-size:11px;color:var(--red);font-weight:700;margin-top:2px">متأخر '+egp(x.overdue)+'</div>':'')
+      +'<div class="row-actions" style="margin-top:5px">'
+      +'<button class="btn ghost sm" onclick="editSupplier(\''+x.supplier_id+'\',\''+esc(x.name||"")+'\',\''
+        +esc(x.phone||"")+'\',\''+esc(x.trade||"")+'\')">عدّل</button></div>'
+      +'</div>').join("")+'</div>';
+  }catch(e){ box.innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+async function addSupplier(){
+  const nm=prompt("اسم المورد؟"); if(!nm||!nm.trim()) return;
+  const ph=prompt("التليفون؟ (اختياري)")||null;
+  const tr=prompt("التخصص؟ (مثلاً: رفع مساحي)")||null;
+  const { error }=await sb.from("os_suppliers").insert({ name:nm.trim(), phone:ph, trade:tr, created_by:ME.id });
+  if(error){ toast(/duplicate|unique/i.test(error.message)?"المورد ده موجود":error.message,"bad"); return; }
+  toast("المورد اتضاف \u2713","ok"); paintSuppliers();
+}
+async function editSupplier(id, nm, ph, tr){
+  const n2=prompt("الاسم؟", nm); if(n2===null) return;
+  const p2=prompt("التليفون؟", ph||""); if(p2===null) return;
+  const t2=prompt("التخصص؟", tr||""); if(t2===null) return;
+  const { error }=await sb.from("os_suppliers").update({
+    name:(n2.trim()||nm), phone:p2.trim()||null, trade:t2.trim()||null }).eq("id",id);
+  if(error){ toast(/duplicate|unique/i.test(error.message)?"الاسم ده موجود":error.message,"bad"); return; }
+  toast("اتعدّل \u2713","ok"); paintSuppliers();
+}
+
 /* === شجرة اختيار الملف: عام أو قطعة ← ملف === */
 let _pickCB=null, _pickTree=null, _pickRestore=null, _pickRebind=null;
 async function loadJobTree(){
@@ -4424,7 +4524,7 @@ async function openFinance(){
   $("finRecv").onclick=()=>openReceivables();
   $("finProj").onclick=()=>openProjectFinance();
   const ft=$("finTr");    if(ft) ft.onclick=()=>openTreasury();
-  const fp=$("finPay");   if(fp) fp.onclick=()=>openPayables();
+  const fp=$("finPay");   if(fp) fp.onclick=()=>openSuppliers();
   const fb=$("finBooks"); if(fb) fb.onclick=()=>openBooks();
   const fAr=$("finArch");  if(fAr) fAr.onclick=()=>openFinArchive();
   const fa=$("finAdv");   if(fa) fa.onclick=()=>openAdvances();
@@ -4493,26 +4593,6 @@ function openCollect(id,maxAmt){
     if(error){ toast("معرفناش نسجّل: "+error.message,"bad"); btn.disabled=false; btn.textContent="سجّل التحصيل"; return; }
     toast(full?"اتحصّلت كاملة ✓":"اتسجّل تحصيل جزئي ✓","ok"); openReceivables();
   };
-}
-async function openProjectFinance(){
-  openSheet('<h3>ربحية المشاريع</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">المحصّل ناقص المصروفات — لحظيًا لكل مشروع.</div><div id="pfBox"><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="openFinance()">رجوع للمالية</button>');
-  try{
-    const { data }=await sb.from("os_project_finance").select("*").order("contract_value",{ascending:false});
-    const rows=(data||[]).filter(r=>Number(r.contract_value)>0||Number(r.planned_billing)>0);
-    if(!rows.length){ $("pfBox").innerHTML='<div class="empty">مفيش مشاريع عليها بيانات مالية لسه.</div>'; return; }
-    $("pfBox").innerHTML=rows.map(r=>{
-      const m=r.margin_pct;
-      const mColor=m==null?"var(--ink-soft)":(m>=30?"var(--green-d)":(m>=15?"#B45309":"var(--red)"));
-      const billPct=Number(r.contract_value)>0?Math.min(100,Math.round(Number(r.collected_total)/Number(r.contract_value)*100)):0;
-      return '<div class="card flat" data-pf="'+r.id+'" style="cursor:pointer">'
-        +'<div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:13px">'+esc(r.name)+'</b>'+(m!=null?'<span class="badge" style="background:transparent;color:'+mColor+';font-weight:800;padding:0">هامش '+m+'%</span>':'')+'</div>'
-        +'<div class="prog" style="margin:8px 0 4px"><i style="width:'+billPct+'%"></i></div>'
-        +'<div class="muted" style="font-size:11.5px">محصّل '+egp(r.collected_total)+' من '+egp(r.contract_value)+' ('+billPct+'%)</div>'
-        +'<div class="meta"><span>مصروفات: '+egp(r.costs_total)+'</span><span class="dot"></span><span style="color:'+(Number(r.net_profit)>=0?"var(--green-d)":"var(--red)")+';font-weight:700">صافي: '+egp(r.net_profit)+'</span>'
-        +(Number(r.outstanding)>0?'<span class="dot"></span><span style="color:var(--red)">مستحق: '+egp(r.outstanding)+'</span>':'')+'</div></div>';
-    }).join("");
-    $("pfBox").querySelectorAll("[data-pf]").forEach(el=>el.onclick=()=>openProjectDetail(el.getAttribute("data-pf")));
-  }catch(e){ $("pfBox").innerHTML=failBox("معرفناش نجيب الربحية.",openProjectFinance); }
 }
 async function openPaymentNew(){
   let prjOpts='<option value="">اختار الملف</option>';
