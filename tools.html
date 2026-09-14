@@ -2214,7 +2214,9 @@ async function paintProjectDetail(id){
   try{
     const { data:prj, error }=await sb.from("os_projects").select("*").eq("id",id).single();
     if(error||!prj){ $("pdBox").innerHTML=failBox("معرفناش نجيب المشروع.",()=>paintProjectDetail(id)); return; }
-    const canUp = isOwnerOps() || PROFILE.dept===prj.dept || PROFILE.dept==="engineering";
+    /* المرفقات مفتوحة لكل الفريق — المحاسب بيرفع فواتير، القانوني عقود،
+       والمهندس رسومات. القفل على القسم كان بيمنع المالية من ملف هندسي. */
+    const canUp = PROFILE.role !== "employee" || PROFILE.dept===prj.dept || PROFILE.dept==="engineering";
     /* تسجيل إن حد فتح الملف — مرة كل ساعة للشخص الواحد */
     try{ sb.rpc("os_log_job_view",{ p_project:id }); }catch(e){}
     const [{ data:files },{ data:ptasks },{ data:jstages },{ data:jsum }]=await Promise.all([
@@ -3194,7 +3196,7 @@ const PAY_METHOD={cash:"كاش",transfer:"تحويل",cheque:"شيك",instapay:"
 async function openJobAccount(id){
   openSheet('<h3>كشف حساب الملف</h3><div id="jaBox"><div class="skel"></div><div class="skel"></div></div>'
     +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" onclick="addCashIn(\''+id+'\')">\u002b تحصيل كاش</button>'
-    +'<button class="btn ghost sm" onclick="paintJob360(\''+id+'\')">رجوع للملف</button></div>');
+    +'<button class="btn ghost sm" onclick="openProjectDetail(\''+id+'\')">رجوع للملف</button></div>');
   try{
     const [{ data:sum },{ data:mv }]=await Promise.all([
       sb.from("os_job_account_summary").select("*").eq("project_id",id).maybeSingle(),
@@ -3427,7 +3429,8 @@ async function openProjectFinance(){
   try{
     const { data }=await sb.from("os_job_profit").select("*").eq("archived",false)
       .order("contracted",{ascending:false}).limit(200);
-    R=(data||[]).filter(x=>x.job_code);
+    /* الملف من غير قطعة مالوش job_code — كان بيختفي من الربحية بالكامل */
+    R=(data||[]);
   }catch(e){ $("pfBox").innerHTML='<div class="empty">تعذّر التحميل.</div>'; return; }
   const paint=()=>{
     const q=($("pfQ").value||"").trim().toLowerCase();
@@ -3447,9 +3450,9 @@ async function openProjectFinance(){
         const m=x.margin_pct;
         const mc=m==null?"var(--ink-soft)":(m>=30?"var(--green-d)":(m>=15?"#B45309":"var(--red)"));
         const pct=Number(x.contracted)>0?Math.min(100,Math.round(Number(x.collected)/Number(x.contracted)*100)):0;
-        return '<div class="card flat" style="cursor:pointer" onclick="paintProjectDetail(\''+x.project_id+'\')">'
+        return '<div class="card flat" style="cursor:pointer" onclick="openProjectDetail(\''+x.project_id+'\')">'
         +'<div style="display:flex;align-items:center;gap:8px">'
-        +'<b style="flex:1;min-width:0;font-size:12.5px">'+esc(x.job_code||"")+'</b>'
+        +'<b style="flex:1;min-width:0;font-size:12.5px">'+esc(x.job_code||x.name||"—")+'</b>'
         +(m!=null?'<span style="flex:none;color:'+mc+';font-weight:800;font-size:12px">هامش '+m+'%</span>':'')+'</div>'
         +'<div class="muted" style="font-size:11px;margin-top:2px">'+esc(x.name||"")
         +(x.client_name?' · '+esc(x.client_name):'')+'</div>'
@@ -3766,7 +3769,7 @@ async function openRouteJob(id, jobCode){
     +'<div class="field"><label>لشخص معيّن؟</label><select id="rtWho">'+who+'</select></div>'
     +'<div class="field"><label>السبب</label><input id="rtWhy" placeholder="مثلاً: محتاج مراجعة مالية قبل التقديم"/></div>'
     +'<div class="row-actions"><button class="btn green" id="rtGo">وجّه الملف</button>'
-    +'<button class="btn ghost" onclick="paintProjectDetail(\''+id+'\')">إلغاء</button></div>'
+    +'<button class="btn ghost" onclick="openProjectDetail(\''+id+'\')">إلغاء</button></div>'
     +(L.length?'<div class="sec-h">سجل التوجيه <span class="ln"></span></div><div class="card flat">'
       +L.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #eef2f7">'
         +'<div style="font-size:12.5px">'+esc(x.from_dept_name||"\u2014")+' \u2190 '+esc(x.to_dept_name||"")
@@ -3802,7 +3805,7 @@ async function quickCash(id, jobCode){
     +'<option value="instapay">إنستاباي</option><option value="cheque">شيك</option></select></div>'
     +'<div class="field"><label>تصنيف الإيراد</label><select id="qcCat"></select></div>'
     +'<div class="row-actions"><button class="btn green" id="qcGo">سجّل التحصيل</button>'
-    +'<button class="btn ghost" onclick="paintProjectDetail(\''+id+'\')">إلغاء</button></div>');
+    +'<button class="btn ghost" onclick="openProjectDetail(\''+id+'\')">إلغاء</button></div>');
   addMicTo("qcTitle");
   catOptions("income").then(o=>{ const c=$("qcCat"); if(c) c.innerHTML=o; });
   $("qcGo").onclick=async()=>{
@@ -4340,9 +4343,12 @@ async function paintJob360(id, mountId){
       +'</div>';
 
     /* كشف الحساب والتوجيه */
-    h+='<div class="row-actions" style="margin-bottom:10px">'
-      +'<button class="btn sm" onclick="openJobAccount(\''+id+'\')">كشف الحساب</button>'
-      +'<button class="btn ghost sm" onclick="openRouteJob(\''+id+'\')">وجّه لقسم</button></div>';
+    h+='<div class="act-grid" style="margin-bottom:10px">'
+      +(canFinRead()?'<button class="btn sm" onclick="openJobAccount(\''+id+'\')">كشف الحساب</button>':'')
+      +'<button class="btn ghost sm" onclick="openRouteJob(\''+id+'\')">وجّه لقسم</button>'
+      +(isFinanceUser()?'<button class="btn ghost sm" onclick="openCostNew(\''+id+'\')">سجّل مصروف</button>':'')
+      +((isOwnerOps()||PROFILE.role==="manager")?'<button class="btn ghost sm" onclick="openWorkOrderNew({id:\''+id+'\',job_code:\''+esc(j.job_code||"")+'\',name:\''+esc((j.name||"").replace(/'/g,""))+'\'})">أمر شغل</button>':'')
+      +'</div>';
 
     /* وعد العميل وتوقعاته */
     {
@@ -4359,10 +4365,12 @@ async function paintJob360(id, mountId){
     }
 
     /* حساب الملف */
-    h+='<div class="sec-h">حساب الملف <span class="ln"></span>'
-      +'<button class="btn ghost sm" onclick="quickCash(\''+id+'\',\''+esc(j.job_code||"")+'\')">\u002b تحصيل</button></div>'
-      +'<div id="acctBox"><div class="skel"></div></div>';
-    setTimeout(()=>paintJobAccount(id,"acctBox"), 60);
+    if(canFinRead()){
+      h+='<div class="sec-h">حساب الملف <span class="ln"></span>'
+        +(isFinanceUser()?'<button class="btn ghost sm" onclick="quickCash(\''+id+'\',\''+esc(j.job_code||"")+'\')">\u002b تحصيل</button>':'')
+        +'</div><div id="acctBox"><div class="skel"></div></div>';
+      setTimeout(()=>paintJobAccount(id,"acctBox"), 60);
+    }
 
     /* التوجيه للأقسام */
     h+='<div class="card flat" style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
@@ -5131,7 +5139,7 @@ async function openPaymentNew(){
   }
   bindPy();
 }
-async function openCostNew(){
+async function openCostNew(preJobId){
   /* المصروف نوعين: على ملف (رسوم، مقاول) أو عام (إيجار، كهرباء، رواتب) */
   let prjOpts='<option value="">\u2014 مصروف عام (مش على ملف) \u2014</option>';
   let catOpts='';
@@ -5147,7 +5155,9 @@ async function openCostNew(){
   catOpts+='<option value="__new">\u002b تصنيف جديد…</option>';
   openSheet('<h3>سجّل مصروف</h3>'
     +'<div class="muted" style="margin:-6px 0 12px;font-size:12px">لو المصروف على ملف معيّن اختاره — ولو مصروف عام (إيجار، كهرباء، رواتب) سيبه زي ما هو.</div>'
-    +jobPickerField("csPrj","على ملف؟ (من بيان الأعمال)")
+    +(preJobId?'<input type="hidden" id="csPrj" value="'+esc(preJobId)+'"/>'
+        +'<div class="card flat" style="padding:9px 13px;margin-bottom:10px"><b style="font-size:12.5px">المصروف على الملف المفتوح</b></div>'
+       :jobPickerField("csPrj","على ملف؟ (من بيان الأعمال)"))
     +'<div class="field"><label>البند</label><input id="csTitle" placeholder="مثلاً: رسوم جهاز المدينة"/></div>'
     +'<div class="field"><label>التصنيف</label><select id="csCat">'+catOpts+'</select></div>'
     +'<div class="field"><label>المبلغ (ج)</label><input id="csAmt" type="number" min="0" inputmode="numeric"/></div>'
