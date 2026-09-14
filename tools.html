@@ -2997,6 +2997,107 @@ async function receiveJob(routingId, prjId){
   toast("اتسجّل الاستلام \u2713","ok"); openRouteJob(prjId);
 }
 
+/* === كشف حساب الملف === */
+async function paintJobAccount(id, mountId){
+  const box=$(mountId); if(!box) return;
+  try{
+    const [{ data:rows },{ data:sum }]=await Promise.all([
+      sb.from("os_job_account").select("*").eq("project_id",id),
+      sb.from("os_job_account_summary").select("*").eq("project_id",id).limit(1)
+    ]);
+    const S=(sum&&sum.length)?sum[0]:null, R=rows||[];
+    if(!R.length){ box.innerHTML='<div class="empty" style="padding:8px">مفيش حركة مالية لسه.</div>'; return; }
+    const KC={ "استحقاق":"#B45309", "مصروف":"var(--red)" };
+    let h="";
+    if(S) h+='<div class="card flat" style="display:flex;gap:6px;text-align:center">'
+      +'<div style="flex:1"><b style="display:block;font-size:14px">'+egp(S.contracted)+'</b>'
+      +'<span class="muted" style="font-size:10.5px">متعاقد</span></div>'
+      +'<div style="flex:1"><b style="display:block;font-size:14px;color:var(--green-d)">'+egp(S.collected)+'</b>'
+      +'<span class="muted" style="font-size:10.5px">محصّل</span></div>'
+      +'<div style="flex:1"><b style="display:block;font-size:14px;color:'
+      +(Number(S.balance_due)>0?'var(--red)':'var(--green-d)')+'">'+egp(S.balance_due)+'</b>'
+      +'<span class="muted" style="font-size:10.5px">متبقي</span></div></div>'
+      +'<div class="muted" style="font-size:11px;text-align:center;margin:4px 0 8px">كاش '+egp(S.cash_in)
+      +' · تحويل '+egp(S.bank_in)+' · مصروفات '+egp(S.expenses)+'</div>';
+    h+='<div class="card flat">'+R.map(x=>
+      '<div style="display:flex;gap:6px;padding:7px 0;border-bottom:1px solid #eef2f7">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:12.5px">'+esc(x.title||"")+'</div>'
+      +'<div class="muted" style="font-size:10.5px;margin-top:1px">'
+      +'<span style="color:'+(KC[x.kind]||'var(--green-d)')+';font-weight:700">'+esc(x.kind)+'</span>'
+      +' · '+fmtDate(x.on_date)+(x.ref?' · '+esc(x.ref):'')+'</div></div>'
+      +'<div style="flex:none;text-align:left"><div style="font-size:12.5px;font-weight:700">'
+      +(Number(x.debit)?egp(x.debit):(Number(x.credit)?egp(x.credit):'—'))+'</div>'
+      +'<div class="muted" style="font-size:10.5px">متبقي '+egp(x.balance_due)+'</div></div></div>').join("")+'</div>';
+    box.innerHTML=h;
+  }catch(e){ box.innerHTML='<div class="empty">تعذّر تحميل الحساب.</div>'; }
+}
+
+/* === توجيه الملف لقسم === */
+async function openRouteJob(id, jobCode){
+  const { data:log }=await sb.from("os_job_routing_log").select("*")
+    .eq("project_id",id).order("routed_at",{ascending:false}).limit(12);
+  const opts=(DEPTS||[]).map(d=>'<option value="'+esc(d.key)+'">'+esc(d.name)+'</option>').join("");
+  const who='<option value="">\u2014 القسم كله \u2014</option>'
+    +PROFILES.filter(p=>!/^suspended/.test(p.email||"")).map(p=>'<option value="'+p.id+'">'+esc(p.name||p.email)+'</option>').join("");
+  const L=log||[];
+  openSheet('<h3>توجيه '+esc(jobCode||"الملف")+'</h3>'
+    +'<div class="field"><label>لأي قسم؟</label><select id="rtDept">'+opts+'</select></div>'
+    +'<div class="field"><label>لشخص معيّن؟</label><select id="rtWho">'+who+'</select></div>'
+    +'<div class="field"><label>السبب</label><input id="rtWhy" placeholder="مثلاً: محتاج مراجعة مالية قبل التقديم"/></div>'
+    +'<div class="row-actions"><button class="btn green" id="rtGo">وجّه الملف</button>'
+    +'<button class="btn ghost" onclick="paintProjectDetail(\''+id+'\')">إلغاء</button></div>'
+    +(L.length?'<div class="sec-h">سجل التوجيه <span class="ln"></span></div><div class="card flat">'
+      +L.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #eef2f7">'
+        +'<div style="font-size:12.5px">'+esc(x.from_dept_name||"\u2014")+' \u2190 '+esc(x.to_dept_name||"")
+        +(x.to_user_name?' ('+esc(x.to_user_name)+')':'')+'</div>'
+        +(x.reason?'<div class="muted" style="font-size:11px;margin-top:1px">'+esc(x.reason)+'</div>':'')
+        +'<div class="muted" style="font-size:10.5px;margin-top:2px">'+esc(x.routed_by_name||"")+' · '+fmtDate(x.routed_at)
+        +' · <b style="color:'+(x.received_at?'var(--green-d)':'#B45309')+'">'+esc(x.state)+'</b></div>'
+        +(!x.received_at?'<button class="btn sm" style="margin-top:5px" onclick="receiveJob(\''+x.id+'\',\''+id+'\')">استلمت الملف</button>':'')
+        +'</div>').join("")+'</div>':''));
+  addMicTo("rtWhy");
+  $("rtGo").onclick=async()=>{
+    const b=$("rtGo"); b.disabled=true;
+    const { error }=await sb.rpc("os_route_job",{ p_project:id, p_dept:$("rtDept").value,
+      p_user:$("rtWho").value||null, p_reason:$("rtWhy").value.trim()||null });
+    if(error){ toast(error.message,"bad"); b.disabled=false; return; }
+    toast("الملف اتوجّه \u2713","ok"); paintProjectDetail(id);
+  };
+}
+async function receiveJob(routingId, prjId){
+  const { error }=await sb.rpc("os_receive_job",{ p_routing:routingId });
+  if(error){ toast(error.message,"bad"); return; }
+  toast("اتسجّل الاستلام \u2713","ok"); paintProjectDetail(prjId);
+}
+
+/* === تحصيل كاش سريع === */
+async function quickCash(id, jobCode){
+  openSheet('<h3>تحصيل \u2014 '+esc(jobCode||"")+'</h3>'
+    +'<div class="muted" style="margin:-6px 0 12px;font-size:12px">دفعة برّه الخطة — العميل دفع دلوقتي.</div>'
+    +'<div class="field"><label>المبلغ</label><input id="qcAmt" type="number" inputmode="numeric" min="1"/></div>'
+    +'<div class="field"><label>البيان</label><input id="qcTitle" placeholder="مثلاً: دفعة تحت الحساب"/></div>'
+    +'<div class="field"><label>طريقة الدفع</label><select id="qcMethod">'
+    +'<option value="cash">كاش</option><option value="transfer">تحويل بنكي</option>'
+    +'<option value="instapay">إنستاباي</option><option value="cheque">شيك</option></select></div>'
+    +'<div class="field"><label>تصنيف الإيراد</label><select id="qcCat"></select></div>'
+    +'<div class="row-actions"><button class="btn green" id="qcGo">سجّل التحصيل</button>'
+    +'<button class="btn ghost" onclick="paintProjectDetail(\''+id+'\')">إلغاء</button></div>');
+  addMicTo("qcTitle");
+  catOptions("income").then(o=>{ const c=$("qcCat"); if(c) c.innerHTML=o; });
+  $("qcGo").onclick=async()=>{
+    const amt=parseFloat($("qcAmt").value);
+    if(!(amt>0)){ toast("اكتب المبلغ","bad"); return; }
+    const cat=await resolveCat("qcCat","income");
+    const b=$("qcGo"); b.disabled=true;
+    const { error }=await sb.from("os_project_payments").insert({
+      project_id:id, title:$("qcTitle").value.trim()||"تحصيل", amount:amt, paid_amount:amt,
+      status:"paid", paid_at:todayStr(), method:$("qcMethod").value, is_adhoc:true,
+      category:cat, created_by:ME.id });
+    if(error){ toast(error.message,"bad"); b.disabled=false; return; }
+    toast("اتحصّل \u2713","ok"); paintProjectDetail(id);
+  };
+}
+
 /* ═══════════ الدفاتر المحاسبية ═══════════ */
 async function openBooks(){
   if(!isFinanceUser()&&!isOwnerOps()){ toast("الدفاتر للمالية والإدارة","bad"); return; }
@@ -3529,6 +3630,19 @@ async function paintJob360(id, mountId){
         +(!j.promised_date&&!j.client_expectation?'<div class="muted" style="font-size:11.5px;margin-top:3px">مفيش موعد متسجّل — العميل ممكن يكون متوقّع حاجة تانية.</div>':'')
         +'</div>';
     }
+
+    /* حساب الملف */
+    h+='<div class="sec-h">حساب الملف <span class="ln"></span>'
+      +'<button class="btn ghost sm" onclick="quickCash(\''+id+'\',\''+esc(j.job_code||"")+'\')">\u002b تحصيل</button></div>'
+      +'<div id="acctBox"><div class="skel"></div></div>';
+    setTimeout(()=>paintJobAccount(id,"acctBox"), 60);
+
+    /* التوجيه للأقسام */
+    h+='<div class="card flat" style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+      +'<div style="flex:1;min-width:0"><span style="font-size:12.5px;font-weight:600">القسم الحالي</span>'
+      +'<div class="muted" style="font-size:11.5px;margin-top:2px">'
+      +esc((DEPT_BY_KEY[j.dept]&&DEPT_BY_KEY[j.dept].name)||j.dept||"\u2014")+'</div></div>'
+      +'<button class="btn sm" style="flex:none" onclick="openRouteJob(\''+id+'\',\''+esc(j.job_code||"")+'\')">وجّه لقسم</button></div>';
 
     /* المشتملات */
     h+='<div class="sec-h">مشتملات بيان الأعمال <span class="ln"></span>'
