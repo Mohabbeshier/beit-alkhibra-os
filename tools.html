@@ -366,6 +366,8 @@ function withLoading(btn, label, fn){
 /* ===================== نظام التلميحات — "دي بتعمل إيه؟" ===================== */
 const HELP_TEXT={
   /* الشاشة الرئيسية */
+  officehub:"لوحة مدير المكتب — كل اللي متأخر أو محتاج متابعة في شاشة واحدة: الملفات، أوامر الشغل، التحصيل، الفريق.",
+  payreq:"تطلب من المالية تصرف مبلغ — بيوصلهم إشعار، ولما يعتمدوه بيتسجّل مصروف وبيتولّد إذن صرف.",
   collect:"طلبات التحصيل اللي المالية بعتتها — مين يكلّم العميل، بكام، وقبل امتى.",
   workorder:"تختار ملف من بيان الأعمال وتكلّف موظف بشغل محدد عليه — بيوصله إشعار وبيبقى في مهامه وتقييمه.",
   smart:"تكتب أو تقول كذا مهمة في جملة واحدة، والذكاء يفصلها لمهام منفصلة ويحدد المسؤول والموعد لكل واحدة.",
@@ -408,6 +410,198 @@ const HELP_TEXT={
   decisions:"سجل القرارات الإدارية المهمة بتاريخها ومين اتخذها.",
   meeting:"تقرير اجتماع — بتسجّل المحضر والقرارات والمهام اللي طلعت منه."
 };
+/* ═══════════ لوحة مدير المكتب — محور الشغل ═══════════ */
+async function openOfficeHub(){
+  if(!isOwnerOps() && PROFILE.role!=="manager"){ toast("اللوحة دي للإدارة","bad"); return; }
+  openSheet('<h3>لوحة المكتب</h3>'
+    +'<div class="muted" style="margin:-6px 0 10px;font-size:12px">كل اللي محتاج متابعة — الملفات، الشغل، التحصيل، الفريق.</div>'
+    +'<div id="ohBox"><div class="skel"></div><div class="skel"></div></div>'
+    +actGroup("طلبات",[
+        { label:"اطلب تحصيل", kind:"", on:"openCollectionNew()" },
+        { label:"اطلب دفع", kind:"", on:"openPaymentReqNew()" },
+        { label:"طلبات الدفع", kind:"", on:"openPaymentReqs()" },
+        { label:"طلبات التحصيل", kind:"", on:"openCollections()" }])
+    +actGroup("الشغل",[
+        { label:"أمر شغل جديد", kind:"green", lead:true, on:"openWorkOrderNew()" },
+        { label:"أوامر الشغل", kind:"", on:"openWorkOrders()" },
+        { label:"بيان الأعمال", kind:"", on:"openProjects()" },
+        { label:"إنجاز الفريق", kind:"", on:"openStaffProgress()" }])
+    +actMini([{ label:"قفل", on:"closeSheet()" }]));
+  await paintOfficeHub();
+}
+
+async function paintOfficeHub(){
+  const box=$("ohBox"); if(!box) return;
+  try{
+    const { data:P }=await sb.from("os_office_pulse").select("*").maybeSingle();
+    const F=P||{};
+    const items=[
+      {n:+F.wo_late||0,          lbl:"أمر شغل فات موعده",            go:openWorkOrders,  hot:true},
+      {n:+F.tasks_late||0,       lbl:"مهمة متأخرة",                  go:()=>{closeSheet();switchTab("tasks");}, hot:true},
+      {n:+F.jobs_promise_late||0,lbl:"ملف فات وعد العميل",           go:openProjects,    hot:true},
+      {n:+F.coll_late||0,        lbl:"طلب تحصيل فات موعده",          go:openCollections, hot:true},
+      {n:+F.routing_pending||0,  lbl:"ملف متوجّه لقسم ومحدش استلمه", go:openProjects,    hot:true},
+      {n:+F.wo_idle||0,          lbl:"أمر شغل عدّى يومين ومحدش بدأ",  go:openWorkOrders,  hot:false},
+      {n:+F.jobs_stale||0,       lbl:"ملف واقف من أسبوع",            go:openProjects,    hot:false},
+      {n:+F.jobs_unpriced||0,    lbl:"ملف لسه مش متسعّر",            go:openProjects,    hot:false},
+      {n:+F.jobs_no_files||0,    lbl:"ملف من غير أي مرفقات",         go:openProjects,    hot:false},
+      {n:+F.coll_open||0,        lbl:"طلب تحصيل مفتوح",              go:openCollections, hot:false},
+      {n:+F.reqs_pending||0,     lbl:"طلب مستني ردّك",               go:()=>{closeSheet();switchTab("req");}, hot:false},
+      {n:+F.staff_never_in||0,   lbl:"موظف مدخلش النظام خالص",       go:openStaffProgress, hot:false}
+    ].filter(x=>x.n>0);
+
+    let h='<div class="card flat" style="display:flex;gap:6px;text-align:center;margin-bottom:10px">'
+      +'<div style="flex:1"><b style="display:block;font-size:17px">'+(+F.jobs_open||0)+'</b>'
+      +'<span class="muted" style="font-size:10.5px">ملف شغّال</span></div>'
+      +'<div style="flex:1"><b style="display:block;font-size:17px;color:var(--blue)">'+(+F.wo_open||0)+'</b>'
+      +'<span class="muted" style="font-size:10.5px">أمر شغل مفتوح</span></div>'
+      +'<div style="flex:1"><b style="display:block;font-size:17px;color:'+((+F.tasks_late||0)>0?"var(--red)":"var(--green-d)")+'">'+(+F.tasks_late||0)+'</b>'
+      +'<span class="muted" style="font-size:10.5px">مهمة متأخرة</span></div></div>';
+
+    if(!items.length){
+      box.innerHTML=h+'<div class="card flat" style="background:#F1F8F2;border-color:#A5D6A7"><b style="font-size:13px">مفيش حاجة متأخرة — الشغل ماشي تمام</b></div>';
+      return;
+    }
+    box.innerHTML=h+'<div class="sec-h" style="color:var(--red)">محتاج متابعتك <span class="ln"></span></div>'
+      +items.map((x,i)=>'<button class="card flat" data-oh="'+i+'" style="width:100%;text-align:right;cursor:pointer'
+        +(x.hot?';border-right:4px solid var(--red)':'')+'"><div style="display:flex;align-items:center;gap:10px">'
+        +'<b style="font-size:18px;color:'+(x.hot?"var(--red)":"#B45309")+';min-width:30px">'+x.n+'</b>'
+        +'<span style="flex:1;font-size:12.5px;font-weight:700">'+x.lbl+'</span>'
+        +'<span style="color:var(--muted)">‹</span></div></button>').join("");
+    box.querySelectorAll("[data-oh]").forEach(b=>b.onclick=()=>items[+b.dataset.oh].go());
+  }catch(e){ box.innerHTML=failBox("معرفناش نجيبها.",paintOfficeHub); }
+}
+
+async function openStaffProgress(){
+  openSheet('<h3>إنجاز الفريق</h3>'
+    +'<div class="muted" style="margin:-6px 0 12px;font-size:12px">كل موظف: شغله المفتوح، المتأخر، واللي خلّصه.</div>'
+    +'<div id="spBox"><div class="skel"></div><div class="skel"></div></div>'
+    +actMini([{ label:"قفل", on:"closeSheet()" }]));
+  try{
+    const { data }=await sb.from("os_staff_progress").select("*").order("late_all",{ascending:false});
+    const R=(data||[]).filter(x=>x.role!=="owner");
+    if(!R.length){ $("spBox").innerHTML='<div class="empty">مفيش بيانات.</div>'; return; }
+    const max=Math.max(1,...R.map(x=>+x.open_all||0));
+    $("spBox").innerHTML=R.map(x=>{
+      const late=+x.late_all||0, open=+x.open_all||0;
+      const never=!x.last_seen_at;
+      return '<div class="card flat"'+(late>0?' style="border-right:4px solid var(--red)"':(never?' style="border-right:4px solid #B45309"':''))+'>'
+        +'<div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">'
+        +'<b style="font-size:13.5px;flex:1">'+esc(x.name||"")+'</b>'
+        +(late>0?'<span class="badge b-red" style="font-size:10px">'+late+' متأخر</span>':'')
+        +(never?'<span class="badge" style="background:#B45309;color:#fff;font-size:10px">مدخلش خالص</span>':'')+'</div>'
+        +'<div class="prog" style="margin:7px 0 4px"><i style="width:'+Math.round(open/max*100)+'%'
+        +(late>0?';background:var(--red)':'')+'"></i></div>'
+        +'<div class="meta" style="font-size:11px"><span>'+open+' مفتوح</span>'
+        +'<span class="dot"></span><span>'+(+x.open_orders||0)+' أمر شغل</span>'
+        +'<span class="dot"></span><span>'+(+x.done_30d||0)+' خلص الشهر</span>'
+        +(x.next_due?'<span class="dot"></span><span>أقرب تسليم '+fmtDate(x.next_due)+'</span>':'')
+        +(x.last_seen_at?'<span class="dot"></span><span>آخر ظهور '+relativeTime(x.last_seen_at)+'</span>':'')
+        +'</div></div>';
+    }).join("");
+  }catch(e){ $("spBox").innerHTML=failBox("معرفناش نجيبها.",openStaffProgress); }
+}
+
+/* ═══════════ طلبات الدفع — المديرة تطلب والمالية تنفّذ ═══════════ */
+async function openPaymentReqNew(preJob){
+  if(!isOwnerOps() && PROFILE.role!=="manager"){ toast("طلب الدفع للإدارة","bad"); return; }
+  let catOpts='';
+  try{ const { data }=await sb.from("os_fin_categories").select("code,name").eq("kind","expense").eq("active",true).order("sort_order");
+    catOpts=(data||[]).map(c=>'<option value="'+esc(c.code||c.name)+'">'+esc(c.name)+'</option>').join(""); }catch(e){}
+  openSheet('<h3>طلب دفع</h3>'
+    +'<div class="muted" style="margin:-6px 0 10px;font-size:12px">بيروح للمالية تعتمده وتصرفه — وبيوصلك إشعار بالنتيجة.</div>'
+    +(preJob?'<input type="hidden" id="prPrj" value="'+esc(preJob)+'"/>'
+       :jobPickerField("prPrj","على ملف؟ (اختياري)"))
+    +'<div class="field"><label>البيان</label><input id="prTitle" placeholder="مثلاً: رسوم جهاز المدينة"/></div>'
+    +'<div class="field"><label>المبلغ (ج)</label><input id="prAmt" type="number" min="0" inputmode="numeric"/></div>'
+    +'<div class="field"><label>التصنيف</label><select id="prCat"><option value="">— بدون —</option>'+catOpts+'</select></div>'
+    +'<div class="field"><label>المدفوع له</label><input id="prPayee" placeholder="اسم الجهة أو الشخص"/></div>'
+    +'<div class="field"><label>مطلوب قبل</label><input id="prNeed" type="date"/></div>'
+    +'<div class="field"><label>ملاحظة</label><textarea id="prNote" rows="2" placeholder="ليه محتاجينه؟"></textarea></div>'
+    +actGroup("",[{ label:"ابعت الطلب", kind:"green", lead:true, id:"prGo" }])
+    +actMini([{ label:"إلغاء", on:"closeSheet()" }]));
+  addMicTo("prNote");
+  $("prGo").onclick=()=>withLoading($("prGo"),"بيتبعت…", async()=>{
+    const t=$("prTitle").value.trim(); if(!t){ toast("اكتب البيان","bad"); return; }
+    const a=Number($("prAmt").value||0); if(!(a>0)){ toast("اكتب المبلغ","bad"); return; }
+    const { data, error }=await sb.rpc("os_request_payment",{
+      p_title:t, p_amount:a, p_project:$("prPrj").value||null,
+      p_category:$("prCat").value||null, p_payee:$("prPayee").value.trim()||null,
+      p_need_by:$("prNeed").value||null, p_note:$("prNote").value.trim()||null });
+    if(error){ toast(error.message,"bad"); return; }
+    toast("اتبعت "+((data&&data.code)||"")+" للمالية","ok");
+    track("action","payment_request"); openPaymentReqs();
+  });
+}
+
+let _prFilter="pending";
+async function openPaymentReqs(){
+  openSheet('<h3>طلبات الدفع</h3>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="prF">'
+    +'<button class="chip on" data-pf="pending">مستنية</button>'
+    +'<button class="chip" data-pf="paid">اتصرفت</button>'
+    +'<button class="chip" data-pf="rejected">مرفوضة</button>'
+    +'<button class="chip" data-pf="all">الكل</button></div>'
+    +'<div id="prBox"><div class="skel"></div><div class="skel"></div></div>'
+    +actGroup("",[{ label:"طلب دفع جديد", kind:"green", lead:true, on:"openPaymentReqNew()" }])
+    +actMini([{ label:"قفل", on:"closeSheet()" }]));
+  document.querySelectorAll("#prF [data-pf]").forEach(b=>b.onclick=()=>{
+    _prFilter=b.dataset.pf;
+    document.querySelectorAll("#prF [data-pf]").forEach(x=>x.className="chip");
+    b.className="chip on"; paintPaymentReqs();
+  });
+  await paintPaymentReqs();
+}
+
+async function paintPaymentReqs(){
+  const box=$("prBox"); if(!box) return;
+  try{
+    let q=sb.from("os_payment_request_board").select("*").order("created_at",{ascending:false}).limit(60);
+    if(_prFilter!=="all") q=q.eq("status",_prFilter);
+    const { data, error }=await q; if(error) throw error;
+    const R=data||[];
+    if(!R.length){ box.innerHTML='<div class="empty">مفيش طلبات هنا.</div>'; return; }
+    const LBL={pending:"مستني اعتماد",approved:"معتمد",rejected:"مرفوض",paid:"اتصرف"};
+    box.innerHTML=R.map(x=>{
+      const col=x.status==="paid"?"var(--green-d)":(x.status==="rejected"?"var(--red)":(x.overdue?"var(--red)":"#B45309"));
+      return '<div class="card flat" style="border-right:4px solid '+col+'">'
+        +'<div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">'
+        +'<b style="font-size:13.5px;flex:1">'+esc(x.title||"")+'</b>'
+        +'<span class="badge" style="background:'+col+';color:#fff;font-size:10px">'+esc(LBL[x.status]||x.status)+'</span></div>'
+        +'<div style="font-size:15px;font-weight:800;margin-top:4px">'+egp(x.amount)+'</div>'
+        +'<div class="muted" style="font-size:11.5px;margin-top:3px">'
+        +(x.job_label?'ملف '+esc(x.job_label)+' · ':'')
+        +(x.payee?'لـ '+esc(x.payee)+' · ':'')+'طلب: '+esc(x.created_by_name||"—")+'</div>'
+        +(x.note?'<div style="font-size:12px;margin-top:5px;white-space:pre-wrap">'+esc(x.note)+'</div>':'')
+        +(x.reject_note?'<div style="font-size:12px;margin-top:5px;color:var(--red)">سبب الرفض: '+esc(x.reject_note)+'</div>':'')
+        +'<div class="meta"><span>'+esc(x.code||"")+'</span>'
+        +(x.need_by?'<span class="dot"></span><span'+(x.overdue?' style="color:var(--red);font-weight:800"':'')+'>قبل '+fmtDate(x.need_by)+'</span>':'')
+        +(x.decided_by_name?'<span class="dot"></span><span>'+esc(x.decided_by_name)+'</span>':'')+'</div>'
+        +(x.status==="pending"&&isFinanceUser()
+          ?'<div class="act-mini" style="margin-top:8px">'
+           +'<button class="btn" onclick="decidePayReq(\''+x.id+'\',true)">اعتمد واصرف</button>'
+           +'<button class="btn" onclick="decidePayReq(\''+x.id+'\',false)">ارفض</button></div>':'')
+        +(x.status==="paid"&&x.cost_id&&canFinRead()
+          ?'<div class="act-mini" style="margin-top:8px"><button class="btn" onclick="printVoucher(\'payment\',\''+x.cost_id+'\')">اطبع إذن الصرف</button></div>':'')
+        +'</div>';
+    }).join("");
+  }catch(e){ box.innerHTML=failBox("معرفناش نجيبها.",paintPaymentReqs); }
+}
+
+async function decidePayReq(id, ok){
+  if(!ok){
+    const why=prompt("سبب الرفض؟"); if(why===null) return;
+    const { error }=await sb.rpc("os_decide_payment_request",{ p_id:id, p_ok:false, p_note:why||null });
+    if(error){ toast(error.message,"bad"); return; }
+    toast("اترفض","ok"); paintPaymentReqs(); return;
+  }
+  confirmDlg("تعتمد الطلب ده وتصرفه؟ هيتسجّل مصروف فعلي وهيتولّد إذن صرف.", async()=>{
+    const { data, error }=await sb.rpc("os_decide_payment_request",{ p_id:id, p_ok:true });
+    if(error){ toast(error.message,"bad"); return; }
+    afterMoney("payment",(data&&data.cost_id)||null,"اتعتمد واتصرف \u2713",()=>openPaymentReqs());
+  });
+}
+
 /* ═══════════ تسعير الملف وطلب التحصيل — للمالية ═══════════ */
 async function openPriceJob(id, jobLabel, curVal){
   if(!isFinanceUser()){ toast("التسعير للمالية بس","bad"); return; }
@@ -1128,7 +1322,7 @@ function renderOwnerHome(d){
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
     <div class="row-actions"><button class="btn sm" data-quick="myday" style="flex:1;background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button></div>
     <div class="act-label" style="margin-top:16px">أنشئ بسرعة</div>
-    <div class="act-grid" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب'+helpDot("newreq")+'</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك'+helpDot("smart")+'</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع'+helpDot("meeting")+'</button>${isOwnerOps()?'<button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="workorder">أمر شغل</button>':""}</div>
+    <div class="act-grid" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب'+helpDot("newreq")+'</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك'+helpDot("smart")+'</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع'+helpDot("meeting")+'</button>${isOwnerOps()?'<button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="officehub">لوحة المكتب</button><button class="btn sm" data-quick="workorder">أمر شغل</button>':""}</div>
     <div class="act-label" style="margin-top:18px">روح لـ</div>
     <div class="act-grid" style="margin-top:0"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال'+helpDot("projects")+'</button><button class="btn ghost sm" data-quick="sales">المبيعات'+helpDot("sales")+'</button><button class="btn ghost sm" data-quick="adminhub">الإدارية'+helpDot("adminhub")+'</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="contracts">العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات'+helpDot("decisions")+'</button>':""}<button class="btn ghost sm" data-quick="roadmap" data-more="1">خطة التطوير'+helpDot("roadmap")+'</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام'+helpDot("syshealth")+'</button>':""}<button class="btn ghost sm" id="moreBtn" onclick="toggleMore(this)" style="opacity:.7">كل الأقسام ⌄</button></div>`;
   if(d.evs.length){
@@ -1164,7 +1358,7 @@ function renderOpsHome(d){
   body+=`<div class="sec-h">تحركات سريعة <span class="ln"></span></div>
     <div class="row-actions"><button class="btn sm" data-quick="myday" style="flex:1;background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button></div>
     <div class="act-label" style="margin-top:16px">أنشئ بسرعة</div>
-    <div class="act-grid" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب'+helpDot("newreq")+'</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك'+helpDot("smart")+'</button><button class="btn ghost sm" data-quick="event">موعد'+helpDot("event")+'</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع'+helpDot("meeting")+'</button>${isOwnerOps()?'<button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="workorder">أمر شغل</button>':""}</div>
+    <div class="act-grid" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب'+helpDot("newreq")+'</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك'+helpDot("smart")+'</button><button class="btn ghost sm" data-quick="event">موعد'+helpDot("event")+'</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع'+helpDot("meeting")+'</button>${isOwnerOps()?'<button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="officehub">لوحة المكتب</button><button class="btn sm" data-quick="workorder">أمر شغل</button>':""}</div>
     <div class="act-label" style="margin-top:18px">روح لـ</div>
     <div class="act-grid" style="margin-top:0"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال'+helpDot("projects")+'</button><button class="btn ghost sm" data-quick="sales">المبيعات'+helpDot("sales")+'</button><button class="btn ghost sm" data-quick="adminhub">الإدارية'+helpDot("adminhub")+'</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="contracts">العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات'+helpDot("decisions")+'</button>':""}<button class="btn ghost sm" data-quick="roadmap" data-more="1">خطة التطوير'+helpDot("roadmap")+'</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام'+helpDot("syshealth")+'</button>':""}<button class="btn ghost sm" id="moreBtn" onclick="toggleMore(this)" style="opacity:.7">كل الأقسام ⌄</button></div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
@@ -3293,7 +3487,7 @@ let _moreOpen=false;
 function toggleMore(btn){
   _moreOpen=!_moreOpen;
   document.querySelectorAll('[data-quick]').forEach(b=>{
-    const keep=["projects","sales","myday","newreq","adminhub","finance","workorder"];
+    const keep=["projects","sales","myday","newreq","adminhub","finance","workorder","officehub"];
     if(keep.includes(b.dataset.quick)) return;
     b.style.display=_moreOpen?"":"none";
   });
@@ -3306,7 +3500,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 function applyQuickCollapse(){
   if(_moreOpen) return;
   document.querySelectorAll('[data-quick]').forEach(b=>{
-    const keep=["projects","sales","myday","newreq","adminhub","finance","workorder"];
+    const keep=["projects","sales","myday","newreq","adminhub","finance","workorder","officehub"];
     if(!keep.includes(b.dataset.quick)) b.style.display="none";
   });
   const mb=document.getElementById("moreBtn"); if(mb) mb.style.display="";
@@ -4299,7 +4493,8 @@ async function openSettleAdvance(profileId, staffName, balance){
       p_lines:_setLines.map(x=>({ title:x.title, amount:x.amount, category:x.category, project_id:x.project_id })),
       p_cash_back:cash, p_notes:null });
     if(error){ toast(error.message,"bad"); b.disabled=false; return; }
-    toast("العهدة اتصفّت \u2713","ok"); _setLines=[]; openAdvances();
+    _setLines=[];
+    afterMoney("advance_back",(data&&(data.settle_id||data.id))||null,"العهدة اتصفّت \u2713",()=>openAdvances());
   };
   }
   bindSl();
@@ -4499,6 +4694,7 @@ async function paintJob360(id, mountId){
       +(isFinanceUser()?'<button class="btn ghost sm" onclick="openPriceJob(\''+id+'\',\''+esc((j.job_code||j.name||"").replace(/'/g,""))+'\','+(Number(j.value_egp)||0)+')">سعّر الملف</button>':'')
       +(isFinanceUser()?'<button class="btn ghost sm" onclick="openCollectionNew(\''+id+'\',\''+esc((j.job_code||j.name||"").replace(/'/g,""))+'\')">اطلب تحصيل</button>':'')
       +((isOwnerOps()||PROFILE.role==="manager")?'<button class="btn ghost sm" onclick="openWorkOrderNew({id:\''+id+'\',job_code:\''+esc(j.job_code||"")+'\',name:\''+esc((j.name||"").replace(/'/g,""))+'\'})">أمر شغل</button>':'')
+      +((isOwnerOps()||PROFILE.role==="manager")?'<button class="btn ghost sm" onclick="openPaymentReqNew(\''+id+'\')">اطلب دفع</button>':'')
       +'</div>';
 
     /* وعد العميل وتوقعاته */
@@ -4673,7 +4869,7 @@ async function collectInst(payId, remaining, prjId){
   const { error }=await sb.from("os_project_payments").update({
     paid_amount:paid, status: full?'paid':'partial', paid_at: full?todayStr():null }).eq("id",payId);
   if(error){ toast(error.message.includes('مقفلة')?'الفترة المالية مقفلة':error.message,"bad"); return; }
-  toast(full?"الدفعة اتحصّلت \u2713":"تحصيل جزئي \u2713","ok"); paintProjectDetail(prjId);
+  afterMoney("receipt", payId, full?"الدفعة اتحصّلت \u2713":"تحصيل جزئي \u2713", ()=>openProjectDetail(prjId));
 }
 
 /* ═══════════ البحث الموحّد ═══════════ */
@@ -4926,11 +5122,13 @@ async function openPayables(){
   $("pvGo").onclick=async()=>{
     const sup=$("pvSup").value.trim(), t=$("pvTitle").value.trim(), a=parseFloat($("pvAmt").value);
     if(!sup||!t||!(a>0)){ toast("املا المورد والبيان والمبلغ","bad"); return; }
-    const { error }=await sb.from("os_payables").insert({ supplier:sup, title:t, amount:a,
-      due_date:$("pvDue").value||null, created_by:ME.id });
+    const { data, error }=await sb.from("os_payables").insert({ supplier:sup, title:t, amount:a,
+      due_date:$("pvDue").value||null, created_by:ME.id }).select("id,approved");
     if(error){ toast("ماتسجلتش: "+error.message,"bad"); return; }
-    toast("اتسجلت \u2713","ok"); ["pvSup","pvTitle","pvAmt"].forEach(i=>$(i).value="");
-    paintPayables();
+    ["pvSup","pvTitle","pvAmt"].forEach(i=>$(i).value="");
+    const _r=data&&data[0];
+    if(_r&&_r.approved) afterMoney("payable",_r.id,"فاتورة المورد اتسجّلت \u2713",()=>openPayables());
+    else { toast("اتسجلت — مستنية اعتماد المالية \u2713","ok"); paintPayables(); }
   };
   await paintPayables();
 }
@@ -4963,9 +5161,9 @@ async function paintPayables(){
 async function payPayable(id, remaining){
   const v=prompt("المبلغ المدفوع (المتبقي "+remaining+")", String(remaining));
   const a=parseFloat(v); if(!(a>0)) return;
-  const { error }=await sb.rpc("os_pay_payable",{ p_id:id, p_amount:a });
+  const { data, error }=await sb.rpc("os_pay_payable",{ p_id:id, p_amount:a });
   if(error){ toast(error.message,"bad"); return; }
-  toast("اتدفع \u2713","ok"); paintPayables();
+  afterMoney("payable", id, "اتدفع \u2713", ()=>openPayables());
 }
 
 /* ═══════════ لوحة المالك ═══════════ */
@@ -5076,11 +5274,11 @@ async function openAdvances(){
     const amount=parseFloat($("advAmt").value);
     if(!(amount>0)){ toast("اكتب مبلغ صحيح","bad"); return; }
     const who=$("advWho").value;
-    const { error }=await sb.rpc("os_issue_advance",{ p_profile:who, p_amount:amount,
+    const { data, error }=await sb.rpc("os_issue_advance",{ p_profile:who, p_amount:amount,
       p_project:$("advPrj").value||null, p_notes:$("advNote").value.trim()||null });
     if(error){ toast("ماتسجلتش: "+error.message,"bad"); return; }
-    toast("اتسجلت \u2713","ok"); $("advAmt").value=""; $("advNote").value="";
-    await paintAdvances();
+    $("advAmt").value=""; $("advNote").value="";
+    afterMoney("advance", data||null, "العهدة اتصرفت \u2713", ()=>openAdvances());
   };
   }
   bindAdv();
@@ -5168,6 +5366,7 @@ async function openFinance(){
     +actGroup("المتابعة",[
         { id:"finRecv", label:"المستحقات", kind:"" },
         { label:"طلبات التحصيل", kind:"", on:"openCollections()" },
+        { label:"طلبات الدفع", kind:"", on:"openPaymentReqs()" },
         { id:"finPay",  label:"الموردين", kind:"" },
         { id:"finProj", label:"ربحية الملفات", kind:"" }])
     +actMini([
@@ -5246,7 +5445,7 @@ function openCollect(id,maxAmt){
     if($("clInv").value.trim()) upd.invoice_no=$("clInv").value.trim();
     const { error }=await sb.from("os_project_payments").update(upd).eq("id",id);
     if(error){ toast("معرفناش نسجّل: "+error.message,"bad"); btn.disabled=false; btn.textContent="سجّل التحصيل"; return; }
-    toast(full?"اتحصّلت كاملة ✓":"اتسجّل تحصيل جزئي ✓","ok"); openReceivables();
+    afterMoney("receipt", id, full?"اتحصّلت كاملة \u2713":"اتسجّل تحصيل جزئي \u2713", ()=>openReceivables());
   };
 }
 async function openPaymentNew(){
@@ -6305,6 +6504,8 @@ function wireHome(el){
     track("action","quick:"+q);
     if(q==="workorder"){ openWorkOrders(); }
     else if(q==="collect"){ openCollections(); }
+    else if(q==="officehub"){ openOfficeHub(); }
+    else if(q==="payreq"){ openPaymentReqs(); }
     else if(q==="smart"){ switchTab("tasks"); setTimeout(openSmartTask,90); }
     else if(q==="ask"){ switchTab("ask"); }
     else if(q==="newreq"){ switchTab("req"); setTimeout(openNewReq,90); }
