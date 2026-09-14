@@ -2884,6 +2884,119 @@ function applyQuickCollapse(){
   const mb=document.getElementById("moreBtn"); if(mb) mb.style.display="";
 }
 
+/* ═══════════ كشف حساب الملف ═══════════ */
+const PAY_METHOD={cash:"كاش",transfer:"تحويل",cheque:"شيك",instapay:"إنستاباي",other:"أخرى"};
+async function openJobAccount(id){
+  openSheet('<h3>كشف حساب الملف</h3><div id="jaBox"><div class="skel"></div><div class="skel"></div></div>'
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" onclick="addCashIn(\''+id+'\')">\u002b تحصيل كاش</button>'
+    +'<button class="btn ghost sm" onclick="paintJob360(\''+id+'\')">رجوع للملف</button></div>');
+  try{
+    const [{ data:sum },{ data:mv }]=await Promise.all([
+      sb.from("os_job_account_summary").select("*").eq("project_id",id).maybeSingle(),
+      sb.from("os_job_account").select("*").eq("project_id",id).limit(120)
+    ]);
+    const S=sum||{}, M=mv||[];
+    let h='<div class="card flat" style="text-align:center">'
+      +'<b style="display:block;font-size:19px">'+egp(S.balance_due||0)+'</b>'
+      +'<span class="muted" style="font-size:11.5px">المتبقي على العميل</span>'
+      +'<div class="meta" style="justify-content:center;margin-top:6px">'
+      +'<span>متعاقد '+egp(S.contracted||0)+'</span><span>محصّل '+egp(S.collected||0)+'</span>'
+      +'<span>مصروف '+egp(S.expenses||0)+'</span></div></div>'
+      +'<div class="card flat" style="display:flex;gap:8px;text-align:center">'
+      +'<div style="flex:1"><b style="display:block;font-size:14px">'+egp(S.cash_in||0)+'</b>'
+      +'<span class="muted" style="font-size:11px">كاش</span></div>'
+      +'<div style="flex:1"><b style="display:block;font-size:14px">'+egp(S.bank_in||0)+'</b>'
+      +'<span class="muted" style="font-size:11px">تحويل/شيك</span></div>'
+      +'<div style="flex:1"><b style="display:block;font-size:14px">'+(S.installments||0)+'</b>'
+      +'<span class="muted" style="font-size:11px">دفعة</span></div></div>';
+
+    if(!M.length) h+='<div class="empty">مفيش حركة مالية لسه.</div>';
+    else h+='<div class="sec-h">الحركة <span class="ln"></span></div><div class="card flat">'
+      +M.map(x=>{
+        const inn=Number(x.credit)>0;
+        const col=x.kind==="مصروف"?"#B45309":(inn?"var(--green-d)":"#0D47A1");
+        return '<div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid #eef2f7">'
+          +'<div style="flex:1;min-width:0">'
+          +'<div style="font-size:12.5px">'+esc(x.title||"")+'</div>'
+          +'<div class="muted" style="font-size:10.5px;margin-top:1px">'+fmtDate(x.on_date)
+          +' · <span style="color:'+col+';font-weight:700">'+esc(x.kind)+'</span>'
+          +(x.ref?' · '+esc(x.ref):'')+'</div></div>'
+          +'<div style="flex:none;text-align:left">'
+          +'<div style="font-size:12.5px;font-weight:800;color:'+col+'">'
+          +(inn?'+':(x.kind==="مصروف"?'':'−'))+egp(Number(x.credit)||Number(x.debit)||0)+'</div>'
+          +'<div class="muted" style="font-size:10.5px">رصيد '+egp(x.balance_due||0)+'</div></div>'
+          +'</div>';
+      }).join("")+'</div>';
+    $("jaBox").innerHTML=h;
+  }catch(e){ $("jaBox").innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+async function addCashIn(id){
+  if(!isFinanceUser()&&!isOwnerOps()){ toast("التحصيل للمالية","bad"); return; }
+  const cats=await catOptions("income");
+  openSheet('<h3>تحصيل كاش</h3>'
+    +'<div class="field"><label>البيان</label><input id="ciTitle" placeholder="مثلاً: دفعة تحت الحساب"/></div>'
+    +'<div class="field"><label>المبلغ</label><input id="ciAmt" type="number" inputmode="numeric" min="1"/></div>'
+    +'<div class="field"><label>طريقة الدفع</label><select id="ciM">'
+    +Object.entries(PAY_METHOD).map(([k,v])=>'<option value="'+k+'">'+v+'</option>').join("")+'</select></div>'
+    +'<div class="field"><label>تصنيف الإيراد</label><select id="ciCat">'+cats+'</select></div>'
+    +'<div class="field"><label>التاريخ</label><input id="ciDate" type="date" value="'+todayStr()+'"/></div>'
+    +'<div class="row-actions"><button class="btn green" id="ciGo">سجّل التحصيل</button>'
+    +'<button class="btn ghost" onclick="openJobAccount(\''+id+'\')">إلغاء</button></div>');
+  addMicTo("ciTitle");
+  $("ciGo").onclick=async()=>{
+    const t=$("ciTitle").value.trim(), a=parseFloat($("ciAmt").value);
+    if(!t){ toast("اكتب البيان","bad"); return; }
+    if(!(a>0)){ toast("اكتب المبلغ","bad"); return; }
+    const cat=await resolveCat("ciCat","income");
+    const b=$("ciGo"); b.disabled=true;
+    const d=$("ciDate").value||todayStr();
+    const { error }=await sb.from("os_project_payments").insert({ project_id:id, title:t,
+      amount:a, paid_amount:a, status:"paid", paid_at:d, due_date:d,
+      method:$("ciM").value, is_adhoc:true, category:cat, created_by:ME.id });
+    if(error){ toast(error.message,"bad"); b.disabled=false; return; }
+    toast("اتحصّل \u2713","ok"); openJobAccount(id);
+  };
+}
+
+/* ═══════════ توجيه الملف لقسم ═══════════ */
+async function openRouteJob(id){
+  const [{ data:deps },{ data:log }]=await Promise.all([
+    sb.from("os_departments").select("key,name").order("name"),
+    sb.from("os_job_routing_log").select("*").eq("project_id",id).order("routed_at",{ascending:false}).limit(10)
+  ]);
+  const dOpts=(deps||[]).map(d=>'<option value="'+esc(d.key)+'">'+esc(d.name)+'</option>').join("");
+  const people='<option value="">\u2014 القسم كله \u2014</option>'
+    +PROFILES.filter(p=>!/^suspended/.test(p.email||"")).map(p=>'<option value="'+p.id+'">'+esc(p.name||p.email)+'</option>').join("");
+  const L=log||[];
+  openSheet('<h3>وجّه الملف لقسم</h3>'
+    +'<div class="field"><label>القسم</label><select id="rjDept">'+dOpts+'</select></div>'
+    +'<div class="field"><label>لشخص محدد؟</label><select id="rjWho">'+people+'</select></div>'
+    +'<div class="field"><label>السبب</label><input id="rjWhy" placeholder="مثلاً: محتاج مراجعة مالية قبل التقديم"/></div>'
+    +'<div class="row-actions"><button class="btn green" id="rjGo">وجّه</button>'
+    +'<button class="btn ghost" onclick="paintJob360(\''+id+'\')">رجوع</button></div>'
+    +(L.length?'<div class="sec-h">سجل التوجيه <span class="ln"></span></div><div class="card flat">'
+      +L.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #eef2f7">'
+        +'<div style="font-size:12.5px">'+esc(x.from_dept_name||"—")+' \u2190 '+esc(x.to_dept_name||"")+'</div>'
+        +(x.reason?'<div class="muted" style="font-size:11px;margin-top:1px">'+esc(x.reason)+'</div>':'')
+        +'<div class="muted" style="font-size:10.5px;margin-top:2px">'+esc(x.routed_by_name||"")+' · '+fmtDate(x.routed_at)
+        +' · <b style="color:'+(x.received_at?'var(--green-d)':'#B45309')+'">'+esc(x.state)+'</b></div>'
+        +(!x.received_at?'<button class="btn sm" style="margin-top:5px" onclick="receiveJob(\''+x.id+'\',\''+id+'\')">استلمت</button>':'')
+        +'</div>').join("")+'</div>':""));
+  addMicTo("rjWhy");
+  $("rjGo").onclick=async()=>{
+    const b=$("rjGo"); b.disabled=true;
+    const { error }=await sb.rpc("os_route_job",{ p_project:id, p_dept:$("rjDept").value,
+      p_user:$("rjWho").value||null, p_reason:$("rjWhy").value.trim()||null });
+    if(error){ toast(error.message,"bad"); b.disabled=false; return; }
+    toast("الملف اتوجّه \u2713","ok"); paintJob360(id);
+  };
+}
+async function receiveJob(routingId, prjId){
+  const { error }=await sb.rpc("os_receive_job",{ p_routing:routingId });
+  if(error){ toast(error.message,"bad"); return; }
+  toast("اتسجّل الاستلام \u2713","ok"); openRouteJob(prjId);
+}
+
 /* ═══════════ الدفاتر المحاسبية ═══════════ */
 async function openBooks(){
   if(!isFinanceUser()&&!isOwnerOps()){ toast("الدفاتر للمالية والإدارة","bad"); return; }
@@ -3397,6 +3510,11 @@ async function paintJob360(id, mountId){
         +'</div>'
         :'<div class="muted" style="font-size:11.5px;margin-top:4px">مفيش قطعة مربوطة</div>')
       +'</div>';
+
+    /* كشف الحساب والتوجيه */
+    h+='<div class="row-actions" style="margin-bottom:10px">'
+      +'<button class="btn sm" onclick="openJobAccount(\''+id+'\')">كشف الحساب</button>'
+      +'<button class="btn ghost sm" onclick="openRouteJob(\''+id+'\')">وجّه لقسم</button></div>';
 
     /* وعد العميل وتوقعاته */
     {
