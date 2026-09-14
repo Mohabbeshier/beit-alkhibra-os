@@ -2045,6 +2045,8 @@ async function paintProjectDetail(id){
         }).join("")+'</div>';
       }
     }
+    h='<div id="j360Box"><div class="skel"></div></div>'+h;
+    setTimeout(()=>paintJob360(id,"j360Box"), 30);
     h+='<div class="sec-h">مرفقات الملف <span class="ln"></span></div>';
     if(canUp){
       h+='<div class="card flat"><div class="field"><label>اسم المرفق</label><input id="pdTitle" placeholder="مثلًا: رسمة معمارية — الدور الأرضي"/></div>'
@@ -2857,6 +2859,128 @@ async function refreshCostCats(){
 }
 const egp=(n)=>Number(n||0).toLocaleString("en")+" ج";
 function isFinanceUser(){ return isOwnerOps()||PROFILE.dept==="finance"; }
+/* ═══════════ بيان الأعمال ٣٦٠ ═══════════ */
+async function paintJob360(id, mountId){
+  const box=$(mountId); if(!box) return;
+  try{
+    const [{ data:j },{ data:inst }]=await Promise.all([
+      sb.from("os_job_360").select("*").eq("project_id",id).maybeSingle(),
+      sb.from("os_job_installments").select("*").eq("project_id",id).order("seq_no")
+    ]);
+    if(!j){ box.innerHTML=""; return; }
+    const I=inst||[];
+    const badge=(t,c)=>'<span class="badge" style="background:'+c[0]+';color:'+c[1]+';font-weight:800">'+t+'</span>';
+    const hcol=j.health==="سليم"?['#E8F5E9','#2E7D32']
+             :j.health==="مغلق"?['#eef2f7','#0D47A1']:['#FFEBEE','#C62828'];
+
+    let h='<div class="card flat" style="border-right:4px solid '+hcol[1]+'">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+      +'<b style="font-size:15px;flex:1;min-width:0">'+esc(j.name||"—")+'</b>'
+      +badge(esc(j.job_code||j.code||"—"),['#E1F5EE','#0F6E56'])+'</div>'
+      +'<div class="meta" style="margin-top:5px">'
+      +(j.service_name?'<span>'+esc(j.service_name)+'</span><span class="dot"></span>':'')
+      +'<span>'+esc(j.health)+'</span>'
+      +(j.opened_on?'<span class="dot"></span><span>فُتح '+fmtDate(j.opened_on)+'</span>':'')
+      +'</div></div>';
+
+    /* العميل والأرض */
+    h+='<div class="card flat"><div class="meta" style="margin:0">'
+      +'<span>👤 '+esc(j.client_name||"—")+'</span>'
+      +(j.client_phone?'<span class="dot"></span><span>'+esc(j.client_phone)+'</span>':'')+'</div>'
+      +(j.parcel_code?'<div class="meta" style="margin-top:4px">'
+        +'<span>📍 '+esc(j.parcel_code)+'</span>'
+        +'<span class="dot"></span><span>'+esc(j.authority||"—")+'</span>'
+        +'<span class="dot"></span><span>'+esc(j.area||"—")+'</span>'
+        +(j.land_code?'<span class="dot"></span><span>كود الأرض '+esc(j.land_code)+'</span>':'')
+        +'</div>'
+        +'<button class="btn ghost sm" style="margin-top:7px" onclick="openParcelHistory(\''+j.parcel_id+'\')">كل ملفات القطعة دي</button>'
+        :'<div class="muted" style="font-size:11.5px;margin-top:4px">مفيش قطعة مربوطة</div>')
+      +'</div>';
+
+    /* المرحلة الحالية */
+    if(j.current_stage){
+      const late=j.current_due && j.current_due<todayStr();
+      h+='<div class="card flat" style="border-right:3px solid '+(j.current_state==="blocked"?'var(--red)':late?'var(--red)':'var(--blue)')+'">'
+        +'<div style="font-size:12.5px;font-weight:600">'
+        +(j.current_state==="blocked"?'⛔ ':'')+esc(j.current_stage)+'</div>'
+        +'<div class="meta" style="margin-top:4px"><span>'+esc(j.current_owner||"مش متعيّن")+'</span>'
+        +'<span class="dot"></span><span>'+j.stages_done+'/'+j.stages_total+' مرحلة</span>'
+        +(j.current_due?'<span class="dot"></span><span'+(late?' style="color:var(--red);font-weight:800"':'')+'>'+fmtDate(j.current_due)+'</span>':'')
+        +'</div></div>';
+    }
+
+    /* الفلوس */
+    const canFin=isFinanceUser();
+    if(canFin||isOwnerOps()){
+      h+='<div class="sec-h">الفلوس <span class="ln"></span></div>'
+        +'<div style="display:flex;gap:9px;flex-wrap:wrap">'
+        +'<div class="card flat" style="flex:1;min-width:calc(50% - 5px);text-align:center"><b style="display:block;font-size:15px">'+egp(j.contracted)+'</b><span class="muted" style="font-size:11px">متعاقد</span></div>'
+        +'<div class="card flat" style="flex:1;min-width:calc(50% - 5px);text-align:center"><b style="display:block;font-size:15px;color:var(--green-d)">'+egp(j.collected)+'</b><span class="muted" style="font-size:11px">محصّل '+(j.collected_pct!=null?j.collected_pct+'%':'')+'</span></div>'
+        +'<div class="card flat" style="flex:1;min-width:calc(50% - 5px);text-align:center"><b style="display:block;font-size:15px;color:'+(Number(j.due_now)>0?'var(--red)':'var(--ink2,#666)')+'">'+egp(j.due_now)+'</b><span class="muted" style="font-size:11px">مستحق دلوقتي</span></div>'
+        +'<div class="card flat" style="flex:1;min-width:calc(50% - 5px);text-align:center"><b style="display:block;font-size:15px">'+egp(j.net_cash)+'</b><span class="muted" style="font-size:11px">صافي (بعد '+egp(j.expenses)+' مصروف)</span></div>'
+        +'</div>';
+
+      /* جدول الدفعات */
+      h+='<div class="sec-h">جدول الدفعات <span class="ln"></span>'
+        +(I.length?'<span class="badge" style="background:#eef2f7;color:#0D47A1;font-weight:800">'+I.length+'</span>':'')+'</div>';
+      if(!I.length){
+        h+='<div class="card flat"><div class="empty" style="padding:8px">مفيش خطة دفع لسه.</div>'
+          +(canFin?'<button class="btn green sm" onclick="buildPlan(\''+id+'\')">ولّد خطة الدفع تلقائي</button>':'')
+          +'</div>';
+      } else {
+        h+='<div class="card flat">'+I.map(x=>{
+          const cl=x.state_ar==="محصّلة"?['#E8F5E9','#2E7D32']
+                 :x.state_ar==="متأخرة"?['#FFEBEE','#C62828']
+                 :x.state_ar==="مستحقة"?['#FFF8E1','#B45309']:['#eef2f7','#5F5E5A'];
+          return '<div style="padding:8px 0;border-bottom:1px solid #eef2f7">'
+            +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+            +'<span style="font-size:12.5px;font-weight:600;flex:1;min-width:0">'+x.seq_no+'. '+esc(x.title)+'</span>'
+            +'<b style="font-size:12.5px">'+egp(x.amount)+'</b></div>'
+            +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:6px">'
+            +'<span class="muted" style="font-size:11px;flex:1;min-width:0">'
+            +(x.pct?x.pct+'% · ':'')+(x.stage_name?esc(x.stage_name):'من غير مرحلة')
+            +(x.due_date?' · '+fmtDate(x.due_date):'')+'</span>'
+            +badge(esc(x.state_ar),cl)
+            +(canFin&&x.state_ar!=="محصّلة"?'<button class="btn sm" onclick="collectInst(\''+x.payment_id+'\','+(x.remaining||x.amount)+',\''+id+'\')">حصّل</button>':'')
+            +'</div></div>';
+        }).join("")+'</div>';
+      }
+    }
+
+    /* أرقام سريعة */
+    h+='<div class="card flat"><div class="meta" style="margin:0">'
+      +'<span>📎 '+(j.attachments||0)+' مرفق</span>'
+      +'<span class="dot"></span><span>🏛 '+(j.gov_open||0)+' معاملة</span>'
+      +'<span class="dot"></span><span>✔ '+(j.open_tasks||0)+' مهمة</span>'
+      +'<span class="dot"></span><span>📋 '+(j.audit_events||0)+' حركة</span>'
+      +'</div></div>';
+    box.innerHTML=h;
+  }catch(e){ box.innerHTML='<div class="empty">تعذّر تحميل ملخص الملف.</div>'; }
+}
+async function buildPlan(id){
+  const { data:p }=await sb.from("os_projects").select("value_egp,name").eq("id",id).maybeSingle();
+  let val=p&&p.value_egp;
+  if(!val){
+    const v=prompt("قيمة الملف بالجنيه؟"); val=parseFloat(v);
+    if(!(val>0)) return;
+    await sb.from("os_projects").update({ value_egp:val }).eq("id",id);
+  }
+  const { error }=await sb.rpc("os_build_payment_plan",{ p_project:id, p_value:val });
+  if(error){ toast(error.message,"bad"); return; }
+  toast("خطة الدفع اتولدت \u2713","ok"); paintProjectDetail(id);
+}
+async function collectInst(payId, remaining, prjId){
+  const v=prompt("المبلغ المحصّل (المتبقي "+remaining+")", String(remaining));
+  const a=parseFloat(v); if(!(a>0)) return;
+  const { data:cur }=await sb.from("os_project_payments").select("amount,paid_amount").eq("id",payId).maybeSingle();
+  const paid=(Number(cur&&cur.paid_amount||0))+a;
+  const full=paid >= Number(cur&&cur.amount||0);
+  const { error }=await sb.from("os_project_payments").update({
+    paid_amount:paid, status: full?'paid':'partial', paid_at: full?todayStr():null }).eq("id",payId);
+  if(error){ toast(error.message.includes('مقفلة')?'الفترة المالية مقفلة':error.message,"bad"); return; }
+  toast(full?"الدفعة اتحصّلت \u2713":"تحصيل جزئي \u2713","ok"); paintProjectDetail(prjId);
+}
+
 /* ═══════════ البحث الموحّد ═══════════ */
 async function openFind(pre){
   openSheet('<h3>بحث</h3>'
