@@ -1965,25 +1965,22 @@ async function paintProjectDetail(id){
         }).join("")+'</div>';
       }
     }
-    h+='<div class="sec-h">مرفقات الملف <span class="ln"></span></div><div id="ftBox"><div class="skel"></div></div>';
-    setTimeout(()=>paintFileTree(id,"ftBox"), 40);
-    h+='<div class="sec-h">مرفقات المشروع (قديم) <span class="ln"></span></div>';
+    h+='<div class="sec-h">مرفقات الملف <span class="ln"></span></div>';
     if(canUp){
       h+='<div class="card flat"><div class="field"><label>اسم المرفق</label><input id="pdTitle" placeholder="مثلًا: رسمة معمارية — الدور الأرضي"/></div>'
-        +'<div class="field"><label>اختار ملف (أقصى 20 ميجا)</label><input id="pdFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx" style="font-size:12px"/></div>'
+        +'<div class="field"><label>القسم</label><select id="pdFolder">'
+        +'<option value="client">مستندات العميل</option><option value="survey">رفع ومعاينة</option>'
+        +'<option value="design" selected>تصميم ورسومات</option><option value="permit">ترخيص وجهاز المدينة</option>'
+        +'<option value="exec">تنفيذ وإنشاءات</option><option value="corr">مراسلات</option>'
+        +'<option value="photos">صور موقع</option><option value="handover">تسليم ومخالصة</option>'
+        +'<option value="other">أخرى</option></select></div>'
+        +'<div class="field"><label>وسوم (اختياري — بفاصلة)</label><input id="pdTags" placeholder="واجهات, نسخة نهائية"/></div>'
+        +'<div class="field"><label>اختار ملف (أقصى 20 ميجا)</label><input id="pdFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.dwg" style="font-size:12px"/></div>'
         +'<div id="pdStatus" class="muted" style="font-size:12px;margin-bottom:8px"></div>'
         +'<div class="row-actions"><button class="btn green sm" id="pdUp">ارفع للمشروع</button></div></div>';
     }
-    h+='<div id="pdFiles" style="margin-top:8px">';
-    if(!fl.length){ h+='<div class="empty">مفيش مرفقات للمشروع ده لسه.</div>'; }
-    else { h+=fl.map(f=>{
-      const isLink=f.kind==="link"; const sz=f.size_bytes?(" · "+fmtBytes(f.size_bytes)):"";
-      const revBadge=(f.revision||1)>1?'<span class="badge b-blue" style="font-size:10px">Rev '+f.revision+'</span>':"";
-      return '<div class="card flat"><div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:13px">'+esc(f.title||"ملف")+'</b>'+revBadge
-        +(f.url?'<a class="btn sm" href="'+esc(f.url)+'" target="_blank" rel="noopener" style="background:var(--blue);color:#fff">فتح</a>':'')+'</div>'
-        +'<div class="meta"><span>'+(isLink?"لينك":"ملف")+sz+'</span>'+((f.uploaded_name)?'<span class="dot"></span><span>'+esc(f.uploaded_name)+'</span>':'')+'</div></div>';
-    }).join(""); }
-    h+='</div>';
+    h+='<div id="ftBox" style="margin-top:8px"><div class="skel"></div></div>';
+    setTimeout(()=>paintFileTree(id,"ftBox"), 40);
     $("pdBox").innerHTML=h;
     const msBtn=$("pdAddMs"); if(msBtn) msBtn.onclick=()=>openProjectMilestoneNew(id,prj);
     if(canUp){
@@ -2002,7 +1999,17 @@ async function paintProjectDetail(id){
             revision=Math.max(...dupes.map(d=>d.revision||1))+1;
             await sb.from("os_files").update({ archived:true, archived_at:new Date().toISOString(), archived_by:ME.id }).in("id",dupes.map(d=>d.id));
           }
-          await registerFile({ title, kind:"file", project_id:id, dept:prj.dept||null, url:up.url, storage_path:up.path, size_bytes:up.size, mime:up.mime, revision });
+          const folder=$("pdFolder")?$("pdFolder").value:"other";
+          const tags=($("pdTags")&&$("pdTags").value.trim())
+            ? $("pdTags").value.split(",").map(t=>t.trim()).filter(Boolean) : null;
+          let organized=up.path;
+          try{
+            const { data:np }=await sb.rpc("os_build_storage_path",
+              { p_project:id, p_folder:folder, p_filename:(fe.files[0].name||title) });
+            if(np) organized=np;
+          }catch(e){}
+          await registerFile({ title, kind:"file", project_id:id, dept:prj.dept||null, folder,
+            tags, url:up.url, storage_path:organized, size_bytes:up.size, mime:up.mime, revision });
           toast(revision>1?"اترفعت نسخة جديدة (Rev "+revision+") — النسخة القديمة اتأرشفت أوتوماتيك":"اترفع واتربط بالمشروع","ok");
           paintProjectDetail(id);
         }catch(e){ $("pdStatus").textContent=""+(e.message||"فشل"); toast(e.message||"فشل الرفع","bad"); b.disabled=false; }
