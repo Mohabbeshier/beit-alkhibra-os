@@ -406,6 +406,27 @@ const HELP_TEXT={
   decisions:"سجل القرارات الإدارية المهمة بتاريخها ومين اتخذها.",
   meeting:"تقرير اجتماع — بتسجّل المحضر والقرارات والمهام اللي طلعت منه."
 };
+/* استخدام الأزرار — الدليل اللي بنقرر بيه نشيل إيه */
+async function openButtonUsage(){
+  openSheet('<h3>استخدام الأزرار</h3>'
+    +'<div class="muted" style="margin:-6px 0 12px;font-size:12px">كل زرار وكام مرة اتضغط. اللي رقمه صفر بعد أسبوعين — يتشال.</div>'
+    +'<div id="buBox"><div class="skel"></div></div>'
+    +actMini([{ label:"قفل", on:"closeSheet()" }]));
+  try{
+    const { data, error }=await sb.from("os_button_usage").select("*").order("hits",{ascending:false}).limit(80);
+    if(error) throw error;
+    const rows=data||[];
+    if(!rows.length){ $("buBox").innerHTML='<div class="empty">لسه مفيش بيانات. التتبّع بيشتغل من دلوقتي — راجعها بعد أسبوع.</div>'; return; }
+    const max=Math.max(1,...rows.map(r=>Number(r.hits||0)));
+    $("buBox").innerHTML='<div class="card flat" style="padding:10px 14px">'
+      +rows.map(r=>'<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--line)">'
+        +'<span style="flex:1;font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.button||"")+'</span>'
+        +'<div style="width:74px;background:#eef2f7;border-radius:99px;height:7px;overflow:hidden"><div style="width:'+Math.round(Number(r.hits)/max*100)+'%;height:100%;background:var(--blue);border-radius:99px"></div></div>'
+        +'<b style="font-size:12px;min-width:26px;text-align:left">'+r.hits+'</b>'
+        +'<span class="muted" style="font-size:10.5px;min-width:44px;text-align:left">'+r.users+' مستخدم</span></div>').join("")
+      +'</div>';
+  }catch(e){ $("buBox").innerHTML=failBox("معرفناش نجيبها.",openButtonUsage); }
+}
 /* actGroup(عنوان, [{id,label,kind,lead}]) — kind: green|blue|ghost */
 function actGroup(label, items){
   const vis=(items||[]).filter(Boolean);
@@ -485,7 +506,11 @@ const STOP_BTN_SVG='<svg viewBox="0 0 24 24" width="34" height="34" fill="#fff">
 function nameOf(id){ return (BY_ID[id]&&BY_ID[id].name)||"—"; }
 
 /* ===================== MODAL ===================== */
-function openSheet(html){ $("sheet").innerHTML=html; $("modal").classList.add("open"); }
+function openSheet(html){
+  $("sheet").innerHTML=html; $("modal").classList.add("open");
+  /* تتبّع الشاشة تلقائي — عشان نعرف إيه اللي بيتستخدم فعلاً */
+  try{ const m=String(html).match(/<h3>([^<]{2,44})</); if(m) track("screen", m[1].trim()); }catch(e){}
+}
 function closeSheet(){
   if(sRecOn){ try{ stopSheetMic(true); }catch(e){} }
   try{
@@ -1236,7 +1261,7 @@ function renderEmployeeHome(d){
       else if(d==="reception") b='<button class="btn sm" data-quick="visitor">تسجيل زائر'+helpDot("visitor")+'</button><button class="btn ghost sm" data-quick="call">تسجيل مكالمة'+helpDot("call")+'</button><button class="btn ghost sm" data-quick="corr">الوارد والصادر'+helpDot("corr")+'</button><button class="btn ghost sm" data-quick="clientfiles">ملفات العملاء'+helpDot("clientfiles")+'</button><button class="btn ghost sm" data-quick="attlog">مين موجود'+helpDot("attlog")+'</button>';
       if(canSeeLeads()) b+='<button class="btn ghost sm" data-quick="leads">📥 الليدز'+helpDot("leads")+'</button>';
       return b?'<div class="act-grp"><div class="act-lbl">شغلك اليومي</div><div class="row-actions">'+b+'</div></div>':"";})()}
-    <div class="act-grp"><div class="act-lbl">حاجات عامة</div><div class="row-actions"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك'+helpDot("ask")+'</button><button class="btn sm" data-quick="event">سجّل موعد'+helpDot("event")+'</button><button class="btn ghost sm" data-quick="newreq">طلب'+helpDot("newreq")+'</button><button class="btn ghost sm" data-quick="leaves">الإجازات'+helpDot("leaves")+'</button>${PROFILE.dept==="reception"?'<button class="btn ghost sm" data-quick="docs">خزنة المستندات'+helpDot("docs")+'</button>':""}</div></div></div>`;
+    <div class="act-grp"><div class="act-lbl">حاجات عامة</div><div class="act-grid"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك'+helpDot("ask")+'</button><button class="btn sm" data-quick="event">سجّل موعد'+helpDot("event")+'</button><button class="btn ghost sm" data-quick="newreq">طلب'+helpDot("newreq")+'</button><button class="btn ghost sm" data-quick="leaves">الإجازات'+helpDot("leaves")+'</button>${PROFILE.dept==="reception"?'<button class="btn ghost sm" data-quick="docs">خزنة المستندات'+helpDot("docs")+'</button>':""}</div></div></div>`;
   body+=`<div class="sec-h">المهام اللي عليك <span class="ln"></span></div>`;
   if(myTasks.length){
     body+=myTasks.slice(0,6).map(t=>`<button class="card flat" data-task="${t.id}" style="width:100%;text-align:right;cursor:pointer${t.deadline&&new Date(t.deadline)<new Date()?';border-right:4px solid var(--red)':''}"><b>${esc(t.title)}</b><div class="meta">${t.deadline?`<span>${fmtDate(t.deadline)}</span>`:`<span class="muted">من غير موعد</span>`}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}<span class="dot"></span><span class="muted">${t.progress||0}%</span></div></button>`).join("");
@@ -2472,22 +2497,26 @@ async function openAdminHub(){
   let docsExp=0;
   try{ const r=await sb.from("os_documents").select("id",{count:"exact",head:true}).not("expires_at","is",null).lte("expires_at",new Date(Date.now()+30*86400000).toISOString().slice(0,10)); docsExp=r.count||0; }catch(e){}
   openSheet('<h3>المركز الإداري</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">الموافقات والإجازات والمستندات والعهدة والتفويض — كله رسمي ومسجّل</div>'
-    +'<div class="row-actions" style="flex-wrap:wrap;gap:8px">'
-    +(isOwnerOps()?'<button class="btn sm" id="ahCockpit" style="background:#0D47A1;color:#fff">لوحة الإدارة</button>':'')
-    +'<button class="btn sm" id="ahAppr" style="background:var(--blue);color:#fff">الموافقات</button>'
-    +'<button class="btn sm" id="ahLeave" style="background:var(--green-d);color:#fff">الإجازات</button>'
-    +'<button class="btn ghost sm" id="ahDocs">المستندات'+(docsExp?' <span class="badge b-red">'+docsExp+' بتنتهي</span>':'')+'</button>'
-    +'<button class="btn ghost sm" id="ahCust">العهدة</button>'
-    +'<button class="btn ghost sm" id="ahDeleg">التفويض</button>'
-    +'<button class="btn ghost sm" id="ahDec">القرارات</button>'
-    +'<button class="btn ghost sm" id="ahMin">المحاضر</button>'
-    +'<button class="btn ghost sm" id="ahExp">بينتهي قريب</button>'
-    +'<button class="btn ghost sm" id="ahPrj">المشاريع</button>'
-    +(isOwnerOps()?'<button class="btn ghost sm" id="ahCmp">الشكاوى</button>':'')
-    +(PROFILE.role==="owner"?'<button class="btn ghost sm" id="ahSucc">البدلاء</button>':'')
-    +(isOwnerOps()?'<button class="btn sm" id="ahUsage" style="background:linear-gradient(135deg,#7C3AED,#5B21B6);color:#fff">تحليلات الاستخدام</button>':'')
-    +(isOwnerOps()?'<button class="btn sm" id="ahStorage" style="background:linear-gradient(135deg,#0891B2,#0E7490);color:#fff">مركز التخزين</button>':'')
-    +'</div><button class="btn ghost" style="margin-top:12px" onclick="closeSheet()">قفل</button>');
+    +actGroup("محتاج قرارك",[
+        (isOwnerOps()?{ id:"ahCockpit", label:"لوحة الإدارة", kind:"green", lead:true }:null),
+        { id:"ahAppr",  label:"الموافقات", kind:"" },
+        { id:"ahLeave", label:"الإجازات", kind:"" },
+        { id:"ahExp",   label:"بينتهي قريب"+(docsExp?" ("+docsExp+")":""), kind:"" }])
+    +actGroup("المستندات والعهدة",[
+        { id:"ahDocs", label:"المستندات"+(docsExp?" \u2022 "+docsExp+" بتنتهي":""), kind:"" },
+        { id:"ahCust", label:"العهدة", kind:"" },
+        { id:"ahDeleg",label:"التفويض", kind:"" }])
+    +actGroup("القرارات والمتابعة",[
+        { id:"ahDec", label:"القرارات", kind:"" },
+        { id:"ahMin", label:"المحاضر", kind:"" },
+        { id:"ahPrj", label:"بيان الأعمال", kind:"" },
+        (isOwnerOps()?{ id:"ahCmp", label:"الشكاوى", kind:"" }:null)])
+    +((isOwnerOps()||PROFILE.role==="owner")?actGroup("أدوات المالك",[
+        (isOwnerOps()?{ id:"ahUsage", label:"تحليلات الاستخدام", kind:"ghost" }:null),
+        (isOwnerOps()?{ label:"استخدام الأزرار", kind:"ghost", on:"openButtonUsage()" }:null),
+        (isOwnerOps()?{ id:"ahStorage", label:"مركز التخزين", kind:"ghost" }:null),
+        (PROFILE.role==="owner"?{ id:"ahSucc", label:"البدلاء", kind:"ghost" }:null)]):"")
+    +actMini([{ label:"قفل", on:"closeSheet()" }]));
   const ac=$("ahCockpit"); if(ac) ac.onclick=()=>openCockpit();
   $("ahAppr").onclick=()=>openApprovals();
   $("ahLeave").onclick=()=>openLeaves();
@@ -3071,12 +3100,12 @@ async function openVouchers(){
   if(!canFinRead()){ toast("الإيصالات للمالية والإدارة","bad"); return; }
   openSheet('<h3>الإيصالات</h3>'
     +'<div class="field"><input id="vcQ" placeholder="دوّر برقم الإذن أو الملف أو العميل…"/></div>'
-    +'<div class="row-actions" style="flex-wrap:wrap;gap:6px;margin-bottom:8px">'
-    +'<button class="btn sm vc-f" data-f="all">الكل</button>'
-    +'<button class="btn ghost sm vc-f" data-f="receipt">إذن قبض</button>'
-    +'<button class="btn ghost sm vc-f" data-f="payment">إذن صرف</button>'
-    +'<button class="btn ghost sm" onclick="openFinance()">رجوع</button></div>'
-    +'<div id="vcBox"><div class="skel"></div></div>');
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'
+    +'<button class="chip on vc-f" data-f="all">الكل</button>'
+    +'<button class="chip vc-f" data-f="receipt">إذن قبض</button>'
+    +'<button class="chip vc-f" data-f="payment">إذن صرف</button></div>'
+    +'<div id="vcBox"><div class="skel"></div></div>'
+    +actMini([{ label:"رجوع للمالية", on:"openFinance()" }]));
   let R=[], f="all";
   try{
     const { data }=await sb.from("os_voucher").select("*").order("on_date",{ascending:false}).limit(200);
@@ -3110,8 +3139,8 @@ async function openVouchers(){
   $("vcQ").oninput=paint;
   document.querySelectorAll(".vc-f").forEach(b=>{
     b.onclick=()=>{ f=b.getAttribute("data-f");
-      document.querySelectorAll(".vc-f").forEach(x=>x.className="btn ghost sm vc-f");
-      b.className="btn sm vc-f"; paint(); };
+      document.querySelectorAll(".vc-f").forEach(x=>x.className="chip vc-f");
+      b.className="chip on vc-f"; paint(); };
   });
   paint();
 }
@@ -3448,13 +3477,13 @@ async function openFinArchive(){
   if(!canFinRead()){ toast("الأرشيف للمالية والإدارة","bad"); return; }
   openSheet('<h3>أرشيف الحركات المالية</h3>'
     +'<div class="field"><input id="arQ" placeholder="دوّر ببيان أو إذن أو ملف…"/></div>'
-    +'<div class="row-actions" style="flex-wrap:wrap;gap:6px;margin-bottom:8px">'
-    +'<button class="btn sm ar-f" data-f="all">الكل</button>'
-    +'<button class="btn ghost sm ar-f" data-f="in">داخل</button>'
-    +'<button class="btn ghost sm ar-f" data-f="out">خارج</button>'
-    +'<button class="btn ghost sm ar-f" data-f="عهدة">العهد</button>'
-    +'<button class="btn ghost sm" onclick="openFinance()">رجوع</button></div>'
-    +'<div id="arBox"><div class="skel"></div><div class="skel"></div></div>');
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'
+    +'<button class="chip on ar-f" data-f="all">الكل</button>'
+    +'<button class="chip ar-f" data-f="in">داخل</button>'
+    +'<button class="chip ar-f" data-f="out">خارج</button>'
+    +'<button class="chip ar-f" data-f="عهدة">العهد</button></div>'
+    +'<div id="arBox"><div class="skel"></div><div class="skel"></div></div>'
+    +actMini([{ label:"رجوع للمالية", on:"openFinance()" }]));
   let ROWS=[], filter="all";
   try{
     const { data }=await sb.from("os_fin_archive").select("*")
@@ -3497,8 +3526,8 @@ async function openFinArchive(){
   document.querySelectorAll(".ar-f").forEach(b=>{
     b.onclick=()=>{
       filter=b.getAttribute("data-f");
-      document.querySelectorAll(".ar-f").forEach(x=>x.className="btn ghost sm ar-f");
-      b.className="btn sm ar-f"; paint();
+      document.querySelectorAll(".ar-f").forEach(x=>x.className="chip ar-f");
+      b.className="chip on ar-f"; paint();
     };
   });
   paint();
@@ -5801,14 +5830,14 @@ async function openDeptPanel(key){
     +'<div id="dpStats"><div class="skel" style="height:46px"></div></div>'
     +'<div class="sec-h">آخر المهام <span class="ln"></span></div><div id="dpTasks"><div class="skel"></div></div>'
     +'<div class="sec-h">تحكم سريع <span class="ln"></span></div>'
-    +'<div class="row-actions" style="flex-wrap:wrap;gap:8px">'
-    +'<button class="btn green sm" id="dpSmart">وزّع مهمة</button>'
-    +'<button class="btn sm" id="dpChat" style="background:var(--blue);color:#fff">شات القسم</button>'
-    +'<button class="btn ghost sm" id="dpAsk">اسأل مساعده</button>'
-    +'<button class="btn ghost sm" id="dpReq">طلب للمدير</button>'
-    +'<button class="btn ghost sm" id="dpSum">لخّص أسبوع القسم</button>'
-    +'<button class="btn ghost sm" id="dpReport">تقرير القسم</button>'
-    +'</div>'
+    +actGroup("شغل يومي",[
+        { id:"dpSmart", label:"وزّع مهمة", kind:"green", lead:true },
+        { id:"dpChat",  label:"شات القسم", kind:"" },
+        { id:"dpAsk",   label:"اسأل مساعده", kind:"" },
+        { id:"dpReq",   label:"طلب للمدير", kind:"" }])
+    +actGroup("تقارير",[
+        { id:"dpSum",    label:"لخّص أسبوع القسم", kind:"ghost" },
+        { id:"dpReport", label:"تقرير القسم", kind:"ghost" }])
     +'<div id="dpInsight"></div>'
     +'<div id="dpTeam"></div>'
     +'<div id="dpAdmin"></div>'
