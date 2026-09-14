@@ -1577,7 +1577,9 @@ async function openComplaintsAdmin(){
 /* =====المشاريع ===== */
 async function openProjects(){
   const canAddPrj=true; /* أي موظف يقدر يفتح بيان أعمال */
-  openSheet('<h3>بيان الأعمال</h3><div id="prjBox"><div class="skel"></div><div class="skel"></div></div>'
+  openSheet('<h3>بيان الأعمال</h3>'
+    +'<div class="field"><input id="prjQ" placeholder="دوّر بكود الملف أو العميل أو رقم القطعة…" oninput="filterProjects(this.value)"/></div>'
+    +'<div id="prjBox"><div class="skel"></div><div class="skel"></div></div>'
     +(canAddPrj?'<div class="sec-h">افتح بيان أعمال جديد <span class="ln"></span></div>'
       +'<div class="field"><label>جهاز المدينة</label>'
         +'<select id="pjAuth"><option value="">— اختار —</option><option value="__new">\u002b جهاز جديد…</option></select>'
@@ -1650,8 +1652,17 @@ async function openProjects(){
     })();
     $("pjGo").onclick=async()=>{
       const name=$("pjName").value.trim(); if(!name){ toast("اكتب اسم الملف","bad"); return; }
+      /* الملف الناقص بيتحفظ من غير كود وبعدين مايبانش صح — نمنعه من الأول */
+      const _au=$("pjAuth")?$("pjAuth").value:"";
+      const _ar=$("pjArea")?$("pjArea").value:"";
+      const _pn=$("pjParcel")?$("pjParcel").value.trim():"";
+      const _sv=$("pjSvc")?$("pjSvc").value:"";
+      if(!_au){ toast("اختار جهاز المدينة","bad"); return; }
+      if(!_ar){ toast("اختار المنطقة","bad"); return; }
+      if(!_pn){ toast("اكتب رقم القطعة","bad"); return; }
+      if(!_sv){ toast("اختار نوع الملف","bad"); return; }
       const v=parseFloat($("pjVal").value)||null;
-      const go=$("pjGo"); go.disabled=true;
+      const go=$("pjGo"); if(go.disabled) return; go.disabled=true;
       const hint=(t)=>{ const h=$("pjHint"); if(h) h.textContent=t||""; };
 
       /* الجديد اللي اتكتب يدوي بيتسجّل الأول ويفضل في القايمة بعد كده */
@@ -1748,6 +1759,7 @@ async function openProjects(){
           "معرفناش نضيف: "+m, "bad");
         return; }
       toast("بيان الأعمال اتفتح \u2713","ok");
+      try{ await paintProjects(); }catch(e){}
       ["pjName","pjParcel","pjCli","pjPhone","pjLand","pjVal","pjAuthNew","pjAreaNew","pjSvcNew"].forEach(i=>{ if($(i)) $(i).value=""; });
       openProjects();
     };
@@ -1758,29 +1770,58 @@ async function openProjects(){
 const PRJ_STAGE={"جديد":"جديد","تسعير":"تسعير","تنفيذ":"تنفيذ","تسليم":"تسليم","مغلق":"مغلق"};
 async function paintProjects(){
   try{
-    const [{ data },{ data:meta },{ data:fls }]=await Promise.all([
-      sb.from("os_project_overview").select("*").order("name"),
-      sb.from("os_projects").select("id,code,status"),
+    const [{ data, error },{ data:fls }]=await Promise.all([
+      sb.from("os_job_360").select("*").eq("archived",false).order("opened_on",{ascending:false}),
       sb.from("os_files").select("project_id").not("project_id","is",null)
     ]);
+    if(error) throw error;
     const rows=data||[];
-    const M={}; (meta||[]).forEach(m=>{ M[m.id]=m; });
     const FC={}; (fls||[]).forEach(f=>{ if(f.project_id) FC[f.project_id]=(FC[f.project_id]||0)+1; });
-    if(!rows.length){ $("prjBox").innerHTML='<div class="empty">مفيش مشاريع متسجلة لسه.</div>'; return; }
-    $("prjBox").innerHTML=rows.map(p=>{
-      const pr=Math.max(0,Math.min(100,p.progress||0)); const mm=M[p.id]||{}; const nf=FC[p.id]||0;
-      return '<div class="card flat" data-prj="'+p.id+'" style="cursor:pointer">'
-        +'<div style="display:flex;align-items:center;gap:8px">'+(mm.code?'<span class="badge" style="background:#eef2f7;color:#0D47A1;font-weight:800;letter-spacing:.3px">'+esc(mm.code)+'</span>':'')+'<b style="flex:1">'+esc(p.name)+'</b><span class="badge b-blue">'+(PRJ_STAGE[p.stage]||esc(p.stage||"\u2014"))+'</span></div>'
-        +'<div class="prog" style="margin:8px 0 4px"><i style="width:'+pr+'%"></i></div>'
-        +'<div class="meta"><span>'+pr+'%</span><span class="dot"></span><span>'+(p.tasks_done||0)+'/'+(p.tasks_total||0)+' مهمة</span>'
-        +((p.tasks_overdue||0)?'<span class="dot"></span><span style="color:var(--red);font-weight:800">'+p.tasks_overdue+' متأخرة</span>':'')
-        +(p.value_egp?'<span class="dot"></span><span>'+Number(p.value_egp).toLocaleString("en")+' ج</span>':'')
-        +((DEPT_BY_KEY[p.dept]&&'<span class="dot"></span><span>'+esc(DEPT_BY_KEY[p.dept].name)+'</span>')||'')
-        +'<span class="dot"></span><span style="color:var(--green-d);font-weight:800">📎 '+nf+' • افتح للملفات ‹</span>'
-        +'</div></div>';
-    }).join("");
-    $("prjBox").querySelectorAll("[data-prj]").forEach(el=>el.onclick=()=>openProjectDetail(el.getAttribute("data-prj")));
-  }catch(e){ $("prjBox").innerHTML=failBox("معرفناش نجيب المشاريع.",paintProjects); }
+    if(!rows.length){
+      $("prjBox").innerHTML='<div class="empty">مفيش ملفات لسه — اعمل أول ملف من زرار «ملف جديد».</div>';
+      return;
+    }
+    window._PRJ_ROWS=rows;
+    paintProjectsList(rows, FC);
+  }catch(e){ $("prjBox").innerHTML=failBox("معرفناش نجيب بيان الأعمال.",paintProjects); }
+}
+function paintProjectsList(rows, FC){
+  FC=FC||{};
+  const HC={ "سليم":"var(--green-d)", "مؤرشف":"var(--ink-soft)", "مغلق":"var(--ink-soft)" };
+  $("prjBox").innerHTML=rows.map(p=>{
+    const nf=FC[p.project_id]||0;
+    const pr=Number(p.stages_total)>0?Math.round(Number(p.stages_done)/Number(p.stages_total)*100):0;
+    const hc=HC[p.health]||"#B45309";
+    return '<div class="card flat" data-prj="'+p.project_id+'" style="cursor:pointer">'
+      +'<div style="display:flex;align-items:center;gap:8px">'
+      +(p.job_code?'<span class="badge" style="background:#eef2f7;color:#0D47A1;font-weight:800;letter-spacing:.3px">'+esc(p.job_code)+'</span>':'')
+      +'<b style="flex:1;min-width:0;font-size:12.5px">'+esc(p.name||"")+'</b>'
+      +'<span style="flex:none;font-size:11px;font-weight:800;color:'+hc+'">'+esc(p.health||"")+'</span></div>'
+      +'<div class="muted" style="font-size:11px;margin-top:2px">'
+      +esc(p.client_name||"— من غير عميل —")
+      +(p.parcel_no?' · قطعة '+esc(p.parcel_no):'')
+      +(p.area?' · '+esc(p.area):'')
+      +(p.service_name?' · '+esc(p.service_name):'')+'</div>'
+      +'<div class="prog" style="margin:8px 0 4px"><i style="width:'+pr+'%"></i></div>'
+      +'<div class="meta" style="font-size:11px">'
+      +'<span>'+(p.stages_done||0)+'/'+(p.stages_total||0)+' مرحلة</span>'
+      +(p.current_stage?'<span class="dot"></span><span>'+esc(p.current_stage)+'</span>':'')
+      +(p.current_owner?'<span class="dot"></span><span>'+esc(p.current_owner)+'</span>':'')
+      +(Number(p.contracted)?'<span class="dot"></span><span>محصّل '+egp(p.collected)+' من '+egp(p.contracted)+'</span>':'')
+      +(Number(p.overdue)?'<span class="dot"></span><span style="color:var(--red);font-weight:800">متأخر '+egp(p.overdue)+'</span>':'')
+      +(Number(p.scope_in)?'<span class="dot"></span><span>مشتملات '+p.scope_delivered+'/'+p.scope_in+'</span>':'')
+      +'<span class="dot"></span><span style="color:var(--green-d);font-weight:800">\u{1F4CE} '+nf+'</span>'
+      +'</div></div>';
+  }).join("");
+  $("prjBox").querySelectorAll("[data-prj]").forEach(el=>el.onclick=()=>openProjectDetail(el.getAttribute("data-prj")));
+}
+function filterProjects(q){
+  const rows=window._PRJ_ROWS||[];
+  q=(q||"").trim().toLowerCase();
+  const F=q?rows.filter(x=>((x.job_code||"")+" "+(x.name||"")+" "+(x.client_name||"")+" "
+    +(x.parcel_no||"")+" "+(x.area||"")+" "+(x.client_phone||"")).toLowerCase().includes(q)):rows;
+  if(!F.length){ $("prjBox").innerHTML='<div class="empty">مفيش نتايج.</div>'; return; }
+  paintProjectsList(F);
 }
 async function openProjectDetail(id){
   openSheet('<h3>تفاصيل المشروع</h3><div id="pdBox"><div class="skel"></div><div class="skel"></div></div><button class="btn ghost" style="margin-top:10px" onclick="openProjects()">رجوع للمشاريع</button>');
