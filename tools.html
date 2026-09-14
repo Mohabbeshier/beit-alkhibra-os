@@ -2902,6 +2902,9 @@ async function refreshCostCats(){
 }
 const egp=(n)=>Number(n||0).toLocaleString("en")+" ج";
 function isFinanceUser(){ return isOwnerOps()||PROFILE.dept==="finance"; }
+
+/* قراءة مالية: المالية + المالك + الأوبريشن — مطابقة os_can_finance_read في الداتابيز */
+function canFinRead(){ try{ return isFinanceUser()||isOwnerOps()||PROFILE.role==="ops"; }catch(e){ return false; } }
 let _moreOpen=false;
 function toggleMore(btn){
   _moreOpen=!_moreOpen;
@@ -3001,6 +3004,50 @@ async function addCashIn(id){
 
 /* ═══════════ توجيه الملف لقسم ═══════════ */
 
+/* === اعتماد الحركات المالية === */
+async function openFinPending(){
+  openSheet('<h3>مستني الاعتماد</h3>'
+    +'<div class="muted" style="margin:-6px 0 10px;font-size:12px">حركات سجّلها الأوبريشن — مبتدخلش الخزينة غير بعد الاعتماد.</div>'
+    +'<div id="fpBox"><div class="skel"></div></div>'
+    +'<button class="btn ghost" style="margin-top:10px" onclick="openFinance()">رجوع للمالية</button>');
+  await paintFinPending();
+}
+async function paintFinPending(){
+  const box=$("fpBox"); if(!box) return;
+  try{
+    const { data }=await sb.from("os_fin_pending").select("*").order("created_at",{ascending:false});
+    const R=data||[];
+    if(!R.length){ box.innerHTML='<div class="empty">مفيش حركات مستنية اعتماد.</div>'; return; }
+    const KN={ cost:"مصروف", advance:"عهدة", payable:"فاتورة مورد" };
+    const canApprove=isFinanceUser()||isOwnerOps();
+    const tot=R.reduce((a,b)=>a+Number(b.amount||0),0);
+    box.innerHTML='<div class="card flat" style="text-align:center">'
+      +'<b style="display:block;font-size:17px;color:#B45309">'+egp(tot)+'</b>'
+      +'<span class="muted" style="font-size:11.5px">'+R.length+' حركة مستنية</span></div>'
+      +R.map(x=>'<div class="card flat">'
+      +'<div style="display:flex;align-items:center;gap:8px">'
+      +'<span class="badge" style="background:#FEF3C7;color:#B45309;font-weight:800">'+esc(KN[x.kind]||x.kind)+'</span>'
+      +'<b style="flex:1;min-width:0;font-size:12.5px">'+esc(x.title||"")+'</b>'
+      +'<b style="flex:none;font-size:13px">'+egp(x.amount)+'</b></div>'
+      +'<div class="muted" style="font-size:10.5px;margin-top:3px">'
+      +fmtDate(x.on_date)+(x.category?' · '+esc(x.category):'')
+      +(x.job_code?' · '+esc(x.job_code):' · عام')
+      +(x.by_name?' · سجّلها '+esc(x.by_name):'')+'</div>'
+      +(canApprove?'<div class="row-actions" style="margin-top:6px">'
+        +'<button class="btn green sm" onclick="approveFin(\''+x.kind+'\',\''+x.id+'\',true)">اعتمد</button>'
+        +'<button class="btn ghost sm" style="color:var(--red)" onclick="approveFin(\''+x.kind+'\',\''+x.id+'\',false)">ارفض</button></div>'
+        :'<div class="muted" style="font-size:11px;margin-top:5px">مستنية اعتماد المالية</div>')
+      +'</div>').join("");
+  }catch(e){ box.innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+async function approveFin(kind, id, ok){
+  if(!ok && !confirm("ترفض الحركة دي؟ هتتشال خالص.")) return;
+  const { error }=await sb.rpc("os_approve_fin",{ p_kind:kind, p_id:id, p_ok:ok });
+  if(error){ toast(error.message,"bad"); return; }
+  toast(ok?"اتعتمدت ودخلت الخزينة \u2713":"اترفضت","ok");
+  paintFinPending();
+}
+
 /* === ربحية الملفات (الجديدة) === */
 async function openProjectFinance(){
   openSheet('<h3>ربحية الملفات</h3>'
@@ -3054,7 +3101,7 @@ async function openProjectFinance(){
 
 /* === سجل الموردين === */
 async function openSuppliers(){
-  if(!isFinanceUser()&&!isOwnerOps()){ toast("الموردين للمالية والإدارة","bad"); return; }
+  if(!canFinRead()){ toast("الموردين للمالية والإدارة","bad"); return; }
   openSheet('<h3>الموردين</h3><div id="spBox"><div class="skel"></div></div>'
     +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" onclick="addSupplier()">\u002b مورد</button>'
     +'<button class="btn sm" onclick="openPayables()">الفواتير</button>'
@@ -3188,7 +3235,7 @@ function jobPickerField(fieldId, labelText){
 
 /* === الأرشيف المالي === */
 async function openFinArchive(){
-  if(!isFinanceUser()&&!isOwnerOps()){ toast("الأرشيف للمالية والإدارة","bad"); return; }
+  if(!canFinRead()){ toast("الأرشيف للمالية والإدارة","bad"); return; }
   openSheet('<h3>أرشيف الحركات المالية</h3>'
     +'<div class="field"><input id="arQ" placeholder="دوّر ببيان أو إذن أو ملف…"/></div>'
     +'<div class="row-actions" style="flex-wrap:wrap;gap:6px;margin-bottom:8px">'
@@ -3350,7 +3397,7 @@ async function quickCash(id, jobCode){
 
 /* ═══════════ الدفاتر المحاسبية ═══════════ */
 async function openBooks(){
-  if(!isFinanceUser()&&!isOwnerOps()){ toast("الدفاتر للمالية والإدارة","bad"); return; }
+  if(!canFinRead()){ toast("الدفاتر للمالية والإدارة","bad"); return; }
   openSheet('<h3>الدفاتر المحاسبية</h3>'
     +'<div class="row-actions" style="flex-wrap:wrap;gap:8px;margin-bottom:10px">'
     +'<button class="btn sm" onclick="openTrialBalance()">ميزان المراجعة</button>'
@@ -4522,15 +4569,16 @@ async function reopenPeriod(id){
 }
 
 async function openFinance(){
-  if(!isFinanceUser()&&PROFILE.role!=="manager"){ toast("الشاشة دي للمالية والإدارة","bad"); return; }
+  if(!canFinRead()&&PROFILE.role!=="manager"){ toast("الشاشة دي للمالية والإدارة","bad"); return; }
   openSheet('<h3>المالية — نظرة شاملة</h3><div id="finBox"><div class="skel"></div><div class="skel"></div></div>'
-    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="finTr">الخزينة</button><button class="btn sm" id="finBooks">الدفاتر</button><button class="btn sm" id="finArch">الأرشيف</button><button class="btn sm" id="finRecv">المستحقات</button><button class="btn sm" id="finPay">الموردين</button><button class="btn sm" id="finProj">ربحية المشاريع</button>'+(isFinanceUser()?'<button class="btn green sm" id="finNewPay">دفعة جديدة</button><button class="btn ghost sm" id="finNewCost">سجّل مصروف</button><button class="btn sm" id="finAdv">العهد والسلف</button>':'')+(isOwnerOps()?'<button class="btn ghost sm" id="finClose">التقفيل المالي</button>':'')+'<button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="finTr">الخزينة</button><button class="btn sm" id="finBooks">الدفاتر</button><button class="btn sm" id="finArch">الأرشيف</button><button class="btn sm" id="finPend">مستني الاعتماد</button><button class="btn sm" id="finRecv">المستحقات</button><button class="btn sm" id="finPay">الموردين</button><button class="btn sm" id="finProj">ربحية المشاريع</button>'+(isFinanceUser()?'<button class="btn green sm" id="finNewPay">دفعة جديدة</button><button class="btn ghost sm" id="finNewCost">سجّل مصروف</button><button class="btn sm" id="finAdv">العهد والسلف</button>':'')+(isOwnerOps()?'<button class="btn ghost sm" id="finClose">التقفيل المالي</button>':'')+'<button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
   $("finRecv").onclick=()=>openReceivables();
   $("finProj").onclick=()=>openProjectFinance();
   const ft=$("finTr");    if(ft) ft.onclick=()=>openTreasury();
   const fp=$("finPay");   if(fp) fp.onclick=()=>openSuppliers();
   const fb=$("finBooks"); if(fb) fb.onclick=()=>openBooks();
   const fAr=$("finArch");  if(fAr) fAr.onclick=()=>openFinArchive();
+  const fPd=$("finPend");  if(fPd) fPd.onclick=()=>openFinPending();
   const fa=$("finAdv");   if(fa) fa.onclick=()=>openAdvances();
   const fc2=$("finClose");if(fc2) fc2.onclick=()=>openClosing();
   const np=$("finNewPay"); if(np) np.onclick=()=>openPaymentNew();
