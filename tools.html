@@ -366,6 +366,7 @@ function withLoading(btn, label, fn){
 /* ===================== نظام التلميحات — "دي بتعمل إيه؟" ===================== */
 const HELP_TEXT={
   /* الشاشة الرئيسية */
+  workorder:"تختار ملف من بيان الأعمال وتكلّف موظف بشغل محدد عليه — بيوصله إشعار وبيبقى في مهامه وتقييمه.",
   smart:"تكتب أو تقول كذا مهمة في جملة واحدة، والذكاء يفصلها لمهام منفصلة ويحدد المسؤول والموعد لكل واحدة.",
   ask:"تسأل قسمك سؤال بصوتك أو كتابة، والذكاء يرد عليك من بيانات الشركة الفعلية.",
   newreq:"تبعت طلب رسمي لزميل أو مدير — موافقة، مستند، معاملة حكومية، أو استفسار. الطلب بيتسجّل بكود ويتتبّع.",
@@ -406,10 +407,131 @@ const HELP_TEXT={
   decisions:"سجل القرارات الإدارية المهمة بتاريخها ومين اتخذها.",
   meeting:"تقرير اجتماع — بتسجّل المحضر والقرارات والمهام اللي طلعت منه."
 };
+/* ═══════════ أوامر الشغل — المالك يكلّف موظف على ملف ═══════════ */
+let _woFilter="open";
+
+async function openWorkOrders(){
+  if(!isOwnerOps() && PROFILE.role!=="manager"){ toast("أوامر الشغل للإدارة","bad"); return; }
+  openSheet('<h3>أوامر الشغل</h3>'
+    +'<div class="muted" style="margin:-6px 0 10px;font-size:12px">كلّف موظف على ملف معيّن — بيوصله إشعار وبيظهر في مهامه.</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="woF">'
+    +'<button class="chip on"  data-wf="open">شغّالة</button>'
+    +'<button class="chip"     data-wf="late">متأخرة</button>'
+    +'<button class="chip"     data-wf="done">خلصت</button>'
+    +'<button class="chip"     data-wf="all">الكل</button></div>'
+    +'<div id="woBox"><div class="skel"></div><div class="skel"></div></div>'
+    +actGroup("",[{ label:"أمر شغل جديد", kind:"green", lead:true, on:"openWorkOrderNew()" },
+                  { label:"حمل الفريق", kind:"", on:"openWorkLoad()" }])
+    +actMini([{ label:"قفل", on:"closeSheet()" }]));
+  document.querySelectorAll("#woF [data-wf]").forEach(b=>b.onclick=()=>{
+    _woFilter=b.dataset.wf;
+    document.querySelectorAll("#woF [data-wf]").forEach(x=>x.className="chip");
+    b.className="chip on"; paintWorkOrders();
+  });
+  await paintWorkOrders();
+}
+
+async function paintWorkOrders(){
+  const box=$("woBox"); if(!box) return;
+  try{
+    let q=sb.from("os_work_orders").select("*").order("created_at",{ascending:false}).limit(60);
+    if(_woFilter==="done") q=q.eq("status","done");
+    else if(_woFilter==="open") q=q.neq("status","done");
+    const { data, error }=await q;
+    if(error) throw error;
+    let rows=data||[];
+    if(_woFilter==="late") rows=rows.filter(r=>r.overdue);
+    if(!rows.length){ box.innerHTML='<div class="empty">مفيش أوامر هنا.</div>'; return; }
+    box.innerHTML=rows.map(r=>{
+      const col=r.overdue?"var(--red)":(r.status==="done"?"var(--green-d)":"var(--blue)");
+      return '<div class="card flat" style="border-right:4px solid '+col+'">'
+        +'<div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">'
+        +'<b style="font-size:13.5px;flex:1">'+esc(r.title||"")+'</b>'
+        +'<span class="badge" style="background:'+col+';color:#fff;font-size:10px">'+esc(r.state_label||"")+'</span></div>'
+        +'<div class="muted" style="font-size:11.5px;margin-top:4px">'
+        +esc(r.assignee_name||"—")+' · ملف '+esc(r.job_code||"—")
+        +(r.client_name?' · '+esc(r.client_name):'')+'</div>'
+        +(r.brief?'<div style="font-size:12px;margin-top:5px;white-space:pre-wrap">'+esc(r.brief)+'</div>':'')
+        +'<div class="meta"><span>'+esc(r.code||"")+'</span>'
+        +(r.deadline?'<span class="dot"></span><span>تسليم '+fmtDate(r.deadline)+'</span>':'')
+        +'<span class="dot"></span><span>'+(Number(r.progress)||0)+'%</span>'
+        +(r.updates_n?'<span class="dot"></span><span>'+r.updates_n+' تحديث</span>':'')
+        +'</div></div>';
+    }).join("");
+  }catch(e){ box.innerHTML=failBox("معرفناش نجيبها.",paintWorkOrders); }
+}
+
+async function openWorkOrderNew(preProject){
+  if(!isOwnerOps() && PROFILE.role!=="manager"){ toast("أوامر الشغل للإدارة","bad"); return; }
+  let kinds=[];
+  try{ const { data }=await sb.from("os_order_kinds").select("*").eq("active",true).order("sort"); kinds=data||[]; }catch(e){}
+  const staff=PROFILES.filter(p=>p.id!==ME.id);
+  openSheet('<h3>أمر شغل جديد</h3>'
+    +(preProject?'<input type="hidden" id="woJob" value="'+esc(preProject.id)+'"/>'
+       +'<div class="card flat" style="padding:9px 13px;margin-bottom:10px"><b style="font-size:12.5px">ملف '+esc(preProject.job_code||"")+'</b>'
+       +(preProject.name?'<div class="muted" style="font-size:11.5px">'+esc(preProject.name)+'</div>':'')+'</div>'
+     : jobPickerField("woJob","على أي ملف؟"))
+    +'<div class="field"><label>مين ينفّذه</label><select id="woWho"><option value="">اختار الموظف…</option>'
+      +staff.map(p=>'<option value="'+p.id+'">'+esc(p.name)+(p.dept&&DEPT_BY_KEY[p.dept]?" · "+esc(DEPT_BY_KEY[p.dept].name):"")+'</option>').join("")+'</select></div>'
+    +'<div class="field"><label>نوع الشغل</label><select id="woKind">'
+      +kinds.map(k=>'<option value="'+esc(k.name)+'">'+esc(k.name)+'</option>').join("")
+      +'<option value="__new">+ نوع جديد…</option></select></div>'
+    +'<div class="field"><label>عنوان الأمر <span class="muted">(اختياري — هيتولّد لوحده)</span></label><input id="woTitle" placeholder="سيبه فاضي وهيبقى: النوع + كود الملف"/></div>'
+    +'<div class="field"><label>التفاصيل المطلوبة</label><textarea id="woBrief" rows="3" placeholder="اكتب المطلوب بالظبط…"></textarea></div>'
+    +'<div class="field"><label>موعد التسليم</label><input id="woDue" type="date"/></div>'
+    +'<div class="field"><label>الأولوية</label><select id="woPri">'
+      +'<option value="normal">عادية</option><option value="high">عالية</option><option value="low">منخفضة</option></select></div>'
+    +actGroup("",[{ label:"ابعت الأمر", kind:"green", lead:true, id:"woGo" }])
+    +actMini([{ label:"إلغاء", on:"closeSheet()" }]));
+  addMicTo("woBrief");
+  $("woGo").onclick=()=>withLoading($("woGo"),"بيتبعت…", async()=>{
+    const prj=$("woJob").value;
+    if(!prj){ toast("اختار الملف الأول","bad"); return; }
+    const who=$("woWho").value;
+    if(!who){ toast("اختار مين ينفّذه","bad"); return; }
+    let kind=$("woKind").value;
+    if(kind==="__new"){
+      const nm=prompt("اسم نوع الشغل الجديد؟");
+      if(!nm||!nm.trim()){ toast("لغينا","bad"); return; }
+      kind=nm.trim();   /* الدالة بتسجّله في الكتالوج ويفضل موجود */
+    }
+    const { data, error }=await sb.rpc("os_work_order",{
+      p_project:prj, p_assignee:who, p_kind:kind,
+      p_title:$("woTitle").value.trim()||null,
+      p_brief:$("woBrief").value.trim()||null,
+      p_deadline:$("woDue").value||null,
+      p_priority:$("woPri").value
+    });
+    if(error){ toast(error.message,"bad"); return; }
+    toast("اتبعت "+((data&&data.code)||"")+" لـ "+((data&&data.assignee)||""),"ok");
+    track("action","work_order");
+    openWorkOrders();
+  });
+}
+
+async function openWorkLoad(){
+  openSheet('<h3>حمل الفريق</h3>'
+    +'<div class="muted" style="margin:-6px 0 12px;font-size:12px">كل موظف وكام أمر شغل عليه — والمتأخر فيهم.</div>'
+    +'<div id="wlBox2"><div class="skel"></div></div>'
+    +actMini([{ label:"رجوع", on:"openWorkOrders()" }]));
+  try{
+    const { data }=await sb.from("os_work_order_load").select("*").order("open_orders",{ascending:false});
+    const rows=(data||[]).filter(r=>Number(r.open_orders)>0||Number(r.done_orders)>0);
+    if(!rows.length){ $("wlBox2").innerHTML='<div class="empty">مفيش أوامر شغل لسه.</div>'; return; }
+    const max=Math.max(1,...rows.map(r=>Number(r.open_orders)||0));
+    $("wlBox2").innerHTML='<div class="card flat">'
+      +rows.map(r=>'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line)">'
+        +'<span style="width:88px;font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.name||"")+'</span>'
+        +'<div style="flex:1;background:#eef2f7;border-radius:99px;height:8px;overflow:hidden"><div style="width:'+Math.round((Number(r.open_orders)||0)/max*100)+'%;height:100%;background:'+(Number(r.overdue_orders)>0?"var(--red)":"var(--blue)")+';border-radius:99px"></div></div>'
+        +'<b style="font-size:12px;min-width:18px;text-align:left">'+(r.open_orders||0)+'</b>'
+        +(Number(r.overdue_orders)>0?'<span class="badge b-red" style="font-size:10px">'+r.overdue_orders+' متأخر</span>':'')
+        +'</div>').join("")+'</div>';
+  }catch(e){ $("wlBox2").innerHTML=failBox("معرفناش نجيبها.",openWorkLoad); }
+}
+
 /* فحص سلامة الخزينة — لازم الفرق = صفر. لو مش صفر يبقى فيه حركة مش متقيّدة */
 async function paintTreasuryCheck(){
   const box=$("trChk"); if(!box) return;
-  const egp=(n)=>Number(n||0).toLocaleString("en",{maximumFractionDigits:0})+" ج";
   try{
     const { data }=await sb.from("os_treasury_check").select("*").maybeSingle();
     if(!data){ box.innerHTML=""; return; }
@@ -814,7 +936,9 @@ async function paintCompanyPulse(){
       {n:Number(F.followups_overdue||0), lbl:"متابعة مبيعات متأخرة", go:()=>openFollowups(), hot:true},
       {n:Number(F.expiring_urgent||0), lbl:"بينتهي خلال 30 يوم", go:()=>openExpiring(), hot:false},
       {n:Number(F.gov_overdue||0), lbl:"معاملة حكومية فات موعدها", go:()=>openGovCases(), hot:true},
-      {n:Number(F.projects_stale||0), lbl:"مشروع واقف من أسبوعين", go:()=>openProjects(), hot:false}
+      {n:Number(F.projects_stale||0), lbl:"مشروع واقف من أسبوعين", go:()=>openProjects(), hot:false},
+      {n:Number(F.wo_overdue||0), lbl:"أمر شغل فات موعد تسليمه", go:()=>openWorkOrders(), hot:true},
+      {n:Number(F.wo_not_started||0), lbl:"أمر شغل عدّى عليه يومين ومحدش بدأ", go:()=>openWorkOrders(), hot:false}
     ].filter(x=>x.n>0);
     let head="";
     if(Number(F.fin_outstanding||0)>0||Number(F.fin_collected_month||0)>0){
@@ -885,7 +1009,7 @@ function renderOwnerHome(d){
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
     <div class="row-actions"><button class="btn sm" data-quick="myday" style="flex:1;background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button></div>
     <div class="act-label" style="margin-top:16px">أنشئ بسرعة</div>
-    <div class="act-grid" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب'+helpDot("newreq")+'</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك'+helpDot("smart")+'</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع'+helpDot("meeting")+'</button></div>
+    <div class="act-grid" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب'+helpDot("newreq")+'</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك'+helpDot("smart")+'</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع'+helpDot("meeting")+'</button>${isOwnerOps()?'<button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="workorder">أمر شغل</button>':""}</div>
     <div class="act-label" style="margin-top:18px">روح لـ</div>
     <div class="act-grid" style="margin-top:0"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال'+helpDot("projects")+'</button><button class="btn ghost sm" data-quick="sales">المبيعات'+helpDot("sales")+'</button><button class="btn ghost sm" data-quick="adminhub">الإدارية'+helpDot("adminhub")+'</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="contracts">العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات'+helpDot("decisions")+'</button>':""}<button class="btn ghost sm" data-quick="roadmap" data-more="1">خطة التطوير'+helpDot("roadmap")+'</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام'+helpDot("syshealth")+'</button>':""}<button class="btn ghost sm" id="moreBtn" onclick="toggleMore(this)" style="opacity:.7">كل الأقسام ⌄</button></div>`;
   if(d.evs.length){
@@ -921,7 +1045,7 @@ function renderOpsHome(d){
   body+=`<div class="sec-h">تحركات سريعة <span class="ln"></span></div>
     <div class="row-actions"><button class="btn sm" data-quick="myday" style="flex:1;background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button></div>
     <div class="act-label" style="margin-top:16px">أنشئ بسرعة</div>
-    <div class="act-grid" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب'+helpDot("newreq")+'</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك'+helpDot("smart")+'</button><button class="btn ghost sm" data-quick="event">موعد'+helpDot("event")+'</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع'+helpDot("meeting")+'</button></div>
+    <div class="act-grid" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب'+helpDot("newreq")+'</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك'+helpDot("smart")+'</button><button class="btn ghost sm" data-quick="event">موعد'+helpDot("event")+'</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع'+helpDot("meeting")+'</button>${isOwnerOps()?'<button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="workorder">أمر شغل</button>':""}</div>
     <div class="act-label" style="margin-top:18px">روح لـ</div>
     <div class="act-grid" style="margin-top:0"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال'+helpDot("projects")+'</button><button class="btn ghost sm" data-quick="sales">المبيعات'+helpDot("sales")+'</button><button class="btn ghost sm" data-quick="adminhub">الإدارية'+helpDot("adminhub")+'</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="contracts">العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات'+helpDot("decisions")+'</button>':""}<button class="btn ghost sm" data-quick="roadmap" data-more="1">خطة التطوير'+helpDot("roadmap")+'</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام'+helpDot("syshealth")+'</button>':""}<button class="btn ghost sm" id="moreBtn" onclick="toggleMore(this)" style="opacity:.7">كل الأقسام ⌄</button></div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
@@ -2173,7 +2297,9 @@ async function paintProjectDetail(id){
 
     /* معالم ومهام المشروع */
     h+='<div class="sec-h">معالم ومهام المشروع <span class="ln"></span></div>';
-    if(canUp) h+='<div class="row-actions" style="margin:-4px 0 10px"><button class="btn sm" id="pdAddMs">➕ أضف معلم/مهمة</button></div>';
+    if(canUp) h+='<div class="act-grid" style="margin:-4px 0 10px">'
+      +'<button class="btn green sm" id="pdWorkOrder">أمر شغل لموظف</button>'
+      +'<button class="btn sm" id="pdAddMs">أضف معلم/مهمة</button></div>';
     if(!tsk.length){ h+='<div class="empty">مفيش معالم أو مهام مرتبطة بالمشروع لسه.</div>'; }
     else { h+=tsk.map(t=>{
       const isOverdue=t.deadline&&t.status!=="done"&&new Date(t.deadline)<new Date();
@@ -2224,6 +2350,12 @@ async function paintProjectDetail(id){
     setTimeout(()=>paintFileTree(id,"ftBox"), 40);
     $("pdBox").innerHTML=h;
     const msBtn=$("pdAddMs"); if(msBtn) msBtn.onclick=()=>openProjectMilestoneNew(id,prj);
+    const woBtn=$("pdWorkOrder");
+    if(woBtn){
+      if(isOwnerOps()||PROFILE.role==="manager")
+        woBtn.onclick=()=>openWorkOrderNew({ id:id, job_code:(prj&&prj.job_code)||"", name:(prj&&prj.name)||"" });
+      else woBtn.remove();
+    }
     if(canUp){
       addMicTo("pdTitle");
       $("pdUp").onclick=async()=>{
@@ -3038,7 +3170,7 @@ let _moreOpen=false;
 function toggleMore(btn){
   _moreOpen=!_moreOpen;
   document.querySelectorAll('[data-quick]').forEach(b=>{
-    const keep=["projects","sales","myday","newreq","adminhub","finance"];
+    const keep=["projects","sales","myday","newreq","adminhub","finance","workorder"];
     if(keep.includes(b.dataset.quick)) return;
     b.style.display=_moreOpen?"":"none";
   });
@@ -3051,7 +3183,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 function applyQuickCollapse(){
   if(_moreOpen) return;
   document.querySelectorAll('[data-quick]').forEach(b=>{
-    const keep=["projects","sales","myday","newreq","adminhub","finance"];
+    const keep=["projects","sales","myday","newreq","adminhub","finance","workorder"];
     if(!keep.includes(b.dataset.quick)) b.style.display="none";
   });
   const mb=document.getElementById("moreBtn"); if(mb) mb.style.display="";
@@ -6004,7 +6136,8 @@ function wireHome(el){
   el.querySelectorAll("[data-quick]").forEach(b=>b.onclick=()=>{
     const q=b.dataset.quick;
     track("action","quick:"+q);
-    if(q==="smart"){ switchTab("tasks"); setTimeout(openSmartTask,90); }
+    if(q==="workorder"){ openWorkOrders(); }
+    else if(q==="smart"){ switchTab("tasks"); setTimeout(openSmartTask,90); }
     else if(q==="ask"){ switchTab("ask"); }
     else if(q==="newreq"){ switchTab("req"); setTimeout(openNewReq,90); }
     else if(q==="hr"){ openHRBoard(); }
