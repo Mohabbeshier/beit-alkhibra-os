@@ -2299,6 +2299,7 @@ async function openAdminHub(){
   try{ const r=await sb.from("os_documents").select("id",{count:"exact",head:true}).not("expires_at","is",null).lte("expires_at",new Date(Date.now()+30*86400000).toISOString().slice(0,10)); docsExp=r.count||0; }catch(e){}
   openSheet('<h3>المركز الإداري</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">الموافقات والإجازات والمستندات والعهدة والتفويض — كله رسمي ومسجّل</div>'
     +'<div class="row-actions" style="flex-wrap:wrap;gap:8px">'
+    +(isOwnerOps()?'<button class="btn sm" id="ahCockpit" style="background:#0D47A1;color:#fff">لوحة الإدارة</button>':'')
     +'<button class="btn sm" id="ahAppr" style="background:var(--blue);color:#fff">الموافقات</button>'
     +'<button class="btn sm" id="ahLeave" style="background:var(--green-d);color:#fff">الإجازات</button>'
     +'<button class="btn ghost sm" id="ahDocs">المستندات'+(docsExp?' <span class="badge b-red">'+docsExp+' بتنتهي</span>':'')+'</button>'
@@ -2313,6 +2314,7 @@ async function openAdminHub(){
     +(isOwnerOps()?'<button class="btn sm" id="ahUsage" style="background:linear-gradient(135deg,#7C3AED,#5B21B6);color:#fff">تحليلات الاستخدام</button>':'')
     +(isOwnerOps()?'<button class="btn sm" id="ahStorage" style="background:linear-gradient(135deg,#0891B2,#0E7490);color:#fff">مركز التخزين</button>':'')
     +'</div><button class="btn ghost" style="margin-top:12px" onclick="closeSheet()">قفل</button>');
+  const ac=$("ahCockpit"); if(ac) ac.onclick=()=>openCockpit();
   $("ahAppr").onclick=()=>openApprovals();
   $("ahLeave").onclick=()=>openLeaves();
   $("ahDocs").onclick=()=>openDocsVault();
@@ -2616,7 +2618,8 @@ function isHRUser(){ return isOwnerOps()||(PROFILE.dept==="hr"&&PROFILE.role==="
 async function openHRHub(){
   if(!isHRUser()){ toast("الشاشة دي للأوبريشن والإدارة","bad"); return; }
   openSheet('<h3>الأوبريشن — نظرة شاملة</h3><div id="hhBox"><div class="skel"></div><div class="skel"></div></div>'
-    +'<div class="row-actions" style="margin-top:10px;flex-wrap:wrap;gap:8px"><button class="btn sm" id="hhAtt">الحضور</button><button class="btn sm" id="hhLeaves">الإجازات</button><button class="btn ghost sm" id="hhArch">أرشيف الموظفين</button><button class="btn ghost sm" id="hhCust">العهدة</button><button class="btn ghost sm" id="hhScore">كفاءة الفريق</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+    +'<div class="row-actions" style="margin-top:10px;flex-wrap:wrap;gap:8px"><button class="btn sm" id="hhPeople">ملفات الموظفين</button><button class="btn sm" id="hhAtt">الحضور</button><button class="btn sm" id="hhLeaves">الإجازات</button><button class="btn ghost sm" id="hhArch">أرشيف الموظفين</button><button class="btn ghost sm" id="hhCust">العهدة</button><button class="btn ghost sm" id="hhScore">كفاءة الفريق</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+  const hp=$("hhPeople"); if(hp) hp.onclick=()=>openHRPeople();
   $("hhAtt").onclick=()=>openAttendanceLog();
   $("hhLeaves").onclick=()=>openLeaves();
   $("hhArch").onclick=()=>openEmployeeArchive();
@@ -2756,6 +2759,218 @@ const PAY_STATUS={planned:["مخططة","b-grey"],due:["مستحقة — جاه�
 const COST_CAT={salary:"أجور",subcontractor:"مقاول باطن",permit:"رسوم ورخص",materials:"مواد وطباعة",transport:"انتقالات",other:"أخرى"};
 const egp=(n)=>Number(n||0).toLocaleString("en")+" ج";
 function isFinanceUser(){ return isOwnerOps()||PROFILE.dept==="finance"; }
+/* ═══════════ الموارد البشرية ═══════════ */
+function isHR(){ return isOwnerOps()||PROFILE.dept==="hr"; }
+
+async function openHRPeople(){
+  if(!isHR()){ toast("الشاشة دي للموارد البشرية","bad"); return; }
+  openSheet('<h3>ملفات الموظفين</h3><div id="hrpBox"><div class="skel"></div><div class="skel"></div></div>'
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn sm" onclick="openPayroll()">مسيّر الرواتب</button>'
+    +'<button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+  try{
+    const { data }=await sb.from("os_employee_360").select("*").order("dept");
+    const R=(data||[]).filter(x=>x.hr_status!=="موقوف");
+    if(!R.length){ $("hrpBox").innerHTML='<div class="empty">مفيش موظفين.</div>'; return; }
+    $("hrpBox").innerHTML=R.map(x=>{
+      const warn=x.hr_status!=="نشط", late=Number(x.late_stages||0);
+      return '<div class="card flat" style="cursor:pointer'+(warn?';border-right:4px solid var(--warn,#e8a33d)':'')+'" onclick="openStaffFile(\''+x.profile_id+'\')">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+        +'<b style="font-size:14px">'+esc(x.name||"—")+'</b>'
+        +'<span class="badge" style="background:#eef2f7;color:#0D47A1;font-weight:800">'+esc((DEPT_BY_KEY[x.dept]&&DEPT_BY_KEY[x.dept].name)||x.dept||"—")+'</span></div>'
+        +'<div class="meta" style="margin-top:5px">'
+        +'<span>رصيد إجازات: '+(x.leave_balance||0)+'</span>'
+        +'<span class="dot"></span><span>مهام: '+(x.open_tasks||0)+'</span>'
+        +'<span class="dot"></span><span'+(late?' style="color:var(--red);font-weight:800"':'')+'>مراحل: '+(x.open_stages||0)+(late?' ('+late+' متأخرة)':'')+'</span>'
+        +(Number(x.advance_balance||0)>0?'<span class="dot"></span><span style="color:var(--red)">عهدة: '+egp(x.advance_balance)+'</span>':'')
+        +(warn?'<span class="dot"></span><span style="color:#B45309;font-weight:800">'+esc(x.hr_status)+'</span>':'')
+        +'</div></div>';
+    }).join("");
+  }catch(e){ $("hrpBox").innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+
+async function openStaffFile(pid){
+  openSheet('<h3>ملف الموظف</h3><div id="sfBox"><div class="skel"></div></div>'
+    +'<button class="btn ghost" style="margin-top:10px" onclick="openHRPeople()">رجوع للموظفين</button>');
+  try{
+    const [{ data:e },{ data:rev },{ data:onb }]=await Promise.all([
+      sb.from("os_employee_360").select("*").eq("profile_id",pid).maybeSingle(),
+      sb.from("os_reviews").select("*").eq("profile_id",pid).order("period",{ascending:false}).limit(3),
+      sb.from("os_onboarding").select("*").eq("profile_id",pid).order("sort_order")
+    ]);
+    if(!e){ $("sfBox").innerHTML='<div class="empty">مش موجود.</div>'; return; }
+    let h='<div class="card flat"><b style="font-size:15px">'+esc(e.name)+'</b>'
+      +'<div class="meta" style="margin-top:4px"><span>'+esc(e.email||"—")+'</span>'
+      +(e.manager_name?'<span class="dot"></span><span>مديره: '+esc(e.manager_name)+'</span>':'')+'</div>'
+      +'<div class="meta" style="margin-top:4px">'
+      +(e.contract_start?'<span>بدأ '+fmtDate(e.contract_start)+'</span>':'')
+      +(e.contract_end?'<span class="dot"></span><span>العقد لحد '+fmtDate(e.contract_end)+'</span>':'')
+      +'<span class="dot"></span><span>'+esc(e.hr_status)+'</span></div></div>';
+    h+='<div class="kpi-row" style="display:flex;gap:9px;margin:10px 0">'
+      +'<div class="card flat" style="flex:1;text-align:center"><b style="display:block;font-size:17px">'+(e.leave_balance||0)+'</b><span class="muted" style="font-size:11px">رصيد إجازات</span></div>'
+      +'<div class="card flat" style="flex:1;text-align:center"><b style="display:block;font-size:17px">'+(e.leave_taken_ytd||0)+'</b><span class="muted" style="font-size:11px">مأخوذة السنة</span></div>'
+      +'<div class="card flat" style="flex:1;text-align:center"><b style="display:block;font-size:17px">'+(e.last_review||"—")+'</b><span class="muted" style="font-size:11px">آخر تقييم</span></div></div>';
+    h+='<div class="card flat"><div class="meta" style="margin:0">'
+      +'<span>مهام مفتوحة: '+(e.open_tasks||0)+'</span><span class="dot"></span>'
+      +'<span>مراحل: '+(e.open_stages||0)+'</span><span class="dot"></span>'
+      +'<span>عهدة مالية: '+egp(e.advance_balance)+'</span><span class="dot"></span>'
+      +'<span>عهد مستلمة: '+(e.items_held||0)+'</span></div></div>';
+    if((rev||[]).length){
+      h+='<div class="sec-h">التقييمات <span class="ln"></span></div><div class="card flat">'
+        +rev.map(r=>'<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #eef2f7">'
+        +'<span style="font-size:12.5px">'+esc(r.period)+'</span>'
+        +'<b style="font-size:12.5px">'+(r.overall||"—")+'/5</b></div>').join("")+'</div>';
+    }
+    const O=(onb||[]).filter(x=>!x.done);
+    if(O.length){
+      h+='<div class="sec-h">إجراءات ناقصة <span class="ln"></span></div><div class="card flat">'
+        +O.map(x=>'<div style="padding:6px 0;border-bottom:1px solid #eef2f7;font-size:12.5px">\u25cb '+esc(x.step)+'</div>').join("")+'</div>';
+    }
+    $("sfBox").innerHTML=h;
+  }catch(err){ $("sfBox").innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+
+async function openPayroll(){
+  if(!isHR()){ toast("مسيّر الرواتب للموارد البشرية","bad"); return; }
+  const per=new Date().toISOString().slice(0,7);
+  openSheet('<h3>مسيّر الرواتب</h3><div id="prBox"><div class="skel"></div></div>'
+    +'<div class="field"><label>الشهر</label><input id="prPer" value="'+per+'" placeholder="2026-09"/></div>'
+    +'<div class="row-actions"><button class="btn" id="prBuild">ابنِ المسيّر</button>'
+    +(isOwnerOps()?'<button class="btn green" id="prApprove">اعتمد وصرف</button>':'')
+    +'<button class="btn ghost" onclick="openHRPeople()">رجوع</button></div>');
+  $("prBuild").onclick=async()=>{
+    const { error }=await sb.rpc("os_build_payroll",{ p_period:$("prPer").value.trim() });
+    if(error){ toast(error.message,"bad"); return; }
+    toast("المسيّر اتبنى \u2713","ok"); paintPayroll();
+  };
+  const ap=$("prApprove");
+  if(ap) ap.onclick=async()=>{
+    const { data:run }=await sb.from("os_payroll_runs").select("id,status,total_net").eq("period",$("prPer").value.trim()).maybeSingle();
+    if(!run){ toast("ابنِ المسيّر الأول","bad"); return; }
+    if(run.status!=="draft"){ toast("معتمد بالفعل","bad"); return; }
+    if(!confirm("اعتماد مسيّر "+$("prPer").value+" بإجمالي "+egp(run.total_net)+"؟ هيتسجّل مصروف في الخزينة والعهد هتتصفّى.")) return;
+    const { error }=await sb.rpc("os_approve_payroll",{ p_run:run.id });
+    if(error){ toast(error.message,"bad"); return; }
+    toast("اتعتمد واتصرف \u2713","ok"); paintPayroll();
+  };
+  await paintPayroll();
+}
+async function paintPayroll(){
+  const box=$("prBox"); if(!box) return;
+  try{
+    const per=$("prPer")?$("prPer").value.trim():new Date().toISOString().slice(0,7);
+    const { data:run }=await sb.from("os_payroll_runs").select("*").eq("period",per).maybeSingle();
+    if(!run){ box.innerHTML='<div class="empty">مفيش مسيّر للشهر ده — اضغط «ابنِ المسيّر».</div>'; return; }
+    const { data:lines }=await sb.from("os_payroll_lines").select("*").eq("run_id",run.id).order("net",{ascending:false});
+    const L=lines||[];
+    const st=run.status==="draft"?'<span class="badge" style="background:#FFF8E1;color:#B45309;font-weight:800">مسودة</span>'
+             :'<span class="badge" style="background:#E8F5E9;color:#2E7D32;font-weight:800">معتمد</span>';
+    let h='<div class="card flat" style="text-align:center"><span class="muted" style="font-size:11.5px">إجمالي '+esc(per)+' '+st+'</span>'
+      +'<b style="display:block;font-size:22px;font-weight:800">'+egp(run.total_net)+'</b>'
+      +'<span class="muted" style="font-size:11px">'+(run.headcount||0)+' موظف</span></div>';
+    h+='<div class="card flat" style="margin-top:10px">'+L.map(x=>
+      '<div style="padding:7px 0;border-bottom:1px solid #eef2f7">'
+      +'<div style="display:flex;justify-content:space-between"><span style="font-size:12.5px;font-weight:600">'+esc(x.staff_name||"—")+'</span>'
+      +'<b style="font-size:12.5px">'+egp(x.net)+'</b></div>'
+      +'<div class="muted" style="font-size:11px;margin-top:2px">أساسي '+egp(x.basic)+' + بدلات '+egp(x.allowances)
+      +(Number(x.advances_cut)>0?' − عهد '+egp(x.advances_cut):'')
+      +(Number(x.insurance_cut)>0?' − تأمينات '+egp(x.insurance_cut):'')
+      +(Number(x.absence_cut)>0?' − غياب '+egp(x.absence_cut):'')+'</div></div>').join("")+'</div>';
+    box.innerHTML=h;
+  }catch(e){ box.innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+
+/* ═══════════ الموردين — المستحق علينا ═══════════ */
+async function openPayables(){
+  if(!isFinanceUser()&&!isOwnerOps()){ toast("الشاشة دي للمالية","bad"); return; }
+  openSheet('<h3>مستحقات الموردين</h3><div id="pvBox"><div class="skel"></div></div>'
+    +'<div class="sec-h">فاتورة جديدة <span class="ln"></span></div>'
+    +'<div class="field"><label>المورد</label><input id="pvSup" placeholder="اسم المورد"/></div>'
+    +'<div class="field"><label>البيان</label><input id="pvTitle" placeholder="مثلاً: طباعة رسومات"/></div>'
+    +'<div class="field"><label>المبلغ</label><input id="pvAmt" type="number" inputmode="decimal" min="1"/></div>'
+    +'<div class="field"><label>تاريخ الاستحقاق</label><input id="pvDue" type="date"/></div>'
+    +'<div class="row-actions"><button class="btn green" id="pvGo">سجّل</button>'
+    +'<button class="btn ghost" onclick="openFinance()">رجوع للمالية</button></div>');
+  $("pvGo").onclick=async()=>{
+    const sup=$("pvSup").value.trim(), t=$("pvTitle").value.trim(), a=parseFloat($("pvAmt").value);
+    if(!sup||!t||!(a>0)){ toast("املا المورد والبيان والمبلغ","bad"); return; }
+    const { error }=await sb.from("os_payables").insert({ supplier:sup, title:t, amount:a,
+      due_date:$("pvDue").value||null, created_by:ME.id });
+    if(error){ toast("ماتسجلتش: "+error.message,"bad"); return; }
+    toast("اتسجلت \u2713","ok"); ["pvSup","pvTitle","pvAmt"].forEach(i=>$(i).value="");
+    paintPayables();
+  };
+  await paintPayables();
+}
+async function paintPayables(){
+  const box=$("pvBox"); if(!box) return;
+  try{
+    const [{ data:sum },{ data:rows }]=await Promise.all([
+      sb.from("os_payables_summary").select("*").maybeSingle(),
+      sb.from("os_payables").select("*").in("status",["open","partial"]).order("due_date",{nullsFirst:false}).limit(30)
+    ]);
+    const d=sum||{}, R=rows||[], today=todayStr();
+    let h='<div style="display:flex;gap:9px">'
+      +'<div class="card flat" style="flex:1;text-align:center"><b style="display:block;font-size:17px;color:var(--red)">'+egp(d.outstanding)+'</b><span class="muted" style="font-size:11px">مستحق علينا</span></div>'
+      +'<div class="card flat" style="flex:1;text-align:center"><b style="display:block;font-size:17px;color:'+(Number(d.overdue_amount||0)>0?'var(--red)':'var(--ink2,#666)')+'">'+egp(d.overdue_amount)+'</b><span class="muted" style="font-size:11px">'+(d.overdue_count||0)+' متأخرة</span></div></div>';
+    if(!R.length) h+='<div class="empty" style="margin-top:10px">مفيش مستحقات مفتوحة.</div>';
+    else h+='<div class="card flat" style="margin-top:10px">'+R.map(x=>{
+      const rem=Number(x.amount)-Number(x.paid_amount||0), late=x.due_date&&x.due_date<today;
+      return '<div style="padding:8px 0;border-bottom:1px solid #eef2f7">'
+        +'<div style="display:flex;justify-content:space-between;gap:8px">'
+        +'<span style="font-size:12.5px;font-weight:600;flex:1;min-width:0">'+esc(x.supplier)+' — '+esc(x.title)+'</span>'
+        +'<b style="font-size:12.5px'+(late?';color:var(--red)':'')+'">'+egp(rem)+'</b></div>'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">'
+        +'<span class="muted" style="font-size:11px'+(late?';color:var(--red);font-weight:700':'')+'">'+(x.due_date?'يستحق '+fmtDate(x.due_date):'بدون تاريخ')+'</span>'
+        +(isFinanceUser()?'<button class="btn sm" onclick="payPayable(\''+x.id+'\','+rem+')">ادفع</button>':'')
+        +'</div></div>';
+    }).join("")+'</div>';
+    box.innerHTML=h;
+  }catch(e){ box.innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+async function payPayable(id, remaining){
+  const v=prompt("المبلغ المدفوع (المتبقي "+remaining+")", String(remaining));
+  const a=parseFloat(v); if(!(a>0)) return;
+  const { error }=await sb.rpc("os_pay_payable",{ p_id:id, p_amount:a });
+  if(error){ toast(error.message,"bad"); return; }
+  toast("اتدفع \u2713","ok"); paintPayables();
+}
+
+/* ═══════════ لوحة المالك ═══════════ */
+async function openCockpit(){
+  if(!isOwnerOps()){ toast("اللوحة دي للإدارة","bad"); return; }
+  openSheet('<h3>لوحة الإدارة</h3><div id="ckBox"><div class="skel"></div><div class="skel"></div></div>'
+    +'<button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
+  try{
+    const { data }=await sb.from("os_owner_cockpit").select("*").maybeSingle();
+    const d=data||{};
+    const cash=Number(d.cash_balance||0);
+    const card=(v,l,c,hot)=>'<div class="card flat" style="flex:1;min-width:calc(50% - 5px);text-align:center'+(hot?';border-right:4px solid var(--red)':'')+'">'
+      +'<b style="display:block;font-size:16px;color:'+c+'">'+v+'</b><span class="muted" style="font-size:11px">'+l+'</span></div>';
+    let h='<div class="card flat" style="text-align:center;border-right:4px solid '+(cash>=0?'var(--green-d)':'var(--red)')+'">'
+      +'<span class="muted" style="font-size:11.5px">رصيد الخزينة</span>'
+      +'<b style="display:block;font-size:26px;font-weight:800;color:'+(cash>=0?'var(--green-d)':'var(--red)')+'">'+egp(cash)+'</b></div>';
+    h+='<div class="sec-h">المالية <span class="ln"></span></div><div style="display:flex;flex-wrap:wrap;gap:10px">'
+      +card(egp(d.receivable),"مستحق لنا","var(--blue-d)",false)
+      +card(egp(d.payable),"مستحق علينا","var(--red)",Number(d.payable_overdue||0)>0)
+      +card(egp(d.cash_in_month),"داخل الشهر","var(--green-d)",false)
+      +card(egp(d.cash_out_month),"خارج الشهر","var(--red)",false)
+      +'</div>';
+    h+='<div class="sec-h">التشغيل <span class="ln"></span></div><div style="display:flex;flex-wrap:wrap;gap:10px">'
+      +card(d.open_files||0,"ملف مفتوح","var(--blue-d)",false)
+      +card(d.late_stages||0,"مرحلة متأخرة","var(--red)",Number(d.late_stages||0)>0)
+      +card(d.blocked_stages||0,"مرحلة واقفة","var(--red)",Number(d.blocked_stages||0)>0)
+      +card(d.gov_open||0,"معاملة حكومية","#B45309",false)
+      +'</div>';
+    h+='<div class="sec-h">الفريق <span class="ln"></span></div><div style="display:flex;flex-wrap:wrap;gap:10px">'
+      +card(d.headcount||0,"موظف","var(--blue-d)",false)
+      +card(egp(d.last_payroll),"آخر مسيّر","var(--ink2,#666)",false)
+      +card(egp(d.advances_out),"عهد مفتوحة","#B45309",Number(d.advances_out||0)>0)
+      +card(d.contracts_expiring||0,"عقد قرب ينتهي","#B45309",Number(d.contracts_expiring||0)>0)
+      +'</div>';
+    $("ckBox").innerHTML=h;
+  }catch(e){ $("ckBox").innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+
 /* ===== الخزينة: الرصيد وكشف الحساب ===== */
 async function openTreasury(){
   if(!isFinanceUser()&&!isOwnerOps()){ toast("الشاشة دي للمالية والإدارة","bad"); return; }
@@ -2901,10 +3116,11 @@ async function reopenPeriod(id){
 async function openFinance(){
   if(!isFinanceUser()&&PROFILE.role!=="manager"){ toast("الشاشة دي للمالية والإدارة","bad"); return; }
   openSheet('<h3>المالية — نظرة شاملة</h3><div id="finBox"><div class="skel"></div><div class="skel"></div></div>'
-    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="finTr">الخزينة</button><button class="btn sm" id="finRecv">المستحقات</button><button class="btn sm" id="finProj">ربحية المشاريع</button>'+(isFinanceUser()?'<button class="btn green sm" id="finNewPay">دفعة جديدة</button><button class="btn ghost sm" id="finNewCost">سجّل مصروف</button><button class="btn sm" id="finAdv">العهد والسلف</button>':'')+(isOwnerOps()?'<button class="btn ghost sm" id="finClose">التقفيل المالي</button>':'')+'<button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="finTr">الخزينة</button><button class="btn sm" id="finRecv">المستحقات</button><button class="btn sm" id="finPay">الموردين</button><button class="btn sm" id="finProj">ربحية المشاريع</button>'+(isFinanceUser()?'<button class="btn green sm" id="finNewPay">دفعة جديدة</button><button class="btn ghost sm" id="finNewCost">سجّل مصروف</button><button class="btn sm" id="finAdv">العهد والسلف</button>':'')+(isOwnerOps()?'<button class="btn ghost sm" id="finClose">التقفيل المالي</button>':'')+'<button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
   $("finRecv").onclick=()=>openReceivables();
   $("finProj").onclick=()=>openProjectFinance();
   const ft=$("finTr");    if(ft) ft.onclick=()=>openTreasury();
+  const fp=$("finPay");   if(fp) fp.onclick=()=>openPayables();
   const fa=$("finAdv");   if(fa) fa.onclick=()=>openAdvances();
   const fc2=$("finClose");if(fc2) fc2.onclick=()=>openClosing();
   const np=$("finNewPay"); if(np) np.onclick=()=>openPaymentNew();
