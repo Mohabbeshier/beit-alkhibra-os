@@ -1576,21 +1576,68 @@ async function openComplaintsAdmin(){
 }
 /* =====المشاريع ===== */
 async function openProjects(){
-  const canAddPrj=isOwnerOps()||PROFILE.role==="manager";
+  const canAddPrj=true; /* أي موظف يقدر يفتح بيان أعمال */
   openSheet('<h3>المشاريع</h3><div id="prjBox"><div class="skel"></div><div class="skel"></div></div>'
     +(canAddPrj?'<div class="sec-h">مشروع جديد <span class="ln"></span></div>'
       +'<div class="field"><label>اسم المشروع</label><input id="pjName" placeholder="فيلا الشيخ زايد — عميل X"/></div>'
       +'<div class="field"><label>القسم</label><select id="pjDept">'+DEPTS.map(d=>'<option value="'+d.key+'"'+(d.key===PROFILE.dept?" selected":"")+'>'+esc(d.name)+'</option>').join("")+'</select></div>'
       +'<div class="field"><label>المرحلة</label><select id="pjStage"><option value="جديد">جديد</option><option value="تسعير">تسعير</option><option value="تنفيذ">تنفيذ</option><option value="تسليم">تسليم</option><option value="مغلق">مغلق</option></select></div>'
+      +'<div class="field"><label>اسم العميل</label><input id="pjCli" placeholder="صاحب القطعة"/></div>'
+      +'<div class="field"><label>رقم الهاتف</label><input id="pjPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx"/></div>'
       +'<div class="field"><label>القيمة (جنيه — اختياري)</label><input id="pjVal" type="number" inputmode="numeric" min="0"/></div>'
+      +'<div class="muted" style="font-size:11.5px;margin:2px 0 6px">الأرض اختيارية — تقدر تكمّلها بعدين</div>'
+      +'<div class="field"><label>جهاز المدينة</label><select id="pjAuth"><option value="">— بدون —</option></select></div>'
+      +'<div class="field"><label>المنطقة</label><select id="pjArea"><option value="">— بدون —</option></select></div>'
+      +'<div class="field"><label>رقم القطعة</label><input id="pjParcel" placeholder="مثلاً: 145"/></div>'
       +'<div class="row-actions"><button class="btn green" id="pjGo">أضف المشروع</button></div>':"")
     +'<button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
   if(canAddPrj){
     addMicTo("pjName");
+    /* تعبئة أجهزة المدن والمناطق */
+    (async()=>{
+      try{
+        const { data:auths }=await sb.from("os_city_authorities").select("id,name").eq("active",true).order("name");
+        const sel=$("pjAuth"); if(!sel) return;
+        (auths||[]).forEach(a=>{ const o=document.createElement("option"); o.value=a.id; o.textContent=a.name; sel.appendChild(o); });
+        sel.onchange=async()=>{
+          const ar=$("pjArea"); ar.innerHTML='<option value="">— بدون —</option>';
+          if(!sel.value) return;
+          const { data:areas }=await sb.from("os_areas").select("id,name").eq("authority_id",sel.value).eq("active",true).order("name");
+          (areas||[]).forEach(a=>{ const o=document.createElement("option"); o.value=a.id; o.textContent=a.name; ar.appendChild(o); });
+        };
+      }catch(e){}
+    })();
     $("pjGo").onclick=async()=>{
       const name=$("pjName").value.trim(); if(!name){ toast("اكتب اسم المشروع","bad"); return; }
       const v=parseFloat($("pjVal").value)||null;
-      const { error }=await sb.from("os_projects").insert({ name, dept:$("pjDept").value, stage:$("pjStage").value, value_egp:v, created_by:ME.id });
+      /* ربط بالعميل — بيتعاد استخدامه لو الرقم موجود */
+      let clientId=null;
+      try{
+        const cn=$("pjCli")?$("pjCli").value.trim():"", cp=$("pjPhone")?$("pjPhone").value.trim():"";
+        if(cn&&cp){
+          const { data:fc }=await sb.from("clients").select("id").eq("phone",cp).maybeSingle();
+          if(fc){ clientId=fc.id; }
+          else{
+            const { data:mc }=await sb.from("clients").insert({ name:cn, phone:cp, code:"C-"+Date.now().toString().slice(-8), source:"jobfile" }).select("id").single();
+            if(mc) clientId=mc.id;
+          }
+        }
+      }catch(e){}
+      /* ربط بقطعة أرض — بتتعمل لو مش موجودة */
+      let parcelId=null;
+      try{
+        const areaId=$("pjArea")&&$("pjArea").value, authId=$("pjAuth")&&$("pjAuth").value;
+        const pno=$("pjParcel")?$("pjParcel").value.trim():"";
+        if(areaId&&pno){
+          const { data:found }=await sb.from("os_parcels").select("id").eq("area_id",areaId).eq("parcel_no",pno).maybeSingle();
+          if(found){ parcelId=found.id; }
+          else{
+            const { data:made }=await sb.from("os_parcels").insert({ area_id:areaId, authority_id:authId, parcel_no:pno, client_id:clientId }).select("id").single();
+            if(made) parcelId=made.id;
+          }
+        }
+      }catch(e){}
+      const { error }=await sb.from("os_projects").insert({ name, dept:$("pjDept").value, stage:$("pjStage").value, value_egp:v, created_by:ME.id, client_id:clientId, parcel_id:parcelId, opened_on:todayStr() });
       if(error){ toast("معرفناش نضيف: "+error.message,"bad"); return; }
       toast("المشروع اتضاف","ok"); $("pjName").value=""; paintProjects();
     };
@@ -1697,14 +1744,28 @@ function openProjectMilestoneNew(projectId,prj){
     toast("اتضاف للمشروع ✓","ok"); openProjectDetail(projectId);
   };
 }
+/* ===== إقفال مرحلة في بيان الأعمال — المرحلة اللي بعدها بتبدأ لوحدها ===== */
+async function doneJobStage(stageId, projectId){
+  try{
+    const { error }=await sb.from("os_job_stages").update({ status:"done", done_at:new Date().toISOString() }).eq("id",stageId);
+    if(error){ toast("معرفناش نقفل المرحلة: "+error.message,"bad"); return; }
+    toast("المرحلة اتقفلت \u2713","ok");
+    await paintProjectDetail(projectId);
+  }catch(e){ toast("حصل خطأ — جرّب تاني","bad"); }
+}
+
 async function paintProjectDetail(id){
   try{
     const { data:prj, error }=await sb.from("os_projects").select("*").eq("id",id).single();
     if(error||!prj){ $("pdBox").innerHTML=failBox("معرفناش نجيب المشروع.",()=>paintProjectDetail(id)); return; }
     const canUp = isOwnerOps() || PROFILE.dept===prj.dept || PROFILE.dept==="engineering";
-    const [{ data:files },{ data:ptasks }]=await Promise.all([
+    /* تسجيل إن حد فتح الملف — مرة كل ساعة للشخص الواحد */
+    try{ sb.rpc("os_log_job_view",{ p_project:id }); }catch(e){}
+    const [{ data:files },{ data:ptasks },{ data:jstages },{ data:jsum }]=await Promise.all([
       sb.from("os_files").select("*").eq("project_id",id).eq("archived",false).order("created_at",{ascending:false}),
-      sb.from("os_tasks").select("*").eq("project_id",id).order("created_at",{ascending:false})
+      sb.from("os_tasks").select("*").eq("project_id",id).order("created_at",{ascending:false}),
+      sb.from("os_job_stages").select("*").eq("project_id",id).order("stage_seq",{ascending:true}),
+      sb.from("os_job_file_summary").select("*").eq("project_id",id).maybeSingle()
     ]);
     const fl=files||[];
     const tsk=ptasks||[];
@@ -1730,6 +1791,44 @@ async function paintProjectDetail(id){
       +((DEPT_BY_KEY[prj.dept]&&'<span>'+esc(DEPT_BY_KEY[prj.dept].name)+'</span>')||'')
       +(prj.value_egp?'<span class="dot"></span><span>'+Number(prj.value_egp).toLocaleString("en")+' ج</span>':'')
       +(dt?'<span class="dot"></span><span>'+dt+'</span>':'')+'</div></div>';
+    /* بيانات الأرض — لو الملف مربوط بقطعة */
+    if(jsum && (jsum.parcel_no || jsum.authority)){
+      h+='<div class="card flat" style="margin-bottom:12px">'
+        +'<div style="font-family:Cairo,sans-serif;font-weight:800;font-size:12.5px;margin-bottom:6px;color:var(--blue-d)">\ud83d\udccd الأرض</div>'
+        +'<div class="meta" style="margin:0">'
+        +(jsum.authority?'<span>'+esc(jsum.authority)+'</span>':'')
+        +(jsum.area?'<span class="dot"></span><span>'+esc(jsum.area)+'</span>':'')
+        +(jsum.parcel_no?'<span class="dot"></span><span>قطعة '+esc(jsum.parcel_no)+'</span>':'')
+        +'</div>'
+        +(jsum.client_name?'<div class="meta" style="margin-top:4px"><span>'+esc(jsum.client_name)+'</span>'+(jsum.client_phone?'<span class="dot"></span><span>'+esc(jsum.client_phone)+'</span>':'')+'</div>':'')
+        +'</div>';
+    }
+
+    /* مراحل الملف — الطبقة اللي بتوضّح الملف واقف فين وعند مين */
+    const stg=jstages||[];
+    if(stg.length){
+      const doneN=stg.filter(x=>x.status==="done").length;
+      const cur=stg.find(x=>x.status==="active");
+      const today=todayStr();
+      const isLate=cur&&cur.due_on&&cur.due_on<today;
+      h+='<div class="sec-h">مراحل الملف <span class="ln"></span><span class="badge" style="background:#eef2f7;color:#0D47A1;font-weight:800">'+doneN+'/'+stg.length+'</span></div>';
+      if(isLate) h+='<div class="card flat" style="border-right:4px solid var(--red);margin-bottom:8px"><b style="font-size:13px;color:var(--red)">\u26a0 متأخر: '+esc(cur.stage_name)+'</b><div class="meta" style="margin-top:3px"><span>كان المفروض يخلص '+fmtDate(cur.due_on)+'</span></div></div>';
+      h+='<div class="card flat">'+stg.map(x=>{
+        const late=x.status==="active"&&x.due_on&&x.due_on<today;
+        const bul=x.status==="done"?'<span style="width:22px;height:22px;border-radius:50%;background:#2E7D32;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex:none">\u2713</span>'
+          :x.status==="active"?'<span style="width:22px;height:22px;border-radius:50%;background:#0D47A1;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex:none">'+x.stage_seq+'</span>'
+          :'<span style="width:22px;height:22px;border-radius:50%;background:#eef2f7;color:#90a4ae;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex:none">'+x.stage_seq+'</span>';
+        const sub=x.status==="done"?('خلصت '+(x.done_at?fmtDate(x.done_at):"—"))
+          :x.status==="active"?(late?'متأخرة — كانت لـ '+fmtDate(x.due_on):'جارية — لـ '+(x.due_on?fmtDate(x.due_on):"—"))
+          :'في الانتظار';
+        return '<div style="display:flex;align-items:flex-start;gap:9px;padding:9px 0;border-bottom:1px solid #eef2f7">'+bul
+          +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">'+esc(x.stage_name)+'</div>'
+          +'<div class="muted" style="font-size:11.5px;margin-top:2px'+(late?';color:var(--red);font-weight:700':'')+'">'+sub+'</div></div>'
+          +(x.status==="active"&&canUp?'<button class="btn sm" onclick="doneJobStage(\''+x.id+'\',\''+id+'\')">تم</button>':'')
+          +'</div>';
+      }).join("")+'</div>';
+    }
+
     /* معالم ومهام المشروع */
     h+='<div class="sec-h">معالم ومهام المشروع <span class="ln"></span></div>';
     if(canUp) h+='<div class="row-actions" style="margin:-4px 0 10px"><button class="btn sm" id="pdAddMs">➕ أضف معلم/مهمة</button></div>';
@@ -1739,6 +1838,29 @@ async function paintProjectDetail(id){
       return '<div class="card flat"'+(isOverdue?' style="border-right:4px solid var(--red)"':'')+'><div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:13px">'+esc(t.title)+'</b>'+statusBadge(t.status)+'</div>'
         +'<div class="meta"><span>'+esc(t.assignee_name||nameOf(t.assignee_id)||"غير محدد")+'</span>'+(t.deadline?'<span class="dot"></span><span>'+fmtDate(t.deadline)+'</span>':'')+'</div></div>';
     }).join(""); }
+    /* سجل الملف — مين ضاف ومين عدّل ومين شاف */
+    if(isOwnerOps()){
+      const { data:hist }=await sb.from("os_job_history").select("*").eq("project_id",id).order("at",{ascending:false}).limit(40);
+      const H=hist||[];
+      const viewers=[...new Set(H.filter(x=>x.action==="view").map(x=>x.actor))];
+      h+='<div class="sec-h">سجل الملف <span class="ln"></span><span class="badge" style="background:#eef2f7;color:#0D47A1;font-weight:800">'+H.length+'</span></div>';
+      if(!H.length){ h+='<div class="empty">مفيش حركات متسجلة لسه.</div>'; }
+      else{
+        if(viewers.length) h+='<div class="card flat" style="margin-bottom:8px"><div class="muted" style="font-size:11.5px">\ud83d\udc41 شافوه: '+viewers.map(v=>esc(v)).join(" \u00b7 ")+'</div></div>';
+        h+='<div class="card flat">'+H.map(x=>{
+          const ic=x.action==="create"?"\ud83d\udcc2":x.action==="update"?"\u270e":x.action==="view"?"\ud83d\udc41":x.action==="stage_done"?"\u2705":x.action==="money_in"?"\u2b07":x.action==="money_out"?"\u2b06":"\u2022";
+          let extra="";
+          if(x.changes){ try{ extra=Object.entries(x.changes).map(([k,v])=>esc(k)+': '+esc(v[0]==null?"\u2014":v[0])+' \u2190 '+esc(v[1]==null?"\u2014":v[1])).join(" \u00b7 "); }catch(e){} }
+          return '<div style="display:flex;gap:8px;padding:8px 0;border-bottom:1px solid #eef2f7">'
+            +'<span style="flex:none;font-size:14px">'+ic+'</span>'
+            +'<div style="flex:1;min-width:0">'
+            +'<div style="font-size:12.5px"><b>'+esc(x.actor)+'</b> \u2014 '+esc(x.summary||x.action_ar)+'</div>'
+            +(extra?'<div class="muted" style="font-size:11px;margin-top:2px">'+extra+'</div>':'')
+            +'<div class="muted" style="font-size:11px;margin-top:2px">'+relativeTime(x.at)+'</div>'
+            +'</div></div>';
+        }).join("")+'</div>';
+      }
+    }
     h+='<div class="sec-h">مرفقات المشروع <span class="ln"></span></div>';
     if(canUp){
       h+='<div class="card flat"><div class="field"><label>اسم المرفق</label><input id="pdTitle" placeholder="مثلًا: رسمة معمارية — الدور الأرضي"/></div>'
@@ -2531,12 +2653,101 @@ const PAY_STATUS={planned:["مخططة","b-grey"],due:["مستحقة — جاه�
 const COST_CAT={salary:"أجور",subcontractor:"مقاول باطن",permit:"رسوم ورخص",materials:"مواد وطباعة",transport:"انتقالات",other:"أخرى"};
 const egp=(n)=>Number(n||0).toLocaleString("en")+" ج";
 function isFinanceUser(){ return isOwnerOps()||PROFILE.dept==="finance"; }
+/* ═══ العهد والسلف ═══ */
+async function openAdvances(){
+  if(!isFinanceUser()&&!isOwnerOps()){ toast("الشاشة دي للمالية","bad"); return; }
+  openSheet('<h3>العهد والسلف</h3><div id="advBox"><div class="skel"></div><div class="skel"></div></div>'
+    +'<div class="sec-h">حركة جديدة <span class="ln"></span></div>'
+    +'<div class="field"><label>الموظف</label><select id="advWho">'+PROFILES.filter(p=>!/^suspended/.test(p.email||"")).map(p=>'<option value="'+p.id+'">'+esc(p.name||p.email)+'</option>').join("")+'</select></div>'
+    +'<div class="field"><label>النوع</label><select id="advDir"><option value="issue">صرف عهدة</option><option value="settle">تصفية عهدة</option></select></div>'
+    +'<div class="field"><label>المبلغ (جنيه)</label><input id="advAmt" type="number" inputmode="decimal" min="1"/></div>'
+    +'<div class="field"><label>البيان</label><input id="advNote" placeholder="مثلاً: مصاريف جهاز المدينة"/></div>'
+    +'<div class="row-actions"><button class="btn green" id="advGo">حفظ</button><button class="btn ghost" onclick="openFinance()">رجوع للمالية</button></div>');
+  $("advGo").onclick=async()=>{
+    const amount=parseFloat($("advAmt").value);
+    if(!(amount>0)){ toast("اكتب مبلغ صحيح","bad"); return; }
+    const who=$("advWho").value;
+    const { error }=await sb.from("os_advances").insert({
+      profile_id:who, holder_name:nameOf(who), direction:$("advDir").value,
+      amount, notes:$("advNote").value.trim()||null, created_by:ME.id, happened_on:todayStr() });
+    if(error){ toast("ماتسجلتش: "+error.message,"bad"); return; }
+    toast("اتسجلت \u2713","ok"); $("advAmt").value=""; $("advNote").value="";
+    await paintAdvances();
+  };
+  await paintAdvances();
+}
+async function paintAdvances(){
+  const box=$("advBox"); if(!box) return;
+  try{
+    const [{ data:bal },{ data:mv }]=await Promise.all([
+      sb.from("os_advance_balances").select("*").order("outstanding",{ascending:false}),
+      sb.from("os_advances").select("*").order("happened_on",{ascending:false}).limit(25)
+    ]);
+    const B=(bal||[]).filter(x=>Number(x.outstanding||0)!==0);
+    let h="";
+    if(!B.length) h+='<div class="empty">مفيش عهد مفتوحة.</div>';
+    else h+='<div class="card flat">'+B.map(x=>'<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #eef2f7">'
+      +'<span style="font-size:13px;font-weight:700">'+esc(x.holder||"\u2014")+'</span>'
+      +'<span style="font-weight:800;color:'+(Number(x.outstanding)>0?'var(--red)':'var(--green-d)')+'">'+egp(x.outstanding)+'</span></div>').join("")+'</div>';
+    if((mv||[]).length) h+='<div class="sec-h">آخر الحركات <span class="ln"></span></div><div class="card flat">'
+      +mv.map(x=>'<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #eef2f7">'
+      +'<span style="font-size:12px;flex:1;min-width:0">'+(x.direction==="issue"?"\u2b06 صرف":"\u2b07 تصفية")+' \u2014 '+esc(x.holder_name||"\u2014")+(x.notes?' \u00b7 '+esc(x.notes):'')+'</span>'
+      +'<span class="muted" style="font-size:11.5px;flex:none">'+egp(x.amount)+' \u00b7 '+fmtDate(x.happened_on)+'</span></div>').join("")+'</div>';
+    box.innerHTML=h;
+  }catch(e){ box.innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+
+/* ═══ التقفيل المالي — للمالك فقط ═══ */
+async function openClosing(){
+  if(!isOwnerOps()){ toast("التقفيل للمالك فقط","bad"); return; }
+  openSheet('<h3>التقفيل المالي</h3>'
+    +'<div class="card flat" style="margin-bottom:10px"><div class="muted" style="font-size:12px">الفترة المقفولة مينفعش يتسجّل فيها ولا يتعدّل فيها أي حركة مالية \u2014 الحماية على الداتابيز نفسها مش على الشاشة.</div></div>'
+    +'<div id="clsBox"><div class="skel"></div></div>'
+    +'<div class="sec-h">اقفل فترة <span class="ln"></span></div>'
+    +'<div class="field"><label>النطاق</label><select id="clsScope"><option value="month">شهر</option><option value="day">يوم</option><option value="year">سنة</option></select></div>'
+    +'<div class="field"><label>من</label><input id="clsFrom" type="date"/></div>'
+    +'<div class="field"><label>إلى</label><input id="clsTo" type="date"/></div>'
+    +'<div class="row-actions"><button class="btn green" id="clsGo">اقفل الفترة</button><button class="btn ghost" onclick="openFinance()">رجوع للمالية</button></div>');
+  const d=new Date(), y=d.getFullYear(), m=d.getMonth();
+  $("clsFrom").value=new Date(Date.UTC(y,m,1)).toISOString().slice(0,10);
+  $("clsTo").value=new Date(Date.UTC(y,m+1,0)).toISOString().slice(0,10);
+  $("clsGo").onclick=async()=>{
+    const f=$("clsFrom").value, t=$("clsTo").value;
+    if(!f||!t||f>t){ toast("راجع التواريخ","bad"); return; }
+    if(!confirm("متأكد؟ بعد الإقفال مفيش حد هيقدر يسجّل أو يعدّل حركة مالية في الفترة دي.")) return;
+    const { error }=await sb.from("os_fin_closing").insert({ scope:$("clsScope").value, period_start:f, period_end:t, closed_by:ME.id });
+    if(error){ toast(/duplicate|unique/i.test(error.message)?"الفترة دي مقفولة بالفعل":"ماتقفلتش: "+error.message,"bad"); return; }
+    toast("الفترة اتقفلت \u2713","ok"); await paintClosing();
+  };
+  await paintClosing();
+}
+async function paintClosing(){
+  const box=$("clsBox"); if(!box) return;
+  try{
+    const { data }=await sb.from("os_fin_closing").select("*").order("period_start",{ascending:false}).limit(20);
+    const R=data||[];
+    if(!R.length){ box.innerHTML='<div class="empty">مفيش فترات مقفولة.</div>'; return; }
+    const L={day:"يوم",month:"شهر",year:"سنة"};
+    box.innerHTML='<div class="card flat">'+R.map(x=>'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #eef2f7">'
+      +'<span style="font-size:12.5px"><b>'+(L[x.scope]||x.scope)+'</b> \u00b7 '+fmtDate(x.period_start)+' \u2190 '+fmtDate(x.period_end)+'</span>'
+      +'<button class="btn ghost sm" onclick="reopenPeriod(\''+x.id+'\')">افتح</button></div>').join("")+'</div>';
+  }catch(e){ box.innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+async function reopenPeriod(id){
+  if(!confirm("تفتح الفترة دي تاني؟")) return;
+  const { error }=await sb.from("os_fin_closing").delete().eq("id",id);
+  if(error){ toast("مقدرناش نفتحها: "+error.message,"bad"); return; }
+  toast("الفترة اتفتحت","ok"); await paintClosing();
+}
+
 async function openFinance(){
   if(!isFinanceUser()&&PROFILE.role!=="manager"){ toast("الشاشة دي للمالية والإدارة","bad"); return; }
   openSheet('<h3>المالية — نظرة شاملة</h3><div id="finBox"><div class="skel"></div><div class="skel"></div></div>'
-    +'<div class="row-actions" style="margin-top:10px"><button class="btn sm" id="finRecv">المستحقات</button><button class="btn sm" id="finProj">ربحية المشاريع</button>'+(isFinanceUser()?'<button class="btn green sm" id="finNewPay">دفعة جديدة</button><button class="btn ghost sm" id="finNewCost">سجّل مصروف</button>':'')+'<button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn sm" id="finRecv">المستحقات</button><button class="btn sm" id="finProj">ربحية المشاريع</button>'+(isFinanceUser()?'<button class="btn green sm" id="finNewPay">دفعة جديدة</button><button class="btn ghost sm" id="finNewCost">سجّل مصروف</button><button class="btn sm" id="finAdv">العهد والسلف</button>':'')+(isOwnerOps()?'<button class="btn ghost sm" id="finClose">التقفيل المالي</button>':'')+'<button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
   $("finRecv").onclick=()=>openReceivables();
   $("finProj").onclick=()=>openProjectFinance();
+  const fa=$("finAdv");   if(fa) fa.onclick=()=>openAdvances();
+  const fc2=$("finClose");if(fc2) fc2.onclick=()=>openClosing();
   const np=$("finNewPay"); if(np) np.onclick=()=>openPaymentNew();
   const nc=$("finNewCost"); if(nc) nc.onclick=()=>openCostNew();
   await paintFinanceDash();
