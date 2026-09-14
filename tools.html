@@ -1599,6 +1599,7 @@ async function openProjects(){
       +'<div class="row-actions"><button class="btn green" id="pjGo">افتح بيان الأعمال</button></div>':"")
     +'<button class="btn sm" style="margin-top:10px" onclick="openFind()">\ud83d\udd0d بحث في الملفات والقطع</button>'
     +'<button class="btn ghost sm" style="margin-top:10px" onclick="openArchive()">الأرشيف</button>'
+    +'<button class="btn ghost sm" style="margin-top:10px" onclick="openGeo()">الأجهزة والمناطق</button>'
     +((isOwnerOps()||PROFILE.role==="manager")?'<button class="btn sm" style="margin-top:10px" onclick="openTeamLoad()">حِمل الفريق وأداء المراحل</button>':'')
     +'<button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
   if(canAddPrj){
@@ -2883,6 +2884,149 @@ function applyQuickCollapse(){
   const mb=document.getElementById("moreBtn"); if(mb) mb.style.display="";
 }
 
+/* ═══════════ مشتملات بيان الأعمال ═══════════ */
+async function paintScope(id, mountId){
+  const box=$(mountId); if(!box) return;
+  try{
+    const { data }=await sb.from("os_job_scope").select("*").eq("project_id",id)
+      .neq("status","cancelled").order("seq_no");
+    const R=data||[];
+    if(!R.length){
+      box.innerHTML='<div class="card flat"><div class="empty" style="padding:8px">'
+        +'مفيش مشتملات — العميل مش عارف إيه اللي داخل وإيه اللي برّه.</div>'
+        +'<button class="btn green sm" onclick="buildScope(\''+id+'\')">ولّد المشتملات تلقائي</button>'
+        +'<button class="btn ghost sm" onclick="addScopeItem(\''+id+'\')">أضف بند يدوي</button></div>';
+      return;
+    }
+    const IN=R.filter(x=>x.included), OUT=R.filter(x=>!x.included);
+    const dl=IN.filter(x=>x.status==="delivered").length;
+    let h='<div class="card flat" style="text-align:center">'
+      +'<b style="display:block;font-size:17px">'+dl+'/'+IN.length+'</b>'
+      +'<span class="muted" style="font-size:11.5px">بند اتسلّم</span></div>';
+
+    h+='<div class="card flat" style="margin-top:8px">'+IN.map(x=>{
+      const ok=x.status==="delivered";
+      return '<div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid #eef2f7">'
+        +'<span style="flex:none;font-size:13px;color:'+(ok?'var(--green-d)':'#b9b9b4')+'">'+(ok?'\u2714':'\u25cb')+'</span>'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:12.5px'+(ok?';color:var(--ink2,#666)':'')+'">'+esc(x.item)+'</div>'
+        +(x.deliverable?'<div class="muted" style="font-size:11px;margin-top:1px">المخرج: '+esc(x.deliverable)+'</div>':'')
+        +(ok&&x.delivered_at?'<div class="muted" style="font-size:10.5px;margin-top:1px">اتسلّم '+fmtDate(x.delivered_at)+'</div>':'')
+        +'</div>'
+        +(!ok?'<button class="btn sm" style="flex:none" onclick="deliverScope(\''+x.id+'\',\''+id+'\')">سلّم</button>':'')
+        +'</div>';
+    }).join("")+'</div>';
+
+    if(OUT.length){
+      h+='<div class="sec-h" style="margin-top:10px">مش داخل في الاتفاق <span class="ln"></span></div>'
+        +'<div class="card flat" style="border-right:3px solid #B45309">'+OUT.map(x=>
+          '<div style="padding:6px 0;border-bottom:1px solid #eef2f7">'
+          +'<div style="font-size:12.5px">\u2716 '+esc(x.item)+'</div>'
+          +(x.deliverable?'<div class="muted" style="font-size:11px">'+esc(x.deliverable)+'</div>':'')
+          +'</div>').join("")+'</div>';
+    }
+    h+='<button class="btn ghost sm" style="margin-top:8px" onclick="addScopeItem(\''+id+'\')">\u002b بند</button>';
+    box.innerHTML=h;
+  }catch(e){ box.innerHTML='<div class="empty">تعذّر تحميل المشتملات.</div>'; }
+}
+async function buildScope(id){
+  const { error }=await sb.rpc("os_build_scope",{ p_project:id });
+  if(error){ toast(error.message,"bad"); return; }
+  toast("المشتملات اتولدت \u2713","ok"); paintProjectDetail(id);
+}
+async function deliverScope(scopeId, prjId){
+  const { error }=await sb.from("os_job_scope").update({ status:"delivered", delivered_at:todayStr() }).eq("id",scopeId);
+  if(error){ toast(error.message,"bad"); return; }
+  toast("البند اتسلّم \u2713","ok"); paintProjectDetail(prjId);
+}
+async function addScopeItem(id){
+  const it=prompt("البند؟"); if(!it||!it.trim()) return;
+  const dv=prompt("المخرج المتفق عليه؟ (اختياري)")||null;
+  const inc=confirm("البند ده داخل في الاتفاق؟\nموافق = داخل · إلغاء = مستثنى");
+  const { data:mx }=await sb.from("os_job_scope").select("seq_no").eq("project_id",id)
+    .order("seq_no",{ascending:false}).limit(1);
+  const nxt=(mx&&mx.length?Number(mx[0].seq_no):0)+1;
+  const { error }=await sb.from("os_job_scope").insert({ project_id:id, seq_no:nxt,
+    item:it.trim(), deliverable:dv, included:inc, created_by:ME.id });
+  if(error){ toast(error.message,"bad"); return; }
+  toast("البند اتضاف \u2713","ok"); paintProjectDetail(id);
+}
+async function setExpectation(id){
+  const { data:p }=await sb.from("os_projects").select("promised_date,client_expectation").eq("id",id).maybeSingle();
+  const d=prompt("الموعد اللي وعدنا العميل بيه؟ (YYYY-MM-DD — سيبه فاضي لو مفيش)", (p&&p.promised_date)||"");
+  if(d===null) return;
+  const t=prompt("العميل متوقّع إيه بالظبط؟", (p&&p.client_expectation)||"");
+  if(t===null) return;
+  const { error }=await sb.from("os_projects").update({
+    promised_date:(d&&d.trim())||null, client_expectation:(t&&t.trim())||null }).eq("id",id);
+  if(error){ toast(error.message,"bad"); return; }
+  toast("اتسجّل \u2713","ok"); paintProjectDetail(id);
+}
+
+/* ═══════════ إدارة الأجهزة والمناطق ═══════════ */
+async function openGeo(){
+  openSheet('<h3>الأجهزة والمناطق</h3>'
+    +'<div class="muted" style="margin:-6px 0 12px;font-size:12px">المنطقة اللي فيها قطع أراضي مينفعش تتمسح — الكود بيفضل ثابت عشان الأكواد القديمة.</div>'
+    +'<div id="geoBox"><div class="skel"></div></div>'
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" onclick="addAuthority()">\u002b جهاز</button>'
+    +'<button class="btn sm" onclick="addArea()">\u002b منطقة</button>'
+    +'<button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+  await paintGeo();
+}
+async function paintGeo(){
+  const box=$("geoBox"); if(!box) return;
+  try{
+    const { data }=await sb.from("os_geo_manage").select("*").order("authority_name").order("area_code");
+    const R=data||[];
+    if(!R.length){ box.innerHTML='<div class="empty">مفيش مناطق.</div>'; return; }
+    const g={};
+    R.forEach(x=>{ (g[x.authority_name]=g[x.authority_name]||[]).push(x); });
+    box.innerHTML=Object.entries(g).map(([an,items])=>
+      '<div class="card flat" style="margin-bottom:8px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center">'
+      +'<b style="font-size:13px">'+esc(an)+'</b>'
+      +'<span class="badge" style="background:#E1F5EE;color:#0F6E56;font-weight:800">'+esc(items[0].authority_code||"")+'</span></div>'
+      +items.map(x=>'<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-top:1px solid #eef2f7">'
+        +'<span style="flex:1;min-width:0;font-size:12.5px">'+esc(x.area_name)
+        +' <span class="muted" style="font-size:11px">('+esc(x.area_code||"")+')</span></span>'
+        +(Number(x.parcels)>0?'<span class="muted" style="font-size:11px;flex:none">'+x.parcels+' قطعة</span>':'')
+        +'<button class="btn ghost sm" style="flex:none" onclick="renameArea(\''+x.area_id+'\',\''+esc(x.area_name)+'\')">عدّل</button>'
+        +(x.can_delete?'<button class="btn ghost sm" style="flex:none;color:var(--red)" onclick="deleteArea(\''+x.area_id+'\',\''+esc(x.area_name)+'\')">امسح</button>'
+          :'<span class="muted" style="font-size:10.5px;flex:none">🔒 محمية</span>')
+        +'</div>').join("")
+      +'</div>').join("");
+  }catch(e){ box.innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+async function addAuthority(){
+  const nm=prompt("اسم الجهاز الجديد؟"); if(!nm||!nm.trim()) return;
+  const { error }=await sb.from("os_city_authorities").insert({ name:nm.trim() });
+  if(error){ toast(/duplicate|unique/i.test(error.message)?"الجهاز ده موجود":error.message,"bad"); return; }
+  toast("اتضاف \u2713","ok"); paintGeo();
+}
+async function addArea(){
+  const { data:auths }=await sb.from("os_city_authorities").select("id,name").order("name");
+  if(!auths||!auths.length){ toast("أضف جهاز الأول","bad"); return; }
+  const list=auths.map((a,i)=>(i+1)+") "+a.name).join("\n");
+  const pick=prompt("الجهاز؟\n"+list, "1");
+  const idx=parseInt(pick)-1; if(!(idx>=0&&idx<auths.length)) return;
+  const nm=prompt("اسم المنطقة؟"); if(!nm||!nm.trim()) return;
+  const { error }=await sb.from("os_areas").insert({ name:nm.trim(), authority_id:auths[idx].id });
+  if(error){ toast(/duplicate|unique/i.test(error.message)?"المنطقة دي موجودة":error.message,"bad"); return; }
+  toast("اتضافت \u2713","ok"); paintGeo();
+}
+async function renameArea(id, cur){
+  const nm=prompt("الاسم الجديد؟", cur); if(!nm||!nm.trim()||nm===cur) return;
+  const { error }=await sb.from("os_areas").update({ name:nm.trim() }).eq("id",id);
+  if(error){ toast(/duplicate|unique/i.test(error.message)?"الاسم ده موجود":error.message,"bad"); return; }
+  toast("اتعدّلت \u2713","ok"); paintGeo();
+}
+async function deleteArea(id, nm){
+  if(!confirm("تمسح «"+nm+"»؟")) return;
+  const { error }=await sb.from("os_areas").delete().eq("id",id);
+  if(error){ toast(error.message,"bad"); return; }
+  toast("اتمسحت \u2713","ok"); paintGeo();
+}
+
 /* ═══════════ بيان الأعمال ٣٦٠ ═══════════ */
 async function paintJob360(id, mountId){
   const box=$(mountId); if(!box) return;
@@ -2924,6 +3068,26 @@ async function paintJob360(id, mountId){
         +'</div>'
         :'<div class="muted" style="font-size:11.5px;margin-top:4px">مفيش قطعة مربوطة</div>')
       +'</div>';
+
+    /* وعد العميل وتوقعاته */
+    {
+      const late=j.promised_date && j.promised_date<todayStr() && j.status!=="closed";
+      h+='<div class="card flat"'+(late?' style="border-right:3px solid var(--red)"':'')+'>'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+        +'<span style="font-size:12.5px;font-weight:600">وعد العميل</span>'
+        +'<button class="btn ghost sm" onclick="setExpectation(\''+id+'\')">'+(j.promised_date||j.client_expectation?'عدّل':'سجّل')+'</button></div>'
+        +(j.promised_date?'<div class="meta" style="margin-top:4px"><span'+(late?' style="color:var(--red);font-weight:800"':'')+'>'
+          +(late?'🔴 فات الموعد — ':'')+fmtDate(j.promised_date)+'</span></div>':'')
+        +(j.client_expectation?'<div class="muted" style="font-size:11.5px;margin-top:4px;line-height:1.6">'+esc(j.client_expectation)+'</div>':'')
+        +(!j.promised_date&&!j.client_expectation?'<div class="muted" style="font-size:11.5px;margin-top:3px">مفيش موعد متسجّل — العميل ممكن يكون متوقّع حاجة تانية.</div>':'')
+        +'</div>';
+    }
+
+    /* المشتملات */
+    h+='<div class="sec-h">مشتملات بيان الأعمال <span class="ln"></span>'
+      +(j.scope_in?'<span class="badge" style="background:#eef2f7;color:#0D47A1;font-weight:800">'+j.scope_delivered+'/'+j.scope_in+'</span>':'')+'</div>'
+      +'<div id="scopeBox"><div class="skel"></div></div>';
+    setTimeout(()=>paintScope(id,"scopeBox"), 50);
 
     /* المرحلة الحالية */
     if(j.current_stage){
