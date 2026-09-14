@@ -2884,6 +2884,232 @@ function applyQuickCollapse(){
   const mb=document.getElementById("moreBtn"); if(mb) mb.style.display="";
 }
 
+/* ═══════════ الدفاتر المحاسبية ═══════════ */
+async function openBooks(){
+  if(!isFinanceUser()&&!isOwnerOps()){ toast("الدفاتر للمالية والإدارة","bad"); return; }
+  openSheet('<h3>الدفاتر المحاسبية</h3>'
+    +'<div class="row-actions" style="flex-wrap:wrap;gap:8px;margin-bottom:10px">'
+    +'<button class="btn sm" onclick="openTrialBalance()">ميزان المراجعة</button>'
+    +'<button class="btn sm" onclick="openStatements()">قائمة الدخل والميزانية</button>'
+    +'<button class="btn ghost sm" onclick="openJournal()">دفتر اليومية</button>'
+    +'<button class="btn ghost sm" onclick="openCOA()">دليل الحسابات</button>'
+    +'<button class="btn ghost sm" onclick="openManualJV()">قيد يدوي</button>'
+    +'<button class="btn ghost sm" onclick="openFinance()">رجوع</button></div>'
+    +'<div id="bkBox"><div class="skel"></div></div>');
+  try{
+    const { data }=await sb.from("os_trial_balance").select("*");
+    const R=data||[];
+    const d=R.reduce((a,b)=>a+Number(b.total_debit||0),0);
+    const c=R.reduce((a,b)=>a+Number(b.total_credit||0),0);
+    const ok=Math.abs(d-c)<0.01;
+    $("bkBox").innerHTML='<div class="card flat" style="text-align:center;border-right:4px solid '
+      +(ok?'var(--green-d)':'var(--red)')+'">'
+      +'<b style="display:block;font-size:18px">'+(ok?'\u2713 الدفاتر متوازنة':'\u2717 فيه فرق')+'</b>'
+      +'<span class="muted" style="font-size:12px">مدين '+egp(d)+' · دائن '+egp(c)+'</span></div>';
+  }catch(e){ $("bkBox").innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+
+async function openTrialBalance(){
+  openSheet('<h3>ميزان المراجعة</h3><div id="tbBox"><div class="skel"></div></div>'
+    +'<button class="btn ghost" style="margin-top:10px" onclick="openBooks()">رجوع للدفاتر</button>');
+  try{
+    const { data }=await sb.from("os_trial_balance").select("*").order("code");
+    const R=(data||[]).filter(x=>Number(x.total_debit)||Number(x.total_credit));
+    if(!R.length){ $("tbBox").innerHTML='<div class="empty">مفيش قيود لسه.</div>'; return; }
+    const td=R.reduce((a,b)=>a+Number(b.total_debit||0),0);
+    const tc=R.reduce((a,b)=>a+Number(b.total_credit||0),0);
+    const TY={asset:"أصول",liability:"التزامات",equity:"ملكية",income:"إيرادات",expense:"مصروفات"};
+    let h='<div class="card flat">';
+    let ty=null;
+    R.forEach(x=>{
+      if(x.type!==ty){ ty=x.type;
+        h+='<div class="muted" style="font-size:11.5px;font-weight:700;margin:8px 0 4px">'+(TY[ty]||ty)+'</div>'; }
+      h+='<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid #eef2f7">'
+        +'<span class="muted" style="flex:none;font-size:11px;width:38px">'+esc(x.code)+'</span>'
+        +'<span style="flex:1;min-width:0;font-size:12.5px">'+esc(x.name)+'</span>'
+        +'<span style="flex:none;font-size:12px;width:82px;text-align:left">'+(Number(x.total_debit)?egp(x.total_debit):'—')+'</span>'
+        +'<span style="flex:none;font-size:12px;width:82px;text-align:left">'+(Number(x.total_credit)?egp(x.total_credit):'—')+'</span>'
+        +'</div>';
+    });
+    h+='<div style="display:flex;gap:8px;padding:9px 0 0;margin-top:4px;border-top:2px solid #0D47A1;font-weight:800">'
+      +'<span style="flex:1;font-size:12.5px">الإجمالي</span>'
+      +'<span style="flex:none;width:82px;text-align:left;font-size:12.5px">'+egp(td)+'</span>'
+      +'<span style="flex:none;width:82px;text-align:left;font-size:12.5px">'+egp(tc)+'</span></div>'
+      +'<div style="text-align:center;margin-top:8px;font-weight:800;color:'
+      +(Math.abs(td-tc)<0.01?'var(--green-d)">\u2713 متوازن':'var(--red)">\u2717 فرق '+egp(Math.abs(td-tc)))+'</div>'
+      +'</div>';
+    $("tbBox").innerHTML=h;
+  }catch(e){ $("tbBox").innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+
+async function openStatements(){
+  openSheet('<h3>القوائم المالية</h3><div id="stBox"><div class="skel"></div><div class="skel"></div></div>'
+    +'<button class="btn ghost" style="margin-top:10px" onclick="openBooks()">رجوع للدفاتر</button>');
+  try{
+    const [{ data:is },{ data:bs }]=await Promise.all([
+      sb.from("os_income_statement").select("*"),
+      sb.from("os_balance_sheet").select("*")
+    ]);
+    const I=(is||[]).filter(x=>Number(x.amount)!==0);
+    const B=(bs||[]).filter(x=>Number(x.balance)!==0);
+    const inc=I.filter(x=>x.type==="income"), exp=I.filter(x=>x.type==="expense");
+    const ti=inc.reduce((a,b)=>a+Number(b.amount),0), te=exp.reduce((a,b)=>a+Number(b.amount),0);
+    const row=(n,v,bold)=>'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eef2f7'
+      +(bold?';font-weight:800':'')+'"><span style="font-size:12.5px">'+esc(n)+'</span>'
+      +'<span style="font-size:12.5px">'+egp(v)+'</span></div>';
+    let h='<div class="sec-h">قائمة الدخل <span class="ln"></span></div><div class="card flat">'
+      +'<div class="muted" style="font-size:11.5px;font-weight:700;margin-bottom:3px">الإيرادات</div>'
+      +(inc.length?inc.map(x=>row(x.name,x.amount)).join(""):'<div class="muted" style="font-size:12px">—</div>')
+      +'<div class="muted" style="font-size:11.5px;font-weight:700;margin:8px 0 3px">المصروفات</div>'
+      +(exp.length?exp.map(x=>row(x.name,x.amount)).join(""):'<div class="muted" style="font-size:12px">—</div>')
+      +'<div style="display:flex;justify-content:space-between;padding:9px 0 0;margin-top:4px;border-top:2px solid #0D47A1;font-weight:800">'
+      +'<span style="font-size:13px">صافي الربح</span>'
+      +'<span style="font-size:14px;color:'+(ti-te>=0?'var(--green-d)':'var(--red)')+'">'+egp(ti-te)+'</span></div></div>';
+
+    const A=B.filter(x=>x.type==="asset"), L=B.filter(x=>x.type==="liability"), E=B.filter(x=>x.type==="equity");
+    const ta=A.reduce((a,b)=>a+Number(b.balance),0), tl=L.reduce((a,b)=>a+Number(b.balance),0);
+    const te2=E.reduce((a,b)=>a+Number(b.balance),0)+(ti-te);
+    h+='<div class="sec-h">الميزانية <span class="ln"></span></div><div class="card flat">'
+      +'<div class="muted" style="font-size:11.5px;font-weight:700;margin-bottom:3px">الأصول</div>'
+      +(A.length?A.map(x=>row(x.name,x.balance)).join(""):'<div class="muted" style="font-size:12px">—</div>')
+      +row("إجمالي الأصول",ta,true)
+      +'<div class="muted" style="font-size:11.5px;font-weight:700;margin:8px 0 3px">الالتزامات وحقوق الملكية</div>'
+      +(L.length?L.map(x=>row(x.name,x.balance)).join(""):"")
+      +(E.length?E.map(x=>row(x.name,x.balance)).join(""):"")
+      +row("أرباح الفترة",ti-te)
+      +row("الإجمالي",tl+te2,true)
+      +'<div style="text-align:center;margin-top:8px;font-weight:800;color:'
+      +(Math.abs(ta-(tl+te2))<0.01?'var(--green-d)">\u2713 الميزانية متزنة':'var(--red)">\u2717 فرق '+egp(Math.abs(ta-(tl+te2))))
+      +'</div></div>';
+    $("stBox").innerHTML=h;
+  }catch(e){ $("stBox").innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+
+async function openJournal(){
+  openSheet('<h3>دفتر اليومية</h3><div id="jvBox"><div class="skel"></div></div>'
+    +'<button class="btn ghost" style="margin-top:10px" onclick="openBooks()">رجوع للدفاتر</button>');
+  try{
+    const { data:J }=await sb.from("os_journal").select("*").order("entry_date",{ascending:false})
+      .order("entry_no",{ascending:false}).limit(40);
+    if(!J||!J.length){ $("jvBox").innerHTML='<div class="empty">مفيش قيود لسه.</div>'; return; }
+    const { data:L }=await sb.from("os_journal_lines").select("*").in("entry_id",J.map(x=>x.id));
+    const by={}; (L||[]).forEach(l=>{ (by[l.entry_id]=by[l.entry_id]||[]).push(l); });
+    const { data:acc }=await sb.from("os_coa").select("code,name");
+    const nm={}; (acc||[]).forEach(a=>{ nm[a.code]=a.name; });
+    $("jvBox").innerHTML=J.map(j=>
+      '<div class="card flat" style="margin-bottom:8px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+      +'<span class="badge" style="background:#eef2f7;color:#0D47A1;font-weight:800">'+esc(j.entry_no||"")+'</span>'
+      +'<span class="muted" style="font-size:11px">'+fmtDate(j.entry_date)+'</span></div>'
+      +'<div style="font-size:12.5px;margin:5px 0">'+esc(j.memo||"")+'</div>'
+      +(by[j.id]||[]).map(l=>'<div style="display:flex;gap:8px;padding:4px 0;border-top:1px solid #eef2f7">'
+        +'<span style="flex:1;min-width:0;font-size:11.5px">'+esc(nm[l.coa_code]||l.coa_code)+'</span>'
+        +'<span style="flex:none;width:78px;text-align:left;font-size:11.5px">'+(Number(l.debit)?egp(l.debit):'')+'</span>'
+        +'<span style="flex:none;width:78px;text-align:left;font-size:11.5px;color:var(--ink2,#666)">'+(Number(l.credit)?egp(l.credit):'')+'</span>'
+        +'</div>').join("")
+      +'</div>').join("");
+  }catch(e){ $("jvBox").innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+
+async function openCOA(){
+  openSheet('<h3>دليل الحسابات</h3><div id="coaBox"><div class="skel"></div></div>'
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" onclick="addCOA()">\u002b حساب</button>'
+    +'<button class="btn ghost sm" onclick="openBooks()">رجوع</button></div>');
+  await paintCOA();
+}
+async function paintCOA(){
+  const box=$("coaBox"); if(!box) return;
+  try{
+    const { data }=await sb.from("os_coa").select("*").order("sort_order").order("code");
+    const R=data||[];
+    const TY={asset:"أصول",liability:"التزامات",equity:"حقوق ملكية",income:"إيرادات",expense:"مصروفات"};
+    box.innerHTML='<div class="card flat">'+R.map(x=>
+      '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #eef2f7'
+      +(x.parent?'':';font-weight:800;margin-top:6px')+'">'
+      +'<span class="muted" style="flex:none;font-size:11px;width:40px">'+esc(x.code)+'</span>'
+      +'<span style="flex:1;min-width:0;font-size:12.5px'+(x.parent?';padding-inline-start:10px':'')+'">'+esc(x.name)+'</span>'
+      +'<span class="muted" style="flex:none;font-size:10.5px">'+(TY[x.type]||"")+'</span>'
+      +(x.parent?'<button class="btn ghost sm" style="flex:none" onclick="renameCOA(\''+x.code+'\',\''+esc(x.name)+'\')">عدّل</button>':'')
+      +'</div>').join("")+'</div>';
+  }catch(e){ box.innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+async function addCOA(){
+  const code=prompt("كود الحساب؟ (مثلاً 5950)"); if(!code||!code.trim()) return;
+  const name=prompt("اسم الحساب؟"); if(!name||!name.trim()) return;
+  const types=["asset","liability","equity","income","expense"];
+  const ar=["أصل","التزام","حقوق ملكية","إيراد","مصروف"];
+  const t=prompt("النوع؟\n"+ar.map((a,i)=>(i+1)+") "+a).join("\n"),"5");
+  const ti=parseInt(t)-1; if(!(ti>=0&&ti<5)) return;
+  const type=types[ti];
+  const normal=(type==="asset"||type==="expense")?"debit":"credit";
+  const parent=({asset:"1",liability:"2",equity:"3",income:"4",expense:"5"})[type];
+  const { error }=await sb.from("os_coa").insert({ code:code.trim(), name:name.trim(), type, normal, parent });
+  if(error){ toast(/duplicate|unique/i.test(error.message)?"الكود ده موجود":error.message,"bad"); return; }
+  toast("الحساب اتضاف \u2713","ok"); paintCOA();
+}
+async function renameCOA(code, cur){
+  const nm=prompt("الاسم الجديد؟", cur); if(!nm||!nm.trim()||nm===cur) return;
+  const { error }=await sb.from("os_coa").update({ name:nm.trim() }).eq("code",code);
+  if(error){ toast(error.message,"bad"); return; }
+  toast("اتعدّل \u2713","ok"); paintCOA();
+}
+
+let _jvLines=[];
+async function openManualJV(){
+  if(!isFinanceUser()&&!isOwnerOps()){ toast("القيود للمالية","bad"); return; }
+  _jvLines=[];
+  const { data:acc }=await sb.from("os_coa").select("code,name").eq("active",true).not("parent","is",null).order("code");
+  const opts=(acc||[]).map(a=>'<option value="'+esc(a.code)+'">'+esc(a.code+' — '+a.name)+'</option>').join("");
+  openSheet('<h3>قيد يدوي</h3>'
+    +'<div class="field"><label>البيان</label><input id="jvMemo" placeholder="مثلاً: إيداع رأس مال"/></div>'
+    +'<div class="field"><label>التاريخ</label><input id="jvDate" type="date" value="'+todayStr()+'"/></div>'
+    +'<div id="jvList"></div>'
+    +'<div class="card flat"><div class="field"><label>الحساب</label><select id="jvAcc">'+opts+'</select></div>'
+    +'<div class="field"><label>مدين</label><input id="jvD" type="number" inputmode="numeric" min="0" value="0"/></div>'
+    +'<div class="field"><label>دائن</label><input id="jvC" type="number" inputmode="numeric" min="0" value="0"/></div>'
+    +'<button class="btn sm" id="jvAdd">\u002b ضيف السطر</button></div>'
+    +'<div id="jvSum" class="muted" style="font-size:12px;margin:6px 0"></div>'
+    +'<div class="row-actions"><button class="btn green" id="jvGo">رحّل القيد</button>'
+    +'<button class="btn ghost" onclick="openBooks()">إلغاء</button></div>');
+  addMicTo("jvMemo"); makeSearchable("jvAcc","دوّر بالكود أو الاسم…");
+  const paint=()=>{
+    const d=_jvLines.reduce((a,b)=>a+Number(b.debit||0),0);
+    const c=_jvLines.reduce((a,b)=>a+Number(b.credit||0),0);
+    $("jvList").innerHTML=_jvLines.length?_jvLines.map((x,i)=>
+      '<div class="card flat" style="display:flex;align-items:center;gap:8px;padding:8px">'
+      +'<span style="flex:1;min-width:0;font-size:12.5px">'+esc(x.name)+'</span>'
+      +'<span style="flex:none;font-size:12px">'+(Number(x.debit)?'مدين '+egp(x.debit):'دائن '+egp(x.credit))+'</span>'
+      +'<button class="btn ghost sm" onclick="rmJv('+i+')" style="color:var(--red)">\u2715</button></div>').join(""):"";
+    $("jvSum").innerHTML='مدين <b>'+egp(d)+'</b> · دائن <b>'+egp(c)+'</b> · '
+      +(Math.abs(d-c)<0.01&&d>0?'<b style="color:var(--green-d)">متوازن \u2713</b>'
+        :'<b style="color:var(--red)">فرق '+egp(Math.abs(d-c))+'</b>');
+  };
+  window.rmJv=(i)=>{ _jvLines.splice(i,1); paint(); };
+  $("jvAdd").onclick=()=>{
+    const d=parseFloat($("jvD").value)||0, c=parseFloat($("jvC").value)||0;
+    if(d<=0&&c<=0){ toast("اكتب مدين أو دائن","bad"); return; }
+    if(d>0&&c>0){ toast("السطر يبقى مدين أو دائن — مش الاتنين","bad"); return; }
+    const sel=$("jvAcc");
+    _jvLines.push({ coa:sel.value, name:sel.options[sel.selectedIndex].textContent, debit:d, credit:c });
+    $("jvD").value="0"; $("jvC").value="0"; paint();
+  };
+  $("jvGo").onclick=async()=>{
+    const memo=$("jvMemo").value.trim();
+    if(!memo){ toast("اكتب البيان","bad"); return; }
+    if(_jvLines.length<2){ toast("القيد محتاج سطرين على الأقل","bad"); return; }
+    const d=_jvLines.reduce((a,b)=>a+Number(b.debit||0),0);
+    const c=_jvLines.reduce((a,b)=>a+Number(b.credit||0),0);
+    if(Math.abs(d-c)>0.01){ toast("القيد مش متوازن","bad"); return; }
+    const b=$("jvGo"); b.disabled=true;
+    const { error }=await sb.rpc("os_post_entry",{ p_memo:memo, p_date:$("jvDate").value||todayStr(),
+      p_lines:_jvLines.map(x=>({ coa:x.coa, debit:x.debit, credit:x.credit })),
+      p_source:"manual", p_source_id:null, p_project:null });
+    if(error){ toast(error.message,"bad"); b.disabled=false; return; }
+    toast("القيد اترحّل \u2713","ok"); _jvLines=[]; openJournal();
+  };
+  paint();
+}
+
 /* ═══════════ إضافة تصنيف من أي فورم ═══════════ */
 async function catOptions(kind){
   try{
@@ -3807,11 +4033,12 @@ async function reopenPeriod(id){
 async function openFinance(){
   if(!isFinanceUser()&&PROFILE.role!=="manager"){ toast("الشاشة دي للمالية والإدارة","bad"); return; }
   openSheet('<h3>المالية — نظرة شاملة</h3><div id="finBox"><div class="skel"></div><div class="skel"></div></div>'
-    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="finTr">الخزينة</button><button class="btn sm" id="finRecv">المستحقات</button><button class="btn sm" id="finPay">الموردين</button><button class="btn sm" id="finProj">ربحية المشاريع</button>'+(isFinanceUser()?'<button class="btn green sm" id="finNewPay">دفعة جديدة</button><button class="btn ghost sm" id="finNewCost">سجّل مصروف</button><button class="btn sm" id="finAdv">العهد والسلف</button>':'')+(isOwnerOps()?'<button class="btn ghost sm" id="finClose">التقفيل المالي</button>':'')+'<button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="finTr">الخزينة</button><button class="btn sm" id="finBooks">الدفاتر</button><button class="btn sm" id="finRecv">المستحقات</button><button class="btn sm" id="finPay">الموردين</button><button class="btn sm" id="finProj">ربحية المشاريع</button>'+(isFinanceUser()?'<button class="btn green sm" id="finNewPay">دفعة جديدة</button><button class="btn ghost sm" id="finNewCost">سجّل مصروف</button><button class="btn sm" id="finAdv">العهد والسلف</button>':'')+(isOwnerOps()?'<button class="btn ghost sm" id="finClose">التقفيل المالي</button>':'')+'<button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
   $("finRecv").onclick=()=>openReceivables();
   $("finProj").onclick=()=>openProjectFinance();
   const ft=$("finTr");    if(ft) ft.onclick=()=>openTreasury();
   const fp=$("finPay");   if(fp) fp.onclick=()=>openPayables();
+  const fb=$("finBooks"); if(fb) fb.onclick=()=>openBooks();
   const fa=$("finAdv");   if(fa) fa.onclick=()=>openAdvances();
   const fc2=$("finClose");if(fc2) fc2.onclick=()=>openClosing();
   const np=$("finNewPay"); if(np) np.onclick=()=>openPaymentNew();
