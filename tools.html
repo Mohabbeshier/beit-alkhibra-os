@@ -1590,6 +1590,7 @@ async function openProjects(){
       +'<div class="field"><label>المنطقة</label><select id="pjArea"><option value="">— بدون —</option></select></div>'
       +'<div class="field"><label>رقم القطعة</label><input id="pjParcel" placeholder="مثلاً: 145"/></div>'
       +'<div class="row-actions"><button class="btn green" id="pjGo">أضف المشروع</button></div>':"")
+    +((isOwnerOps()||PROFILE.role==="manager")?'<button class="btn sm" style="margin-top:10px" onclick="openTeamLoad()">حِمل الفريق وأداء المراحل</button>':'')
     +'<button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
   if(canAddPrj){
     addMicTo("pjName");
@@ -1744,6 +1745,53 @@ function openProjectMilestoneNew(projectId,prj){
     toast("اتضاف للمشروع ✓","ok"); openProjectDetail(projectId);
   };
 }
+/* ===== حِمل الفريق وأداء المراحل — للمدير والمالك ===== */
+async function openTeamLoad(){
+  if(!isOwnerOps()&&PROFILE.role!=="manager"){ toast("الشاشة دي للإدارة","bad"); return; }
+  openSheet('<h3>حِمل الفريق وأداء المراحل</h3><div id="tlBox"><div class="skel"></div><div class="skel"></div></div>'
+    +'<button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
+  try{
+    const [{ data:staff },{ data:perf }]=await Promise.all([
+      sb.from("os_staff_stage_scorecard").select("*").order("open_now",{ascending:false}),
+      sb.from("os_stage_performance").select("*").order("seq")
+    ]);
+    const S=(staff||[]).filter(x=>(x.open_now||0)+(x.finished||0)>0);
+    let h="";
+    if(!S.length) h+='<div class="empty">مفيش مراحل متسجلة لسه — الأرقام هتظهر أول ما الملفات تشتغل.</div>';
+    else{
+      h+='<div class="sec-h">الحِمل الحالي <span class="ln"></span></div><div class="card flat">';
+      S.forEach(x=>{
+        const late=Number(x.late_now||0), open=Number(x.open_now||0);
+        h+='<div style="padding:8px 0;border-bottom:1px solid #eef2f7">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+          +'<b style="font-size:13px">'+esc(x.staff||"—")+'</b>'
+          +'<span><span class="badge" style="background:#eef2f7;color:#0D47A1;font-weight:800">'+open+' مفتوحة</span>'
+          +(late?'<span class="badge" style="background:#FFEBEE;color:#C62828;font-weight:800;margin-inline-start:4px">'+late+' متأخرة</span>':'')+'</span></div>'
+          +'<div class="muted" style="font-size:11.5px;margin-top:3px">'
+          +'خلّص '+(x.finished||0)
+          +(x.avg_days!=null?' · متوسط '+x.avg_days+' يوم':'')
+          +(x.on_time_pct!=null?' · الالتزام '+x.on_time_pct+'%':'')
+          +'</div></div>';
+      });
+      h+='</div>';
+    }
+    const P=(perf||[]).filter(x=>(x.completed||0)+(x.currently_late||0)>0);
+    if(P.length){
+      h+='<div class="sec-h">أداء المراحل <span class="ln"></span></div><div class="card flat">';
+      P.forEach(x=>{
+        const slow=x.avg_days!=null&&Number(x.avg_days)>Number(x.sla_days);
+        h+='<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #eef2f7">'
+          +'<span style="font-size:12.5px;flex:1;min-width:0">'+esc(x.stage_name)+'</span>'
+          +'<span class="muted" style="font-size:11.5px;flex:none'+(slow?';color:var(--red);font-weight:800':'')+'">'
+          +(x.avg_days!=null?x.avg_days+' يوم':'—')+' / المستهدف '+x.sla_days
+          +(x.currently_late?' · '+x.currently_late+' متأخرة':'')+'</span></div>';
+      });
+      h+='</div>';
+    }
+    $("tlBox").innerHTML=h||'<div class="empty">مفيش بيانات لسه.</div>';
+  }catch(e){ $("tlBox").innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+
 /* ===== تعطيل مرحلة: الملف واقف على حاجة برّه إيدنا ===== */
 async function blockJobStage(stageId, projectId){
   const why=prompt("واقف على إيه؟ (مثلاً: العميل ما جابش صورة العقد)");
