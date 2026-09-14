@@ -1811,6 +1811,8 @@ async function paintProjectDetail(id){
       const cur=stg.find(x=>x.status==="active");
       const today=todayStr();
       const isLate=cur&&cur.due_on&&cur.due_on<today;
+      const mine=stg.find(x=>x.status==="active"&&x.owner_id===ME.id);
+      if(mine) h+='<div class="card flat" style="border-right:4px solid var(--green-d);margin-bottom:8px;background:#F1F8E9"><b style="font-size:13px;color:var(--green-d)">\u270b عليك دور: '+esc(mine.stage_name)+'</b>'+(mine.due_on?'<div class="muted" style="font-size:11.5px;margin-top:2px">لحد '+fmtDate(mine.due_on)+'</div>':'')+'</div>';
       h+='<div class="sec-h">مراحل الملف <span class="ln"></span><span class="badge" style="background:#eef2f7;color:#0D47A1;font-weight:800">'+doneN+'/'+stg.length+'</span></div>';
       if(isLate) h+='<div class="card flat" style="border-right:4px solid var(--red);margin-bottom:8px"><b style="font-size:13px;color:var(--red)">\u26a0 متأخر: '+esc(cur.stage_name)+'</b><div class="meta" style="margin-top:3px"><span>كان المفروض يخلص '+fmtDate(cur.due_on)+'</span></div></div>';
       h+='<div class="card flat">'+stg.map(x=>{
@@ -1823,8 +1825,9 @@ async function paintProjectDetail(id){
           :'في الانتظار';
         return '<div style="display:flex;align-items:flex-start;gap:9px;padding:9px 0;border-bottom:1px solid #eef2f7">'+bul
           +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">'+esc(x.stage_name)+'</div>'
-          +'<div class="muted" style="font-size:11.5px;margin-top:2px'+(late?';color:var(--red);font-weight:700':'')+'">'+sub+'</div></div>'
-          +(x.status==="active"&&canUp?'<button class="btn sm" onclick="doneJobStage(\''+x.id+'\',\''+id+'\')">تم</button>':'')
+          +'<div class="muted" style="font-size:11.5px;margin-top:2px'+(late?';color:var(--red);font-weight:700':'')+'">'+sub+'</div>'
+          +(x.owner_name?'<div class="muted" style="font-size:11px;margin-top:1px">\ud83d\udc64 '+esc(x.owner_name)+(x.owner_id===ME.id?' (إنت)':'')+'</div>':'')+'</div>'
+          +(x.status==="active"&&(isOwnerOps()||x.owner_id===ME.id||prj.created_by===ME.id||(PROFILE.role==="manager"&&prj.dept===PROFILE.dept))?'<button class="btn sm" onclick="doneJobStage(\''+x.id+'\',\''+id+'\')">تم</button>':'')
           +'</div>';
       }).join("")+'</div>';
     }
