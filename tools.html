@@ -112,6 +112,26 @@ a{color:var(--blue-d);}
 
 .resp-box{margin-top:11px;background:var(--green-l);border-radius:12px;padding:10px 12px;font-size:13.5px;color:var(--green-d);white-space:pre-wrap;}
 .row-actions{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap;}
+/* ===== نظام تنظيم الأزرار ===== */
+.act-group{margin-top:14px}
+.act-group+.act-group{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.act-label{font-size:11px;font-weight:800;color:var(--muted);letter-spacing:.4px;
+  margin:0 2px 8px;display:flex;align-items:center;gap:7px}
+.act-label::after{content:"";flex:1;height:1px;background:var(--line)}
+.act-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:9px}
+.act-grid .btn,.act-grid .btn.sm{width:100%;padding:12px 10px;font-size:13px;border-radius:11px;
+  line-height:1.3;min-height:46px;white-space:normal;gap:4px}
+/* نقطة المساعدة جوه زرار الشبكة تفضل صغيرة ومحاذية */
+.act-grid .btn .help-dot{width:15px;height:15px;min-width:15px;font-size:9.5px;margin-inline-start:3px}
+/* الزرار الأساسي: أعرض وأوضح */
+.act-grid .btn.lead{grid-column:span 2;font-size:14px;min-height:50px}
+/* الصف الأخير: إجراءات ثانوية أصغر */
+.act-mini{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;
+  padding-top:12px;border-top:1px solid var(--line)}
+.act-mini .btn{width:auto;padding:8px 13px;font-size:12.5px;border-radius:9px;min-height:0;
+  background:transparent;color:var(--muted);box-shadow:none;border:1px solid var(--line);font-weight:700}
+.act-mini .btn:hover,.act-mini .btn:active{background:var(--soft);color:var(--blue-d);border-color:var(--blue)}
+@media (max-width:360px){ .act-grid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr))} }
 
 .empty{text-align:center;color:var(--muted);padding:30px 16px;}
 .empty .big{font-size:30px;margin-bottom:6px;}
@@ -386,6 +406,23 @@ const HELP_TEXT={
   decisions:"سجل القرارات الإدارية المهمة بتاريخها ومين اتخذها.",
   meeting:"تقرير اجتماع — بتسجّل المحضر والقرارات والمهام اللي طلعت منه."
 };
+/* actGroup(عنوان, [{id,label,kind,lead}]) — kind: green|blue|ghost */
+function actGroup(label, items){
+  const vis=(items||[]).filter(Boolean);
+  if(!vis.length) return "";
+  return '<div class="act-group">'
+    +(label?'<div class="act-label">'+esc(label)+'</div>':'')
+    +'<div class="act-grid">'
+    +vis.map(b=>'<button class="btn '+(b.kind||"ghost")+' '+(b.lead?"lead":"")+'"'
+      +(b.id?' id="'+b.id+'"':'')+(b.on?' onclick="'+b.on+'"':'')+'>'+esc(b.label)+'</button>').join("")
+    +'</div></div>';
+}
+function actMini(items){
+  const vis=(items||[]).filter(Boolean);
+  if(!vis.length) return "";
+  return '<div class="act-mini">'+vis.map(b=>'<button class="btn"'
+    +(b.id?' id="'+b.id+'"':'')+(b.on?' onclick="'+b.on+'"':'')+'>'+esc(b.label)+'</button>').join("")+'</div>';
+}
 function helpDot(key){
   if(!HELP_TEXT[key]) return "";
   /* span مش button — الزرار جوه الزرار HTML غلط والمتصفح بيكسره فيطلع نص غريب */
@@ -770,10 +807,10 @@ function renderOwnerHome(d){
     </button>`).join("");
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
     <div class="row-actions"><button class="btn sm" data-quick="myday" style="flex:1;background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button></div>
-    <div class="muted" style="font-size:10.5px;font-weight:800;margin:10px 2px 3px;opacity:.85">أنشئ بسرعة</div>
-    <div class="row-actions" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب'+helpDot("newreq")+'</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك'+helpDot("smart")+'</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع'+helpDot("meeting")+'</button></div>
-    <div class="muted" style="font-size:10.5px;font-weight:800;margin:11px 2px 3px;opacity:.85">روح لـ</div>
-    <div class="row-actions" style="margin-top:0"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال'+helpDot("projects")+'</button><button class="btn ghost sm" data-quick="sales">المبيعات'+helpDot("sales")+'</button><button class="btn ghost sm" data-quick="adminhub">الإدارية'+helpDot("adminhub")+'</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="contracts">العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات'+helpDot("decisions")+'</button>':""}<button class="btn ghost sm" data-quick="roadmap" data-more="1">خطة التطوير'+helpDot("roadmap")+'</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام'+helpDot("syshealth")+'</button>':""}<button class="btn ghost sm" id="moreBtn" onclick="toggleMore(this)" style="opacity:.7">كل الأقسام ⌄</button></div>`;
+    <div class="act-label" style="margin-top:16px">أنشئ بسرعة</div>
+    <div class="act-grid" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب'+helpDot("newreq")+'</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك'+helpDot("smart")+'</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع'+helpDot("meeting")+'</button></div>
+    <div class="act-label" style="margin-top:18px">روح لـ</div>
+    <div class="act-grid" style="margin-top:0"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال'+helpDot("projects")+'</button><button class="btn ghost sm" data-quick="sales">المبيعات'+helpDot("sales")+'</button><button class="btn ghost sm" data-quick="adminhub">الإدارية'+helpDot("adminhub")+'</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="contracts">العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات'+helpDot("decisions")+'</button>':""}<button class="btn ghost sm" data-quick="roadmap" data-more="1">خطة التطوير'+helpDot("roadmap")+'</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام'+helpDot("syshealth")+'</button>':""}<button class="btn ghost sm" id="moreBtn" onclick="toggleMore(this)" style="opacity:.7">كل الأقسام ⌄</button></div>`;
   if(d.evs.length){
     body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   }
@@ -806,10 +843,10 @@ function renderOpsHome(d){
   body+=`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:11px">`+DEPTS.map(dep=>deptChipHtml(dep,(d.openTasks||[]).filter(t=>t.dept===dep.key).length)).join("")+`</div>`;
   body+=`<div class="sec-h">تحركات سريعة <span class="ln"></span></div>
     <div class="row-actions"><button class="btn sm" data-quick="myday" style="flex:1;background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button></div>
-    <div class="muted" style="font-size:10.5px;font-weight:800;margin:10px 2px 3px;opacity:.85">أنشئ بسرعة</div>
-    <div class="row-actions" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب'+helpDot("newreq")+'</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك'+helpDot("smart")+'</button><button class="btn ghost sm" data-quick="event">موعد'+helpDot("event")+'</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع'+helpDot("meeting")+'</button></div>
-    <div class="muted" style="font-size:10.5px;font-weight:800;margin:11px 2px 3px;opacity:.85">روح لـ</div>
-    <div class="row-actions" style="margin-top:0"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال'+helpDot("projects")+'</button><button class="btn ghost sm" data-quick="sales">المبيعات'+helpDot("sales")+'</button><button class="btn ghost sm" data-quick="adminhub">الإدارية'+helpDot("adminhub")+'</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="contracts">العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات'+helpDot("decisions")+'</button>':""}<button class="btn ghost sm" data-quick="roadmap" data-more="1">خطة التطوير'+helpDot("roadmap")+'</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام'+helpDot("syshealth")+'</button>':""}<button class="btn ghost sm" id="moreBtn" onclick="toggleMore(this)" style="opacity:.7">كل الأقسام ⌄</button></div>`;
+    <div class="act-label" style="margin-top:16px">أنشئ بسرعة</div>
+    <div class="act-grid" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب'+helpDot("newreq")+'</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك'+helpDot("smart")+'</button><button class="btn ghost sm" data-quick="event">موعد'+helpDot("event")+'</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع'+helpDot("meeting")+'</button></div>
+    <div class="act-label" style="margin-top:18px">روح لـ</div>
+    <div class="act-grid" style="margin-top:0"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال'+helpDot("projects")+'</button><button class="btn ghost sm" data-quick="sales">المبيعات'+helpDot("sales")+'</button><button class="btn ghost sm" data-quick="adminhub">الإدارية'+helpDot("adminhub")+'</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="contracts">العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات'+helpDot("decisions")+'</button>':""}<button class="btn ghost sm" data-quick="roadmap" data-more="1">خطة التطوير'+helpDot("roadmap")+'</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام'+helpDot("syshealth")+'</button>':""}<button class="btn ghost sm" id="moreBtn" onclick="toggleMore(this)" style="opacity:.7">كل الأقسام ⌄</button></div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   body+='<div id="presBox"></div><div id="wwBox"></div><div id="wlBox"></div><div id="activityBox"></div>';
   el.innerHTML=body;
@@ -2755,7 +2792,15 @@ function isHRUser(){ return isOwnerOps()||(PROFILE.dept==="hr"&&PROFILE.role==="
 async function openHRHub(){
   if(!isHRUser()){ toast("الشاشة دي للأوبريشن والإدارة","bad"); return; }
   openSheet('<h3>الأوبريشن — نظرة شاملة</h3><div id="hhBox"><div class="skel"></div><div class="skel"></div></div>'
-    +'<div class="row-actions" style="margin-top:10px;flex-wrap:wrap;gap:8px"><button class="btn sm" id="hhPeople">ملفات الموظفين</button><button class="btn sm" id="hhAtt">الحضور</button><button class="btn sm" id="hhLeaves">الإجازات</button><button class="btn ghost sm" id="hhArch">أرشيف الموظفين</button><button class="btn ghost sm" id="hhCust">العهدة</button><button class="btn ghost sm" id="hhScore">كفاءة الفريق</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+    +actGroup("الفريق",[
+        { id:"hhPeople", label:"ملفات الموظفين", kind:"green", lead:true },
+        { id:"hhAtt",    label:"الحضور", kind:"" },
+        { id:"hhLeaves", label:"الإجازات", kind:"" },
+        { id:"hhScore",  label:"كفاءة الفريق", kind:"" }])
+    +actGroup("متابعة",[
+        { id:"hhCust", label:"العهدة", kind:"" },
+        { id:"hhArch", label:"أرشيف الموظفين", kind:"ghost" }])
+    +actMini([{ label:"قفل", on:"closeSheet()" }]));
   const hp=$("hhPeople"); if(hp) hp.onclick=()=>openHRPeople();
   $("hhAtt").onclick=()=>openAttendanceLog();
   $("hhLeaves").onclick=()=>openLeaves();
@@ -3564,14 +3609,15 @@ async function quickCash(id, jobCode){
 async function openBooks(){
   if(!canFinRead()){ toast("الدفاتر للمالية والإدارة","bad"); return; }
   openSheet('<h3>الدفاتر المحاسبية</h3>'
-    +'<div class="row-actions" style="flex-wrap:wrap;gap:8px;margin-bottom:10px">'
-    +'<button class="btn sm" onclick="openTrialBalance()">ميزان المراجعة</button>'
-    +'<button class="btn sm" onclick="openStatements()">قائمة الدخل والميزانية</button>'
-    +'<button class="btn ghost sm" onclick="openJournal()">دفتر اليومية</button>'
-    +'<button class="btn ghost sm" onclick="openCOA()">دليل الحسابات</button>'
-    +'<button class="btn ghost sm" onclick="openManualJV()">قيد يدوي</button>'
-    +'<button class="btn ghost sm" onclick="openFinance()">رجوع</button></div>'
-    +'<div id="bkBox"><div class="skel"></div></div>');
+    +'<div id="bkBox"><div class="skel"></div></div>'
+    +actGroup("التقارير",[
+        { label:"ميزان المراجعة", kind:"green", lead:true, on:"openTrialBalance()" },
+        { label:"قائمة الدخل والميزانية", kind:"", lead:true, on:"openStatements()" },
+        { label:"دفتر اليومية", kind:"", on:"openJournal()" }])
+    +actGroup("الإعداد",[
+        { label:"دليل الحسابات", kind:"", on:"openCOA()" },
+        { label:"قيد يدوي", kind:"", on:"openManualJV()" }])
+    +actMini([{ label:"رجوع للمالية", on:"openFinance()" }]));
   try{
     const { data }=await sb.from("os_trial_balance").select("*");
     const R=data||[];
@@ -4736,7 +4782,23 @@ async function reopenPeriod(id){
 async function openFinance(){
   if(!canFinRead()&&PROFILE.role!=="manager"){ toast("الشاشة دي للمالية والإدارة","bad"); return; }
   openSheet('<h3>المالية — نظرة شاملة</h3><div id="finBox"><div class="skel"></div><div class="skel"></div></div>'
-    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="finTr">الخزينة</button><button class="btn sm" id="finBooks">الدفاتر</button><button class="btn sm" id="finArch">الأرشيف</button><button class="btn sm" id="finPend">مستني الاعتماد</button><button class="btn sm" id="finVouch">الإيصالات</button><button class="btn sm" id="finRecv">المستحقات</button><button class="btn sm" id="finPay">الموردين</button><button class="btn sm" id="finProj">ربحية المشاريع</button>'+(isFinanceUser()?'<button class="btn green sm" id="finNewPay">دفعة جديدة</button><button class="btn ghost sm" id="finNewCost">سجّل مصروف</button><button class="btn sm" id="finAdv">العهد والسلف</button>':'')+(isOwnerOps()?'<button class="btn ghost sm" id="finClose">التقفيل المالي</button>':'')+'<button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+    +(isFinanceUser()?actGroup("تسجيل حركة",[
+        { id:"finNewPay",  label:"دفعة جديدة", kind:"green", lead:true },
+        { id:"finNewCost", label:"سجّل مصروف", kind:"" },
+        { id:"finAdv",     label:"العهد والسلف", kind:"" }]):"")
+    +actGroup("الخزينة والدفاتر",[
+        { id:"finTr",    label:"الخزينة", kind:"green", lead:true },
+        { id:"finBooks", label:"الدفاتر", kind:"" },
+        { id:"finVouch", label:"الإيصالات", kind:"" },
+        { id:"finPend",  label:"مستني الاعتماد", kind:"" },
+        { id:"finArch",  label:"الأرشيف", kind:"ghost" }])
+    +actGroup("المتابعة",[
+        { id:"finRecv", label:"المستحقات", kind:"" },
+        { id:"finPay",  label:"الموردين", kind:"" },
+        { id:"finProj", label:"ربحية الملفات", kind:"" }])
+    +actMini([
+        (isOwnerOps()?{ id:"finClose", label:"التقفيل المالي" }:null),
+        { label:"قفل", on:"closeSheet()" }]));
   $("finRecv").onclick=()=>openReceivables();
   $("finProj").onclick=()=>openProjectFinance();
   const ft=$("finTr");    if(ft) ft.onclick=()=>openTreasury();
