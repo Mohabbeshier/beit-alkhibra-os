@@ -388,7 +388,8 @@ const HELP_TEXT={
 };
 function helpDot(key){
   if(!HELP_TEXT[key]) return "";
-  return '<button class="help-dot" data-help="'+key+'" aria-label="إيه ده؟">؟</button>';
+  /* span مش button — الزرار جوه الزرار HTML غلط والمتصفح بيكسره فيطلع نص غريب */
+  return '<span class="help-dot" role="button" tabindex="0" data-help="'+key+'" aria-label="إيه ده؟">؟</span>';
 }
 function showHelp(key,anchorEl){
   const txt=HELP_TEXT[key]; if(!txt) return;
@@ -3004,6 +3005,113 @@ async function addCashIn(id){
 
 /* ═══════════ توجيه الملف لقسم ═══════════ */
 
+/* === مرحلة جديدة من أي فورم === */
+async function resolveStage(selId){
+  const sel=$(selId); if(!sel) return null;
+  if(sel.value!=="__new") return sel.value||null;
+  const nm=prompt("اسم المرحلة الجديدة؟"); if(!nm||!nm.trim()) return null;
+  const { data:mx }=await sb.from("os_stage_defs").select("seq").order("seq",{ascending:false}).limit(1);
+  const nxt=(mx&&mx.length?Number(mx[0].seq):0)+1;
+  const { error }=await sb.from("os_stage_defs").insert({ seq:nxt, name:nm.trim() });
+  if(error){ toast(/duplicate|unique/i.test(error.message)?"المرحلة دي موجودة":error.message,"bad"); return null; }
+  const o=document.createElement("option"); o.value=nm.trim(); o.textContent=nxt+". "+nm.trim();
+  sel.insertBefore(o, sel.lastElementChild); sel.value=nm.trim();
+  toast("المرحلة اتضافت \u2713","ok");
+  return nm.trim();
+}
+
+/* === الإيصالات: إذن قبض / إذن صرف === */
+async function openVouchers(){
+  if(!canFinRead()){ toast("الإيصالات للمالية والإدارة","bad"); return; }
+  openSheet('<h3>الإيصالات</h3>'
+    +'<div class="field"><input id="vcQ" placeholder="دوّر برقم الإذن أو الملف أو العميل…"/></div>'
+    +'<div class="row-actions" style="flex-wrap:wrap;gap:6px;margin-bottom:8px">'
+    +'<button class="btn sm vc-f" data-f="all">الكل</button>'
+    +'<button class="btn ghost sm vc-f" data-f="receipt">إذن قبض</button>'
+    +'<button class="btn ghost sm vc-f" data-f="payment">إذن صرف</button>'
+    +'<button class="btn ghost sm" onclick="openFinance()">رجوع</button></div>'
+    +'<div id="vcBox"><div class="skel"></div></div>');
+  let R=[], f="all";
+  try{
+    const { data }=await sb.from("os_voucher").select("*").order("on_date",{ascending:false}).limit(200);
+    R=data||[];
+  }catch(e){ $("vcBox").innerHTML='<div class="empty">تعذّر التحميل.</div>'; return; }
+  window._VC=R;
+  const paint=()=>{
+    const q=($("vcQ").value||"").trim().toLowerCase();
+    const F=R.filter(x=>{
+      if(f!=="all"&&x.vtype!==f) return false;
+      if(!q) return true;
+      return ((x.ref||"")+" "+(x.job_code||"")+" "+(x.party_name||"")+" "+(x.memo||"")).toLowerCase().includes(q);
+    });
+    if(!F.length){ $("vcBox").innerHTML='<div class="empty">مفيش إيصالات.</div>'; return; }
+    $("vcBox").innerHTML=F.map(x=>{
+      const isIn=x.vtype==="receipt";
+      return '<div class="card flat">'
+        +'<div style="display:flex;align-items:center;gap:8px">'
+        +'<span class="badge" style="background:'+(isIn?'#E1F5EE;color:#0F6E56':'#FEE2E2;color:#B91C1C')
+        +';font-weight:800">'+esc(x.vtitle||"")+'</span>'
+        +'<span class="muted" style="flex:1;min-width:0;font-size:11px">'+esc(x.ref||"")+'</span>'
+        +'<b style="flex:none;font-size:13px;color:'+(isIn?'var(--green-d)':'var(--red)')+'">'+egp(x.amount)+'</b></div>'
+        +'<div style="font-size:12.5px;margin-top:3px">'+esc(x.memo||"")+'</div>'
+        +'<div class="muted" style="font-size:10.5px;margin-top:2px">'
+        +fmtDate(x.on_date)+' · '+esc(x.category||"")+' · '+esc(x.method||"")
+        +(x.job_code?' · '+esc(x.job_code):'')+(x.party_name?' · '+esc(x.party_name):'')+'</div>'
+        +'<button class="btn ghost sm" style="margin-top:6px" onclick="printVoucher(\''+x.vtype+'\',\''+x.id+'\')">اطبع الإيصال</button>'
+        +'</div>';
+    }).join("");
+  };
+  $("vcQ").oninput=paint;
+  document.querySelectorAll(".vc-f").forEach(b=>{
+    b.onclick=()=>{ f=b.getAttribute("data-f");
+      document.querySelectorAll(".vc-f").forEach(x=>x.className="btn ghost sm vc-f");
+      b.className="btn sm vc-f"; paint(); };
+  });
+  paint();
+}
+function printVoucher(vtype, id){
+  const v=(window._VC||[]).find(x=>x.vtype===vtype&&String(x.id)===String(id));
+  if(!v){ toast("الإيصال مش موجود","bad"); return; }
+  const isIn=v.vtype==="receipt";
+  const row=(l,t)=>'<div style="display:flex;gap:6px;padding:3px 0"><span style="color:#666;min-width:96px">'
+    +esc(l)+'</span><b>'+esc(t||"—")+'</b></div>';
+  const html='<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">'
+    +'<title>'+esc(v.vtitle)+' '+esc(v.ref||"")+'</title>'
+    +'<style>body{font-family:system-ui,"Segoe UI",Tahoma,sans-serif;padding:26px;color:#111;font-size:13px}'
+    +'.hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0D47A1;padding-bottom:10px}'
+    +'.ttl{font-size:17px;font-weight:800;color:#0D47A1}'
+    +'.box{border:1.5px solid #0D47A1;border-radius:9px;padding:14px;margin:14px 0;text-align:center}'
+    +'.amt{font-size:26px;font-weight:800;color:#0D47A1;margin:6px 0}'
+    +'.wr{border:1px dashed #999;border-radius:6px;padding:7px;display:inline-block;font-size:12px}'
+    +'.grid{display:grid;grid-template-columns:1fr 1fr;gap:3px 18px;background:#f6f8fb;padding:11px;border-radius:8px}'
+    +'.sig{display:flex;justify-content:space-between;margin-top:44px;font-size:11.5px;color:#555}'
+    +'.sig div{border-top:1px solid #999;padding-top:5px;width:30%;text-align:center}'
+    +'@media print{body{padding:12px}}</style></head><body>'
+    +'<div class="hd"><div><div style="font-weight:800;font-size:15px">شركة بيت الخبرة للتصميمات الهندسية</div>'
+    +'<div style="color:#666;font-size:11.5px">برنامج إدارة الخزينة والمشروعات</div></div>'
+    +'<div class="ttl">'+esc(v.vtitle)+'</div></div>'
+    +'<div class="grid" style="margin-top:12px">'
+    +row("رقم الإذن", v.ref)+row("التاريخ", fmtDate(v.on_date))
+    +row("رقم الملف", v.job_code)+row("الفئة", v.category)
+    +row("جهاز المدينة", v.authority)+row("المنطقة", v.area)
+    +row("رقم القطعة", v.parcel_no)+row("كود الأرض", v.land_code)
+    +row(isIn?"العميل":"المستفيد", (v.party_name||"")+(v.party_phone?" — "+v.party_phone:""))
+    +row("طريقة الدفع", v.method)+'</div>'
+    +'<div style="margin:9px 0;font-size:12.5px"><span style="color:#666">بيان الأعمال: </span><b>'
+    +esc(v.job_name||"—")+'</b></div>'
+    +'<div class="box"><div style="color:#666;font-size:11.5px">'+(isIn?"استلمنا من":"صرفنا مقابل")+'</div>'
+    +'<div style="font-weight:700;font-size:14px;margin:5px 0">'+esc(v.memo||"")+'</div>'
+    +'<div class="amt">'+Number(v.amount).toLocaleString("en",{minimumFractionDigits:2})+' ج.م</div>'
+    +'<div class="wr">'+esc(v.amount_words||"")+'</div></div>'
+    +(v.notes?'<div style="font-size:11.5px;color:#555">ملاحظات: '+esc(v.notes)+'</div>':'')
+    +'<div class="sig"><div>'+(isIn?"توقيع المستلم / العميل":"توقيع المستلم")+'</div>'
+    +'<div>توقيع المحاسب</div><div>اعتماد أمين الخزينة</div></div>'
+    +'<script>window.onload=function(){window.print()}<\/script></body></html>';
+  const w=window.open("","_blank");
+  if(!w){ toast("المتصفح منع النافذة — اسمح بالنوافذ المنبثقة","bad"); return; }
+  w.document.write(html); w.document.close();
+}
+
 /* === اعتماد الحركات المالية === */
 async function openFinPending(){
   openSheet('<h3>مستني الاعتماد</h3>'
@@ -4571,7 +4679,7 @@ async function reopenPeriod(id){
 async function openFinance(){
   if(!canFinRead()&&PROFILE.role!=="manager"){ toast("الشاشة دي للمالية والإدارة","bad"); return; }
   openSheet('<h3>المالية — نظرة شاملة</h3><div id="finBox"><div class="skel"></div><div class="skel"></div></div>'
-    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="finTr">الخزينة</button><button class="btn sm" id="finBooks">الدفاتر</button><button class="btn sm" id="finArch">الأرشيف</button><button class="btn sm" id="finPend">مستني الاعتماد</button><button class="btn sm" id="finRecv">المستحقات</button><button class="btn sm" id="finPay">الموردين</button><button class="btn sm" id="finProj">ربحية المشاريع</button>'+(isFinanceUser()?'<button class="btn green sm" id="finNewPay">دفعة جديدة</button><button class="btn ghost sm" id="finNewCost">سجّل مصروف</button><button class="btn sm" id="finAdv">العهد والسلف</button>':'')+(isOwnerOps()?'<button class="btn ghost sm" id="finClose">التقفيل المالي</button>':'')+'<button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="finTr">الخزينة</button><button class="btn sm" id="finBooks">الدفاتر</button><button class="btn sm" id="finArch">الأرشيف</button><button class="btn sm" id="finPend">مستني الاعتماد</button><button class="btn sm" id="finVouch">الإيصالات</button><button class="btn sm" id="finRecv">المستحقات</button><button class="btn sm" id="finPay">الموردين</button><button class="btn sm" id="finProj">ربحية المشاريع</button>'+(isFinanceUser()?'<button class="btn green sm" id="finNewPay">دفعة جديدة</button><button class="btn ghost sm" id="finNewCost">سجّل مصروف</button><button class="btn sm" id="finAdv">العهد والسلف</button>':'')+(isOwnerOps()?'<button class="btn ghost sm" id="finClose">التقفيل المالي</button>':'')+'<button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
   $("finRecv").onclick=()=>openReceivables();
   $("finProj").onclick=()=>openProjectFinance();
   const ft=$("finTr");    if(ft) ft.onclick=()=>openTreasury();
@@ -4579,6 +4687,7 @@ async function openFinance(){
   const fb=$("finBooks"); if(fb) fb.onclick=()=>openBooks();
   const fAr=$("finArch");  if(fAr) fAr.onclick=()=>openFinArchive();
   const fPd=$("finPend");  if(fPd) fPd.onclick=()=>openFinPending();
+  const fVc=$("finVouch"); if(fVc) fVc.onclick=()=>openVouchers();
   const fa=$("finAdv");   if(fa) fa.onclick=()=>openAdvances();
   const fc2=$("finClose");if(fc2) fc2.onclick=()=>openClosing();
   const np=$("finNewPay"); if(np) np.onclick=()=>openPaymentNew();
@@ -4658,28 +4767,35 @@ async function openPaymentNew(){
     msOpts+=(defs||[]).map(d=>'<option value="'+esc(d.name)+'">'+esc(d.seq+'. '+d.name)+'</option>').join("");
   }catch(e){}
   openSheet('<h3>دفعة جديدة</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">اربط الدفعة بمرحلة — والنظام هيفكّرك أول ما الملف يوصلها.</div>'
-    +'<div class="field"><label>الملف</label><select id="pyPrj">'+prjOpts+'</select></div>'
+    +jobPickerField("pyPrj","الملف (من بيان الأعمال)")
     +'<div class="field"><label>وصف الدفعة</label><input id="pyTitle" placeholder="مثلاً: دفعة الرسومات التنفيذية (30%)"/></div>'
     +'<div class="field"><label>تصنيف الإيراد</label><select id="pyCat"></select></div>'
-    +'<div class="field"><label>مربوطة بمرحلة</label><select id="pyMs">'+msOpts+'</select></div>'
+    +'<div class="field"><label>مربوطة بمرحلة</label><select id="pyMs">'+msOpts
+    +'<option value="__new">\u002b مرحلة جديدة…</option></select></div>'
     +'<div class="field"><label>المبلغ (ج)</label><input id="pyAmt" type="number" min="0" inputmode="numeric"/></div>'
     +'<div class="field"><label>الحالة</label><select id="pySt"><option value="planned">مخططة (لسه</option><option value="due">مستحقة دلوقتي</option></select></div>'
     +'<div class="field"><label>تاريخ الاستحقاق (اختياري)</label><input id="pyDue" type="date"/></div>'
     +'<div class="row-actions"><button class="btn green" id="pyGo">أضف الدفعة</button><button class="btn ghost" onclick="openFinance()">إلغاء</button></div>');
-  addMicTo("pyTitle"); makeSearchable("pyPrj","دوّر بكود أو اسم الملف…");
+  addMicTo("pyTitle");
   catOptions("income").then(o=>{ const c=$("pyCat"); if(c) c.innerHTML=o; });
+  _pickRebind=()=>{ addMicTo("pyTitle"); bindPy(); };
+  function bindPy(){
   $("pyGo").onclick=async()=>{
     const prj=$("pyPrj").value, title=$("pyTitle").value.trim(), amt=parseFloat($("pyAmt").value);
     if(!prj){ toast("اختار الملف","bad"); return; }
     if(!title){ toast("اكتب وصف الدفعة","bad"); return; }
     if(!amt||amt<=0){ toast("اكتب المبلغ","bad"); return; }
-    const btn=$("pyGo"); btn.disabled=true; btn.textContent="بيضيف…";
-    const sel=$("pyPrj").options[$("pyPrj").selectedIndex];
-    const clId=sel&&sel.dataset?sel.dataset.cl:null;
-    const { error }=await sb.from("os_project_payments").insert({ project_id:prj, client_id:clId||null, title, milestone:$("pyMs").value||null, amount:amt, status:$("pySt").value, due_date:$("pyDue").value||null, created_by:ME.id });
+    const ms=await resolveStage("pyMs");
+    const btn=$("pyGo"); if(btn.disabled) return; btn.disabled=true; btn.textContent="بيضيف…";
+    let clId=null;
+    try{ const { data:pp }=await sb.from("os_projects").select("client_id").eq("id",prj).maybeSingle();
+         clId=pp&&pp.client_id||null; }catch(e){}
+    const { error }=await sb.from("os_project_payments").insert({ project_id:prj, client_id:clId||null, title, milestone:ms||null, amount:amt, status:$("pySt").value, due_date:$("pyDue").value||null, created_by:ME.id });
     if(error){ toast("معرفناش نضيف: "+error.message,"bad"); btn.disabled=false; btn.textContent="أضف الدفعة"; return; }
     toast("الدفعة اتضافت ✓","ok"); openFinance();
   };
+  }
+  bindPy();
 }
 async function openCostNew(){
   /* المصروف نوعين: على ملف (رسوم، مقاول) أو عام (إيجار، كهرباء، رواتب) */
