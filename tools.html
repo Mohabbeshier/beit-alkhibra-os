@@ -1614,13 +1614,28 @@ async function openProjects(){
       /* ربط بالعميل — بيتعاد استخدامه لو الرقم موجود */
       let clientId=null;
       try{
-        const cn=$("pjCli")?$("pjCli").value.trim():"", cp=$("pjPhone")?$("pjPhone").value.trim():"";
+        const cn=$("pjCli")?$("pjCli").value.trim():"";
+        let cp=$("pjPhone")?$("pjPhone").value.trim():"";
+        /* توحيد الرقم زي ما الداتابيز بتعمل — عشان ما نعملش عميل مكرر */
+        if(cp){
+          let d=cp.replace(/[^0-9]/g,"");
+          if(d.startsWith("0020")) d="0"+d.slice(4);
+          else if(d.startsWith("20")&&d.length===12) d="0"+d.slice(2);
+          else if(d.startsWith("1")&&d.length===10) d="0"+d;
+          cp=d;
+        }
         if(cn&&cp){
-          const { data:fc }=await sb.from("clients").select("id").eq("phone",cp).maybeSingle();
-          if(fc){ clientId=fc.id; }
+          /* limit(1) بدل maybeSingle: مبيقعش لو فيه أكتر من صف */
+          const { data:fc }=await sb.from("clients").select("id").eq("phone",cp).limit(1);
+          if(fc&&fc.length){ clientId=fc[0].id; }
           else{
-            const { data:mc }=await sb.from("clients").insert({ name:cn, phone:cp, code:"C-"+Date.now().toString().slice(-8), source:"jobfile" }).select("id").single();
-            if(mc) clientId=mc.id;
+            const ins=await sb.from("clients").insert({ name:cn, phone:cp, code:"C-"+Date.now().toString().slice(-8), source:"jobfile" }).select("id").single();
+            if(ins.data) clientId=ins.data.id;
+            else{
+              /* حد تاني سجّل نفس الرقم في نفس اللحظة — هاته */
+              const { data:again }=await sb.from("clients").select("id").eq("phone",cp).limit(1);
+              if(again&&again.length) clientId=again[0].id;
+            }
           }
         }
       }catch(e){}
@@ -1630,16 +1645,27 @@ async function openProjects(){
         const areaId=$("pjArea")&&$("pjArea").value, authId=$("pjAuth")&&$("pjAuth").value;
         const pno=$("pjParcel")?$("pjParcel").value.trim():"";
         if(areaId&&pno){
-          const { data:found }=await sb.from("os_parcels").select("id").eq("area_id",areaId).eq("parcel_no",pno).maybeSingle();
-          if(found){ parcelId=found.id; }
+          const { data:found }=await sb.from("os_parcels").select("id").eq("area_id",areaId).eq("parcel_no",pno).limit(1);
+          if(found&&found.length){ parcelId=found[0].id; }
           else{
-            const { data:made }=await sb.from("os_parcels").insert({ area_id:areaId, authority_id:authId, parcel_no:pno, client_id:clientId }).select("id").single();
-            if(made) parcelId=made.id;
+            const mk=await sb.from("os_parcels").insert({ area_id:areaId, authority_id:authId, parcel_no:pno, client_id:clientId }).select("id").single();
+            if(mk.data) parcelId=mk.data.id;
+            else{
+              const { data:again }=await sb.from("os_parcels").select("id").eq("area_id",areaId).eq("parcel_no",pno).limit(1);
+              if(again&&again.length) parcelId=again[0].id;
+            }
           }
         }
       }catch(e){}
       const { error }=await sb.from("os_projects").insert({ name, dept:$("pjDept").value, stage:$("pjStage").value, value_egp:v, created_by:ME.id, client_id:clientId, parcel_id:parcelId, opened_on:todayStr() });
-      if(error){ toast("معرفناش نضيف: "+error.message,"bad"); return; }
+      if(error){
+        const m=error.message||"";
+        toast(
+          m.includes('row-level')  ? 'صلاحيتك ما تسمحش بفتح ملف' :
+          /duplicate|unique/i.test(m) ? 'الملف ده متسجل بالفعل — دوّر عليه في القايمة' :
+          /Failed to fetch|NetworkError/i.test(m) ? 'النت فصل — الملف ما اتحفظش، جرّب تاني' :
+          "معرفناش نضيف: "+m, "bad");
+        return; }
       toast("المشروع اتضاف","ok"); $("pjName").value=""; paintProjects();
     };
   }
@@ -1809,13 +1835,16 @@ async function unblockJobStage(stageId, projectId){
 }
 
 /* ===== إقفال مرحلة في بيان الأعمال — المرحلة اللي بعدها بتبدأ لوحدها ===== */
+let _stageBusy=false;
 async function doneJobStage(stageId, projectId){
+  if(_stageBusy) return; _stageBusy=true;
   try{
     const { error }=await sb.from("os_job_stages").update({ status:"done", done_at:new Date().toISOString() }).eq("id",stageId);
     if(error){ toast("معرفناش نقفل المرحلة: "+error.message,"bad"); return; }
     toast("المرحلة اتقفلت \u2713","ok");
     await paintProjectDetail(projectId);
   }catch(e){ toast("حصل خطأ — جرّب تاني","bad"); }
+  finally{ _stageBusy=false; }
 }
 
 async function paintProjectDetail(id){
