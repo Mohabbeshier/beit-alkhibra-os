@@ -2756,6 +2756,61 @@ const PAY_STATUS={planned:["مخططة","b-grey"],due:["مستحقة — جاه�
 const COST_CAT={salary:"أجور",subcontractor:"مقاول باطن",permit:"رسوم ورخص",materials:"مواد وطباعة",transport:"انتقالات",other:"أخرى"};
 const egp=(n)=>Number(n||0).toLocaleString("en")+" ج";
 function isFinanceUser(){ return isOwnerOps()||PROFILE.dept==="finance"; }
+/* ===== الخزينة: الرصيد وكشف الحساب ===== */
+async function openTreasury(){
+  if(!isFinanceUser()&&!isOwnerOps()){ toast("الشاشة دي للمالية والإدارة","bad"); return; }
+  openSheet('<h3>الخزينة</h3><div id="trBox"><div class="skel"></div><div class="skel"></div></div>'
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn ghost sm" onclick="openFinance()">رجوع للمالية</button></div>');
+  try{
+    const [{ data:sum },{ data:st },{ data:cat }]=await Promise.all([
+      sb.from("os_treasury_summary").select("*").maybeSingle(),
+      sb.from("os_treasury_statement").select("*").order("on_date",{ascending:false}).limit(40),
+      sb.from("os_expense_by_category").select("*").order("total",{ascending:true})
+    ]);
+    const d=sum||{}, R=st||[];
+    const bal=Number(d.balance||0);
+    let h='<div class="card flat" style="text-align:center;border-right:4px solid '+(bal>=0?'var(--green-d)':'var(--red)')+'">'
+      +'<span class="muted" style="font-size:11.5px">رصيد الخزينة</span>'
+      +'<b style="display:block;font-size:26px;font-weight:800;color:'+(bal>=0?'var(--green-d)':'var(--red)')+'">'+egp(bal)+'</b>'
+      +'<span class="muted" style="font-size:11px">'+(d.movements||0)+' حركة</span></div>';
+    h+='<div style="display:flex;gap:10px;margin:10px 0">'
+      +'<div class="card flat" style="flex:1;text-align:center"><b style="display:block;font-size:15px;color:var(--green-d)">'+egp(d.in_this_month)+'</b><span class="muted" style="font-size:11px">داخل الشهر ده</span></div>'
+      +'<div class="card flat" style="flex:1;text-align:center"><b style="display:block;font-size:15px;color:var(--red)">'+egp(d.out_this_month)+'</b><span class="muted" style="font-size:11px">خارج الشهر ده</span></div>'
+      +'</div>';
+
+    if(!R.length) h+='<div class="empty">مفيش حركات مالية لسه.</div>';
+    else{
+      h+='<div class="sec-h">كشف الحساب <span class="ln"></span></div><div class="card flat">';
+      R.forEach(x=>{
+        const inc=x.kind==="income", amt=Math.abs(Number(x.amount||0));
+        h+='<div style="display:flex;gap:8px;padding:8px 0;border-bottom:1px solid #eef2f7">'
+          +'<span style="flex:none;font-size:13px">'+(inc?"\u2b07":"\u2b06")+'</span>'
+          +'<div style="flex:1;min-width:0">'
+          +'<div style="font-size:12.5px;font-weight:600">'+esc(x.title||"—")+'</div>'
+          +'<div class="muted" style="font-size:11px;margin-top:1px">'
+          +(x.voucher_no?esc(x.voucher_no)+' · ':'')+fmtDate(x.on_date)
+          +(x.file_no?' · '+esc(x.file_no):' · عام')+'</div></div>'
+          +'<div style="flex:none;text-align:left">'
+          +'<b style="font-size:12.5px;color:'+(inc?'var(--green-d)':'var(--red)')+'">'+(inc?'+':'−')+egp(amt)+'</b>'
+          +'<div class="muted" style="font-size:10.5px">'+egp(x.running_balance)+'</div></div></div>';
+      });
+      h+='</div>';
+    }
+
+    const C=(cat||[]).filter(x=>Number(x.total||0)>0);
+    if(C.length){
+      h+='<div class="sec-h">المصروفات حسب البند <span class="ln"></span></div><div class="card flat">';
+      C.forEach(x=>{
+        h+='<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #eef2f7">'
+          +'<span style="font-size:12.5px">'+esc(x.category_name)+'</span>'
+          +'<span class="muted" style="font-size:12px">'+egp(x.total)+' · '+x.movements+' حركة</span></div>';
+      });
+      h+='</div>';
+    }
+    $("trBox").innerHTML=h;
+  }catch(e){ $("trBox").innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+
 /* ═══ العهد والسلف ═══ */
 async function openAdvances(){
   if(!isFinanceUser()&&!isOwnerOps()){ toast("الشاشة دي للمالية","bad"); return; }
@@ -2846,9 +2901,10 @@ async function reopenPeriod(id){
 async function openFinance(){
   if(!isFinanceUser()&&PROFILE.role!=="manager"){ toast("الشاشة دي للمالية والإدارة","bad"); return; }
   openSheet('<h3>المالية — نظرة شاملة</h3><div id="finBox"><div class="skel"></div><div class="skel"></div></div>'
-    +'<div class="row-actions" style="margin-top:10px"><button class="btn sm" id="finRecv">المستحقات</button><button class="btn sm" id="finProj">ربحية المشاريع</button>'+(isFinanceUser()?'<button class="btn green sm" id="finNewPay">دفعة جديدة</button><button class="btn ghost sm" id="finNewCost">سجّل مصروف</button><button class="btn sm" id="finAdv">العهد والسلف</button>':'')+(isOwnerOps()?'<button class="btn ghost sm" id="finClose">التقفيل المالي</button>':'')+'<button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="finTr">الخزينة</button><button class="btn sm" id="finRecv">المستحقات</button><button class="btn sm" id="finProj">ربحية المشاريع</button>'+(isFinanceUser()?'<button class="btn green sm" id="finNewPay">دفعة جديدة</button><button class="btn ghost sm" id="finNewCost">سجّل مصروف</button><button class="btn sm" id="finAdv">العهد والسلف</button>':'')+(isOwnerOps()?'<button class="btn ghost sm" id="finClose">التقفيل المالي</button>':'')+'<button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
   $("finRecv").onclick=()=>openReceivables();
   $("finProj").onclick=()=>openProjectFinance();
+  const ft=$("finTr");    if(ft) ft.onclick=()=>openTreasury();
   const fa=$("finAdv");   if(fa) fa.onclick=()=>openAdvances();
   const fc2=$("finClose");if(fc2) fc2.onclick=()=>openClosing();
   const np=$("finNewPay"); if(np) np.onclick=()=>openPaymentNew();
