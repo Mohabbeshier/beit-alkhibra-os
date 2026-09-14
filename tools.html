@@ -2095,6 +2095,7 @@ async function paintProjectDetail(id){
     if(canUp){
       h+='<div class="card flat"><div class="field"><label>اسم المرفق</label><input id="pdTitle" placeholder="مثلًا: رسمة معمارية — الدور الأرضي"/></div>'
         +'<div class="field"><label>القسم</label><select id="pdFolder">'
+        +'<option value="__new">\u002b قسم جديد…</option>'
         +'<option value="client">مستندات العميل</option><option value="survey">رفع ومعاينة</option>'
         +'<option value="design" selected>تصميم ورسومات</option><option value="permit">ترخيص وجهاز المدينة</option>'
         +'<option value="exec">تنفيذ وإنشاءات</option><option value="corr">مراسلات</option>'
@@ -2125,7 +2126,7 @@ async function paintProjectDetail(id){
             revision=Math.max(...dupes.map(d=>d.revision||1))+1;
             await sb.from("os_files").update({ archived:true, archived_at:new Date().toISOString(), archived_by:ME.id }).in("id",dupes.map(d=>d.id));
           }
-          const folder=$("pdFolder")?$("pdFolder").value:"other";
+          const folder=$("pdFolder")?(await resolveFolder("pdFolder")):"other";
           const tags=($("pdTags")&&$("pdTags").value.trim())
             ? $("pdTags").value.split(",").map(t=>t.trim()).filter(Boolean) : null;
           let organized=up.path;
@@ -3256,6 +3257,61 @@ async function editSupplier(id, nm, ph, tr){
   toast("اتعدّل \u2713","ok"); paintSuppliers();
 }
 
+/* === فتح ملف جديد من جوه الشجرة === */
+async function resolveFolder(selId){
+  const sel=$(selId); if(!sel) return "other";
+  if(sel.value!=="__new") return sel.value||"other";
+  const nm=prompt("اسم القسم الجديد؟"); if(!nm||!nm.trim()){ sel.value="other"; return "other"; }
+  const { data, error }=await sb.from("os_file_folders").insert({ name:nm.trim() }).select("code,name").single();
+  if(error||!data){ toast("معرفناش نضيف القسم","bad"); sel.value="other"; return "other"; }
+  const o=document.createElement("option"); o.value=data.code; o.textContent=data.name;
+  sel.appendChild(o); sel.value=data.code;
+  toast("القسم اتضاف \u2713","ok");
+  return data.code;
+}
+async function quickJobFromPicker(){
+  const svcs=await (async()=>{ try{
+    const { data }=await sb.from("os_service_types").select("code,name").eq("active",true).order("code");
+    return data||[]; }catch(e){ return []; } })();
+  const auths=await (async()=>{ try{
+    const { data }=await sb.from("os_city_authorities").select("name").order("name");
+    return data||[]; }catch(e){ return []; } })();
+  const prev=$("sheet").innerHTML;
+  const restore=_pickRestore;
+  openSheet('<h3>افتح ملف جديد</h3>'
+    +'<div class="muted" style="margin:-6px 0 12px;font-size:12px">لو الجهاز أو المنطقة أو القطعة جديدة — هتتعمل تلقائي.</div>'
+    +'<div class="field"><label>جهاز المدينة</label><input id="qjAuth" list="qjAuthL" placeholder="اكتب أو اختار"/>'
+    +'<datalist id="qjAuthL">'+auths.map(a=>'<option value="'+esc(a.name)+'">').join("")+'</datalist></div>'
+    +'<div class="field"><label>المنطقة</label><input id="qjArea" placeholder="مثلاً: الحي الأول"/></div>'
+    +'<div class="field"><label>رقم القطعة</label><input id="qjParcel" inputmode="numeric" placeholder="مثلاً: 145"/></div>'
+    +'<div class="field"><label>كود الأرض (اختياري)</label><input id="qjLand" placeholder="ZY/2026/0145"/></div>'
+    +'<div class="field"><label>نوع الملف</label><select id="qjSvc">'
+      +svcs.map(x=>'<option value="'+esc(x.code)+'">'+esc(x.name)+'</option>').join("")+'</select></div>'
+    +'<div class="field"><label>اسم الملف</label><input id="qjName" placeholder="مثلاً: ترخيص فيلا"/></div>'
+    +'<div class="field"><label>اسم العميل (اختياري)</label><input id="qjCli" placeholder="صاحب القطعة"/></div>'
+    +'<div class="field"><label>تليفون العميل</label><input id="qjPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx"/></div>'
+    +'<div class="field"><label>القيمة (اختياري)</label><input id="qjVal" type="number" inputmode="numeric" min="0"/></div>'
+    +'<div class="row-actions"><button class="btn green" id="qjGo">افتح الملف واختاره</button>'
+    +'<button class="btn ghost" id="qjBack">رجوع</button></div>');
+  addMicTo("qjName");
+  $("qjBack").onclick=()=>{ $("sheet").innerHTML=prev; _pickRestore=restore; };
+  $("qjGo").onclick=async()=>{
+    const b=$("qjGo"); if(b.disabled) return; b.disabled=true; b.textContent="بيفتح…";
+    const { data, error }=await sb.rpc("os_quick_job",{
+      p_authority:$("qjAuth").value.trim(), p_area:$("qjArea").value.trim(),
+      p_parcel:$("qjParcel").value.trim(), p_service:$("qjSvc").value,
+      p_name:$("qjName").value.trim(), p_client:$("qjCli").value.trim()||null,
+      p_phone:$("qjPhone").value.trim()||null, p_land:$("qjLand").value.trim()||null,
+      p_value:parseFloat($("qjVal").value)||null });
+    if(error){ toast(error.message,"bad"); b.disabled=false; b.textContent="افتح الملف واختاره"; return; }
+    toast("الملف اتفتح \u2713","ok");
+    _pickTree=null; /* الشجرة تتعمل من جديد */
+    const cb=_pickCB; _pickCB=null; _pickRestore=null;
+    if(restore) restore();
+    if(cb) cb(data.project_id, data.label);
+  };
+}
+
 /* === شجرة اختيار الملف: عام أو قطعة ← ملف === */
 let _pickCB=null, _pickTree=null, _pickRestore=null, _pickRebind=null;
 async function loadJobTree(){
@@ -3293,6 +3349,7 @@ async function pickJob(cb, opts){
   openSheet('<h3>'+(opts.title||"اختار الملف")+'</h3>'
     +(opts.allowGeneral!==false?'<button class="btn sm" style="width:100%;margin-bottom:10px" onclick="pickDone(null,null)">'
       +'\u2014 عام (مش على ملف) \u2014</button>':'')
+    +'<button class="btn green sm" style="width:100%;margin-bottom:10px" onclick="quickJobFromPicker()">\u002b افتح ملف جديد</button>'
     +'<div class="field"><input id="pkQ" placeholder="دوّر بكود القطعة أو الملف أو العميل…"/></div>'
     +'<div id="pkTree"></div>'
     +'<button class="btn ghost" style="margin-top:10px" onclick="pickCancel()">رجوع من غير اختيار</button>');
