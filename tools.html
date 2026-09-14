@@ -260,6 +260,10 @@ button.stat,button.dept-card{font-family:inherit;cursor:pointer;}
 .toast.ok{background:var(--green-d);} .toast.bad{background:var(--red);}
 
 .note-line{font-size:12px;color:var(--amber);font-weight:700;margin-top:8px;}
+.nav-back{display:inline-flex;align-items:center;gap:5px;background:#F1F3F5;border:1px solid var(--line);
+  color:var(--ink);border-radius:9px;padding:5px 11px;font-family:inherit;font-size:12px;font-weight:800;
+  cursor:pointer;margin:0 0 10px}
+.nav-back:active{background:#E4E7EA}
 </style>
 </head>
 <body>
@@ -410,6 +414,52 @@ const HELP_TEXT={
   decisions:"سجل القرارات الإدارية المهمة بتاريخها ومين اتخذها.",
   meeting:"تقرير اجتماع — بتسجّل المحضر والقرارات والمهام اللي طلعت منه."
 };
+/* ═══════════ ذاكرة التنقّل — الرجوع يرجّع لآخر شاشة مش للرئيسية ═══════════ */
+var _NAV=[], _CUR=null, _NAV_SILENT=false;
+
+function navWrapAll(){
+  // نلفّ كل دوال الشاشات عشان نفتكر إحنا كنا فين
+  const skip=new Set(["openSheet","openSheetRaw"]);
+  Object.getOwnPropertyNames(window).forEach(k=>{
+    if(!/^open[A-Z]/.test(k) || skip.has(k)) return;
+    const fn=window[k];
+    if(typeof fn!=="function" || fn.__navWrapped) return;
+    const w=function(){
+      const args=Array.prototype.slice.call(arguments);
+      // متعملش push لو ده رجوع، أو نفس الشاشة بنفس المدخلات
+      if(!_NAV_SILENT && _CUR){
+        const same=_CUR.k===k && JSON.stringify(_CUR.a)===JSON.stringify(args);
+        if(!same){ _NAV.push(_CUR); if(_NAV.length>25) _NAV.shift(); }
+      }
+      _CUR={ k:k, a:args };
+      return fn.apply(this,args);
+    };
+    w.__navWrapped=true;
+    try{ window[k]=w; }catch(e){}
+  });
+}
+
+function navBack(){
+  const prev=_NAV.pop();
+  if(!prev){ closeSheet(); return; }
+  const fn=window[prev.k];
+  if(typeof fn!=="function"){ closeSheet(); return; }
+  _NAV_SILENT=true;
+  try{ fn.apply(null, prev.a); }catch(e){ closeSheet(); }
+  _NAV_SILENT=false;
+  _CUR=prev;
+}
+
+function navReset(){ _NAV=[]; _CUR=null; }
+
+/* زرار الرجوع اللي بيتحط تلقائي فوق كل شاشة */
+function navBackBtn(){
+  if(!_NAV.length) return "";
+  const p=_NAV[_NAV.length-1];
+  return '<button class="nav-back" onclick="navBack()" title="رجوع">'
+    +'<span style="font-size:15px">\u203A</span><span>رجوع</span></button>';
+}
+
 /* ═══════════ لوحة مدير المكتب — محور الشغل ═══════════ */
 async function openOfficeHub(){
   if(!isOwnerOps() && PROFILE.role!=="manager"){ toast("اللوحة دي للإدارة","bad"); return; }
@@ -990,7 +1040,8 @@ function nameOf(id){ return (BY_ID[id]&&BY_ID[id].name)||"—"; }
 
 /* ===================== MODAL ===================== */
 function openSheet(html){
-  $("sheet").innerHTML=html; $("modal").classList.add("open");
+  $("sheet").innerHTML=navBackBtn()+html; $("modal").classList.add("open");
+  try{ if(!window._navPushed){ history.pushState({sheet:1},""); window._navPushed=true; } }catch(e){}
   /* تتبّع الشاشة تلقائي — عشان نعرف إيه اللي بيتستخدم فعلاً */
   try{ const m=String(html).match(/<h3>([^<]{2,44})</); if(m) track("screen", m[1].trim()); }catch(e){}
 }
@@ -1000,7 +1051,19 @@ function closeSheet(){
     const rt=$("rTitle"), rd=$("rDet");
     if(rt&&rd&&(rt.value.trim()||rd.value.trim())&&!window._reqSent){ _reqDraft={ t:rt.value, d:rd.value }; }
   }catch(e){}
-  window._reqSent=false; $("modal").classList.remove("open"); if(typeof sRecOn!=="undefined" && sRecOn) stopSheetMic(true); }
+  window._reqSent=false; $("modal").classList.remove("open");
+  navReset(); window._navPushed=false;
+  if(typeof sRecOn!=="undefined" && sRecOn) stopSheetMic(true); }
+
+/* زرار الرجوع بتاع الموبايل/المتصفح يرجّع شاشة مش يقفل التطبيق */
+window.addEventListener("popstate", function(){
+  const m=$("modal");
+  if(m && m.classList.contains("open")){
+    window._navPushed=false;
+    if(_NAV.length){ navBack(); try{ history.pushState({sheet:1},""); window._navPushed=true; }catch(e){} }
+    else closeSheet();
+  }
+});
 $("modal").addEventListener("click",(e)=>{ if(e.target.id==="modal") closeSheet(); });
 
 /* ===================== BOOT ===================== */
@@ -1060,7 +1123,7 @@ async function startApp(user){
   }catch(e){
     PROFILE = { id:user.id, name:(user.email||"مستخدم").split("@")[0], role:"employee", dept:null };
   }
-  $("boot").style.display="none"; $("login").style.display="none"; $("app").style.display="block";
+  $("boot").style.display="none"; $("login").style.display="none"; try{ navWrapAll(); }catch(e){} $("app").style.display="block";
   $("uName").textContent=PROFILE.name;
   $("uRole").textContent=userTitle(PROFILE);
   const av=$("uAvatar"); av.textContent=initials(PROFILE.name);
@@ -1322,9 +1385,9 @@ function renderOwnerHome(d){
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
     <div class="row-actions"><button class="btn sm" data-quick="myday" style="flex:1;background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button></div>
     <div class="act-label" style="margin-top:16px">أنشئ بسرعة</div>
-    <div class="act-grid" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب'+helpDot("newreq")+'</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك'+helpDot("smart")+'</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع'+helpDot("meeting")+'</button>${isOwnerOps()?'<button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="officehub">لوحة المكتب</button><button class="btn sm" data-quick="workorder">أمر شغل</button>':""}</div>
+    <div class="act-grid" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب${helpDot("newreq")}</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك${helpDot("smart")}</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع${helpDot("meeting")}</button>${isOwnerOps()?'<button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="officehub">لوحة المكتب</button><button class="btn sm" data-quick="workorder">أمر شغل</button>':""}</div>
     <div class="act-label" style="margin-top:18px">روح لـ</div>
-    <div class="act-grid" style="margin-top:0"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال'+helpDot("projects")+'</button><button class="btn ghost sm" data-quick="sales">المبيعات'+helpDot("sales")+'</button><button class="btn ghost sm" data-quick="adminhub">الإدارية'+helpDot("adminhub")+'</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="contracts">العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات'+helpDot("decisions")+'</button>':""}<button class="btn ghost sm" data-quick="roadmap" data-more="1">خطة التطوير'+helpDot("roadmap")+'</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام'+helpDot("syshealth")+'</button>':""}<button class="btn ghost sm" id="moreBtn" onclick="toggleMore(this)" style="opacity:.7">كل الأقسام ⌄</button></div>`;
+    <div class="act-grid" style="margin-top:0"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال${helpDot("projects")}</button><button class="btn ghost sm" data-quick="sales">المبيعات${helpDot("sales")}</button><button class="btn ghost sm" data-quick="adminhub">الإدارية${helpDot("adminhub")}</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي${helpDot("structeng")}</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية${helpDot("finance")}</button><button class="btn ghost sm" data-quick="contracts">العقود${helpDot("contracts")}</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات${helpDot("pipeline")}</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية${helpDot("govcases")}</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق${helpDot("hr")}</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات${helpDot("decisions")}</button>':""}<button class="btn ghost sm" data-quick="roadmap" data-more="1">خطة التطوير${helpDot("roadmap")}</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام${helpDot("syshealth")}</button>':""}<button class="btn ghost sm" id="moreBtn" onclick="toggleMore(this)" style="opacity:.7">كل الأقسام ⌄</button></div>`;
   if(d.evs.length){
     body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   }
@@ -1358,9 +1421,9 @@ function renderOpsHome(d){
   body+=`<div class="sec-h">تحركات سريعة <span class="ln"></span></div>
     <div class="row-actions"><button class="btn sm" data-quick="myday" style="flex:1;background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button></div>
     <div class="act-label" style="margin-top:16px">أنشئ بسرعة</div>
-    <div class="act-grid" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب'+helpDot("newreq")+'</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك'+helpDot("smart")+'</button><button class="btn ghost sm" data-quick="event">موعد'+helpDot("event")+'</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع'+helpDot("meeting")+'</button>${isOwnerOps()?'<button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="officehub">لوحة المكتب</button><button class="btn sm" data-quick="workorder">أمر شغل</button>':""}</div>
+    <div class="act-grid" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب${helpDot("newreq")}</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك${helpDot("smart")}</button><button class="btn ghost sm" data-quick="event">موعد${helpDot("event")}</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع${helpDot("meeting")}</button>${isOwnerOps()?'<button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="officehub">لوحة المكتب</button><button class="btn sm" data-quick="workorder">أمر شغل</button>':""}</div>
     <div class="act-label" style="margin-top:18px">روح لـ</div>
-    <div class="act-grid" style="margin-top:0"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال'+helpDot("projects")+'</button><button class="btn ghost sm" data-quick="sales">المبيعات'+helpDot("sales")+'</button><button class="btn ghost sm" data-quick="adminhub">الإدارية'+helpDot("adminhub")+'</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="contracts">العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات'+helpDot("decisions")+'</button>':""}<button class="btn ghost sm" data-quick="roadmap" data-more="1">خطة التطوير'+helpDot("roadmap")+'</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام'+helpDot("syshealth")+'</button>':""}<button class="btn ghost sm" id="moreBtn" onclick="toggleMore(this)" style="opacity:.7">كل الأقسام ⌄</button></div>`;
+    <div class="act-grid" style="margin-top:0"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال${helpDot("projects")}</button><button class="btn ghost sm" data-quick="sales">المبيعات${helpDot("sales")}</button><button class="btn ghost sm" data-quick="adminhub">الإدارية${helpDot("adminhub")}</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي${helpDot("structeng")}</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية${helpDot("finance")}</button><button class="btn ghost sm" data-quick="contracts">العقود${helpDot("contracts")}</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات${helpDot("pipeline")}</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية${helpDot("govcases")}</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق${helpDot("hr")}</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات${helpDot("decisions")}</button>':""}<button class="btn ghost sm" data-quick="roadmap" data-more="1">خطة التطوير${helpDot("roadmap")}</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام${helpDot("syshealth")}</button>':""}<button class="btn ghost sm" id="moreBtn" onclick="toggleMore(this)" style="opacity:.7">كل الأقسام ⌄</button></div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   body+='<div id="presBox"></div><div id="wwBox"></div><div id="wlBox"></div><div id="activityBox"></div>';
   el.innerHTML=body;
@@ -1700,17 +1763,17 @@ function renderManagerHome(d){
     body+=myDeptTasks.slice(0,5).map(t=>`<div class="card flat"${t.deadline&&new Date(t.deadline)<new Date()?' style="border-right:4px solid var(--red)"':''}><b>${esc(t.title)}</b><div class="meta"><span>${esc(t.assignee_name||nameOf(t.assignee_id)||"—")}</span>${t.deadline?`<span class="dot"></span><span>${fmtDate(t.deadline)}</span>`:""}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}</div></div>`).join("");
   } else body+=`<div class="empty" style="padding:18px">مفيش مهام بالقسم لسه.</div>`;
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
-    <div class="act-grp"><div class="act-lbl">شغل يومي</div><div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك'+helpDot("smart")+'</button><button class="btn green sm" data-quick="ask">اسأل القسم'+helpDot("ask")+'</button><button class="btn ghost sm" data-quick="newreq">طلب'+helpDot("newreq")+'</button></div></div>
+    <div class="act-grp"><div class="act-lbl">شغل يومي</div><div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك${helpDot("smart")}</button><button class="btn green sm" data-quick="ask">اسأل القسم${helpDot("ask")}</button><button class="btn ghost sm" data-quick="newreq">طلب${helpDot("newreq")}</button></div></div>
     ${(()=>{const d=PROFILE.dept;let b="";
-      if(d==="finance") b='<button class="btn sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="approvals">الموافقات'+helpDot("approvals")+'</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب'+helpDot("expiring")+'</button>';
-      else if(d==="legal") b='<button class="btn sm" data-quick="contracts">إدارة العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="docs">خزنة المستندات'+helpDot("docs")+'</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب'+helpDot("expiring")+'</button>';
-      else if(d==="ops_marketing") b='<button class="btn sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button>';
-      else if(d==="hr") b='<button class="btn sm" data-quick="hrhub">الأوبريشن'+helpDot("hrhub")+'</button><button class="btn ghost sm" data-quick="sales">المبيعات والليدز'+helpDot("sales")+'</button>';
-      else if(d==="engineering") b='<button class="btn sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>';
-      if(canSeeLeads()) b+='<button class="btn ghost sm" data-quick="leads">📥 الليدز'+helpDot("leads")+'</button>';
+      if(d==="finance") b='<button class="btn sm" data-quick="finance">المالية${helpDot("finance")}</button><button class="btn ghost sm" data-quick="approvals">الموافقات${helpDot("approvals")}</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب${helpDot("expiring")}</button>';
+      else if(d==="legal") b='<button class="btn sm" data-quick="contracts">إدارة العقود${helpDot("contracts")}</button><button class="btn ghost sm" data-quick="docs">خزنة المستندات${helpDot("docs")}</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب${helpDot("expiring")}</button>';
+      else if(d==="ops_marketing") b='<button class="btn sm" data-quick="pipeline">قمع المبيعات${helpDot("pipeline")}</button>';
+      else if(d==="hr") b='<button class="btn sm" data-quick="hrhub">الأوبريشن${helpDot("hrhub")}</button><button class="btn ghost sm" data-quick="sales">المبيعات والليدز${helpDot("sales")}</button>';
+      else if(d==="engineering") b='<button class="btn sm" data-quick="structeng">الإنشائي${helpDot("structeng")}</button>';
+      if(canSeeLeads()) b+='<button class="btn ghost sm" data-quick="leads">📥 الليدز${helpDot("leads")}</button>';
       return b?'<div class="act-grp"><div class="act-lbl">شغل قسمك</div><div class="row-actions">'+b+'</div></div>':"";})()}
-    <div class="act-grp"><div class="act-lbl">المشاريع والفريق</div><div class="row-actions"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال'+helpDot("projects")+'</button><button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button><button class="btn ghost sm" data-quick="addemp">إضافة موظف'+helpDot("addemp")+'</button></div></div>
-    <div class="act-grp"><div class="act-lbl">إدارية</div><div class="row-actions"><button class="btn ghost sm" data-quick="leaves">الإجازات'+helpDot("leaves")+'</button><button class="btn ghost sm" data-quick="adminhub">الإدارية'+helpDot("adminhub")+'</button></div></div>`;
+    <div class="act-grp"><div class="act-lbl">المشاريع والفريق</div><div class="row-actions"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال${helpDot("projects")}</button><button class="btn ghost sm" data-quick="hr">كفاءة الفريق${helpDot("hr")}</button><button class="btn ghost sm" data-quick="addemp">إضافة موظف${helpDot("addemp")}</button></div></div>
+    <div class="act-grp"><div class="act-lbl">إدارية</div><div class="row-actions"><button class="btn ghost sm" data-quick="leaves">الإجازات${helpDot("leaves")}</button><button class="btn ghost sm" data-quick="adminhub">الإدارية${helpDot("adminhub")}</button></div></div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   el.innerHTML=body;
   paintAttendance();
@@ -1745,12 +1808,12 @@ function renderEmployeeHome(d){
     <b>محتاج تعمل حاجة؟ اتكلم بس</b>
     <div class="muted" style="font-size:12.5px;margin:4px 0 12px">مش لازم تكتب — دوس واتكلم والنظام يفهمك.</div>
     ${(()=>{const d=PROFILE.dept,pos=PROFILE.position;let b="";
-      if(pos==="gov") b='<button class="btn sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button><button class="btn ghost sm" data-quick="expiring">تراخيص بتنتهي'+helpDot("expiring")+'</button>';
-      else if(d==="engineering") b='<button class="btn sm" data-quick="myelements">عناصري الإنشائية'+helpDot("myelements")+'</button><button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>';
-      else if(d==="reception") b='<button class="btn sm" data-quick="visitor">تسجيل زائر'+helpDot("visitor")+'</button><button class="btn ghost sm" data-quick="call">تسجيل مكالمة'+helpDot("call")+'</button><button class="btn ghost sm" data-quick="corr">الوارد والصادر'+helpDot("corr")+'</button><button class="btn ghost sm" data-quick="clientfiles">ملفات العملاء'+helpDot("clientfiles")+'</button><button class="btn ghost sm" data-quick="attlog">مين موجود'+helpDot("attlog")+'</button>';
-      if(canSeeLeads()) b+='<button class="btn ghost sm" data-quick="leads">📥 الليدز'+helpDot("leads")+'</button>';
+      if(pos==="gov") b='<button class="btn sm" data-quick="govcases">المعاملات الحكومية${helpDot("govcases")}</button><button class="btn ghost sm" data-quick="expiring">تراخيص بتنتهي${helpDot("expiring")}</button>';
+      else if(d==="engineering") b='<button class="btn sm" data-quick="myelements">عناصري الإنشائية${helpDot("myelements")}</button><button class="btn ghost sm" data-quick="structeng">الإنشائي${helpDot("structeng")}</button>';
+      else if(d==="reception") b='<button class="btn sm" data-quick="visitor">تسجيل زائر${helpDot("visitor")}</button><button class="btn ghost sm" data-quick="call">تسجيل مكالمة${helpDot("call")}</button><button class="btn ghost sm" data-quick="corr">الوارد والصادر${helpDot("corr")}</button><button class="btn ghost sm" data-quick="clientfiles">ملفات العملاء${helpDot("clientfiles")}</button><button class="btn ghost sm" data-quick="attlog">مين موجود${helpDot("attlog")}</button>';
+      if(canSeeLeads()) b+='<button class="btn ghost sm" data-quick="leads">📥 الليدز${helpDot("leads")}</button>';
       return b?'<div class="act-grp"><div class="act-lbl">شغلك اليومي</div><div class="row-actions">'+b+'</div></div>':"";})()}
-    <div class="act-grp"><div class="act-lbl">حاجات عامة</div><div class="act-grid"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك'+helpDot("ask")+'</button><button class="btn sm" data-quick="event">سجّل موعد'+helpDot("event")+'</button><button class="btn ghost sm" data-quick="newreq">طلب'+helpDot("newreq")+'</button><button class="btn ghost sm" data-quick="leaves">الإجازات'+helpDot("leaves")+'</button>${PROFILE.dept==="reception"?'<button class="btn ghost sm" data-quick="docs">خزنة المستندات'+helpDot("docs")+'</button>':""}</div></div></div>`;
+    <div class="act-grp"><div class="act-lbl">حاجات عامة</div><div class="act-grid"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك${helpDot("ask")}</button><button class="btn sm" data-quick="event">سجّل موعد${helpDot("event")}</button><button class="btn ghost sm" data-quick="newreq">طلب${helpDot("newreq")}</button><button class="btn ghost sm" data-quick="leaves">الإجازات${helpDot("leaves")}</button>${PROFILE.dept==="reception"?'<button class="btn ghost sm" data-quick="docs">خزنة المستندات${helpDot("docs")}</button>':""}</div></div></div>`;
   body+=`<div class="sec-h">المهام اللي عليك <span class="ln"></span></div>`;
   if(myTasks.length){
     body+=myTasks.slice(0,6).map(t=>`<button class="card flat" data-task="${t.id}" style="width:100%;text-align:right;cursor:pointer${t.deadline&&new Date(t.deadline)<new Date()?';border-right:4px solid var(--red)':''}"><b>${esc(t.title)}</b><div class="meta">${t.deadline?`<span>${fmtDate(t.deadline)}</span>`:`<span class="muted">من غير موعد</span>`}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}<span class="dot"></span><span class="muted">${t.progress||0}%</span></div></button>`).join("");
