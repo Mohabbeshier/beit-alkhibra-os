@@ -3378,11 +3378,11 @@ async function addCashIn(id){
     const cat=await resolveCat("ciCat","income");
     const b=$("ciGo"); b.disabled=true;
     const d=$("ciDate").value||todayStr();
-    const { error }=await sb.from("os_project_payments").insert({ project_id:id, title:t,
+    const { data, error }=await sb.from("os_project_payments").insert({ project_id:id, title:t,
       amount:a, paid_amount:a, status:"paid", paid_at:d, due_date:d,
-      method:$("ciM").value, is_adhoc:true, category:cat, created_by:ME.id });
+      method:$("ciM").value, is_adhoc:true, category:cat, created_by:ME.id }).select("id");
     if(error){ toast(error.message,"bad"); b.disabled=false; return; }
-    toast("اتحصّل \u2713","ok"); openJobAccount(id);
+    afterMoney("receipt",(data&&data[0]&&data[0].id)||null,"اتحصّل \u2713",()=>openJobAccount(id));
   };
 }
 
@@ -3411,7 +3411,9 @@ async function openVouchers(){
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'
     +'<button class="chip on vc-f" data-f="all">الكل</button>'
     +'<button class="chip vc-f" data-f="receipt">إذن قبض</button>'
-    +'<button class="chip vc-f" data-f="payment">إذن صرف</button></div>'
+    +'<button class="chip vc-f" data-f="payment">إذن صرف</button>'
+    +'<button class="chip vc-f" data-f="advance">عهد</button>'
+    +'<button class="chip vc-f" data-f="payable">موردين</button></div>'
     +'<div id="vcBox"><div class="skel"></div></div>'
     +actMini([{ label:"رجوع للمالية", on:"openFinance()" }]));
   let R=[], f="all";
@@ -3452,9 +3454,35 @@ async function openVouchers(){
   });
   paint();
 }
-function printVoucher(vtype, id){
-  const v=(window._VC||[]).find(x=>x.vtype===vtype&&String(x.id)===String(id));
-  if(!v){ toast("الإيصال مش موجود","bad"); return; }
+/* بعد أي حركة مالية: اعرض الإيصال فوراً مع خيار الطباعة.
+   المدير كان بيعمل الحركة ومفيش أي إيصال بيظهر. */
+function afterMoney(vtype, id, msg, then){
+  toast(msg||"اتسجّل \u2713","ok");
+  if(!id){ if(then) then(); return; }
+  openSheet('<h3>تمت الحركة</h3>'
+    +'<div class="card flat" style="background:#F1F8F2;border-color:#A5D6A7;text-align:center;padding:18px">'
+    +'<b style="font-size:15px;color:var(--green-d);display:block">'+esc(msg||"اتسجّلت")+'</b>'
+    +'<div class="muted" style="font-size:12px;margin-top:4px">تقدر تطبع الإيصال دلوقتي أو من شاشة الإيصالات في أي وقت.</div></div>'
+    +actGroup("",[{ label:"اطبع الإيصال", kind:"green", lead:true, id:"amPrint" }])
+    +actMini([{ label:"تمام، كمّل", id:"amSkip" }]));
+  const go=()=>{ if(then) then(); else closeSheet(); };
+  $("amPrint").onclick=async()=>{ await printVoucher(vtype,id); go(); };
+  $("amSkip").onclick=go;
+}
+
+/* الطباعة بقت تشتغل من أي مكان — بتجيب الإيصال من الداتابيز لو مش في الكاش.
+   قبل كده كانت بتقرا من window._VC اللي بيتملى في شاشة الإيصالات بس،
+   فبعد أي حركة مكنش فيه طباعة خالص. */
+async function printVoucher(vtype, id){
+  let v=(window._VC||[]).find(x=>x.vtype===vtype&&String(x.id)===String(id));
+  if(!v){
+    try{
+      const { data }=await sb.from("os_voucher").select("*")
+        .eq("vtype",vtype).eq("id",id).maybeSingle();
+      v=data||null;
+    }catch(e){}
+  }
+  if(!v){ toast("الإيصال لسه مش جاهز — جرّب من شاشة الإيصالات","bad"); return; }
   const isIn=v.vtype==="receipt";
   const row=(l,t)=>'<div style="display:flex;gap:6px;padding:3px 0"><span style="color:#666;min-width:96px">'
     +esc(l)+'</span><b>'+esc(t||"—")+'</b></div>';
@@ -3934,12 +3962,12 @@ async function quickCash(id, jobCode){
     if(!(amt>0)){ toast("اكتب المبلغ","bad"); return; }
     const cat=await resolveCat("qcCat","income");
     const b=$("qcGo"); b.disabled=true;
-    const { error }=await sb.from("os_project_payments").insert({
+    const { data, error }=await sb.from("os_project_payments").insert({
       project_id:id, title:$("qcTitle").value.trim()||"تحصيل", amount:amt, paid_amount:amt,
       status:"paid", paid_at:todayStr(), method:$("qcMethod").value, is_adhoc:true,
-      category:cat, created_by:ME.id });
+      category:cat, created_by:ME.id }).select("id");
     if(error){ toast(error.message,"bad"); b.disabled=false; return; }
-    toast("اتحصّل \u2713","ok"); paintProjectDetail(id);
+    afterMoney("receipt",(data&&data[0]&&data[0].id)||null,"اتحصّل \u2713",()=>openProjectDetail(id));
   };
 }
 
@@ -5256,9 +5284,12 @@ async function openPaymentNew(){
     let clId=null;
     try{ const { data:pp }=await sb.from("os_projects").select("client_id").eq("id",prj).maybeSingle();
          clId=pp&&pp.client_id||null; }catch(e){}
-    const { error }=await sb.from("os_project_payments").insert({ project_id:prj, client_id:clId||null, title, milestone:ms||null, amount:amt, status:$("pySt").value, due_date:$("pyDue").value||null, created_by:ME.id });
+    const _st=$("pySt").value;
+    const _paid = _st==="paid";
+    const { data, error }=await sb.from("os_project_payments").insert({ project_id:prj, client_id:clId||null, title, milestone:ms||null, amount:amt, status:_st, due_date:$("pyDue").value||null, paid_at:_paid?todayStr():null, paid_amount:_paid?amt:null, created_by:ME.id }).select("id");
     if(error){ toast("معرفناش نضيف: "+error.message,"bad"); btn.disabled=false; btn.textContent="أضف الدفعة"; return; }
-    toast("الدفعة اتضافت ✓","ok"); openFinance();
+    if(_paid) afterMoney("receipt",(data&&data[0]&&data[0].id)||null,"الدفعة اتحصّلت \u2713",()=>openFinance());
+    else { toast("الدفعة اتسجّلت مستحقة \u2713","ok"); openFinance(); }
   };
   }
   bindPy();
@@ -5297,14 +5328,16 @@ async function openCostNew(preJobId){
     if(!amt||amt<=0){ toast("اكتب المبلغ","bad"); return; }
     const btn=$("csGo"); btn.disabled=true; btn.textContent="بيسجّل…";
     const cat=await resolveCat("csCat","expense");
-    const { error }=await sb.from("os_project_costs").insert({ project_id:prj, title,
-      category:cat||readSelect("csCat"), amount:amt, spent_on:$("csDate").value||todayStr(), created_by:ME.id });
+    const { data, error }=await sb.from("os_project_costs").insert({ project_id:prj, title,
+      category:cat||readSelect("csCat"), amount:amt, spent_on:$("csDate").value||todayStr(), created_by:ME.id }).select("id,approved");
     if(error){
       const m=error.message||"";
       toast(m.includes('مقفلة')?'الفترة المالية مقفلة':("معرفناش نسجّل: "+m),"bad");
       btn.disabled=false; btn.textContent="سجّل المصروف"; return;
     }
-    toast(prj?"المصروف اتسجّل على الملف \u2713":"المصروف العام اتسجّل \u2713","ok"); openFinance();
+    const _r=data&&data[0];
+    if(_r&&_r.approved) afterMoney("payment",_r.id,prj?"المصروف اتسجّل على الملف \u2713":"المصروف العام اتسجّل \u2713",()=>openFinance());
+    else { toast("اتسجّل — مستني اعتماد المالية \u2713","ok"); openFinance(); }
   };
   }
   bindCs();
