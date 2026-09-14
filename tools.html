@@ -2959,43 +2959,6 @@ async function addCashIn(id){
 }
 
 /* ═══════════ توجيه الملف لقسم ═══════════ */
-async function openRouteJob(id){
-  const [{ data:deps },{ data:log }]=await Promise.all([
-    sb.from("os_departments").select("key,name").order("name"),
-    sb.from("os_job_routing_log").select("*").eq("project_id",id).order("routed_at",{ascending:false}).limit(10)
-  ]);
-  const dOpts=(deps||[]).map(d=>'<option value="'+esc(d.key)+'">'+esc(d.name)+'</option>').join("");
-  const people='<option value="">\u2014 القسم كله \u2014</option>'
-    +PROFILES.filter(p=>!/^suspended/.test(p.email||"")).map(p=>'<option value="'+p.id+'">'+esc(p.name||p.email)+'</option>').join("");
-  const L=log||[];
-  openSheet('<h3>وجّه الملف لقسم</h3>'
-    +'<div class="field"><label>القسم</label><select id="rjDept">'+dOpts+'</select></div>'
-    +'<div class="field"><label>لشخص محدد؟</label><select id="rjWho">'+people+'</select></div>'
-    +'<div class="field"><label>السبب</label><input id="rjWhy" placeholder="مثلاً: محتاج مراجعة مالية قبل التقديم"/></div>'
-    +'<div class="row-actions"><button class="btn green" id="rjGo">وجّه</button>'
-    +'<button class="btn ghost" onclick="paintJob360(\''+id+'\')">رجوع</button></div>'
-    +(L.length?'<div class="sec-h">سجل التوجيه <span class="ln"></span></div><div class="card flat">'
-      +L.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #eef2f7">'
-        +'<div style="font-size:12.5px">'+esc(x.from_dept_name||"—")+' \u2190 '+esc(x.to_dept_name||"")+'</div>'
-        +(x.reason?'<div class="muted" style="font-size:11px;margin-top:1px">'+esc(x.reason)+'</div>':'')
-        +'<div class="muted" style="font-size:10.5px;margin-top:2px">'+esc(x.routed_by_name||"")+' · '+fmtDate(x.routed_at)
-        +' · <b style="color:'+(x.received_at?'var(--green-d)':'#B45309')+'">'+esc(x.state)+'</b></div>'
-        +(!x.received_at?'<button class="btn sm" style="margin-top:5px" onclick="receiveJob(\''+x.id+'\',\''+id+'\')">استلمت</button>':'')
-        +'</div>').join("")+'</div>':""));
-  addMicTo("rjWhy");
-  $("rjGo").onclick=async()=>{
-    const b=$("rjGo"); b.disabled=true;
-    const { error }=await sb.rpc("os_route_job",{ p_project:id, p_dept:$("rjDept").value,
-      p_user:$("rjWho").value||null, p_reason:$("rjWhy").value.trim()||null });
-    if(error){ toast(error.message,"bad"); b.disabled=false; return; }
-    toast("الملف اتوجّه \u2713","ok"); paintJob360(id);
-  };
-}
-async function receiveJob(routingId, prjId){
-  const { error }=await sb.rpc("os_receive_job",{ p_routing:routingId });
-  if(error){ toast(error.message,"bad"); return; }
-  toast("اتسجّل الاستلام \u2713","ok"); openRouteJob(prjId);
-}
 
 /* === ربحية الملفات (الجديدة) === */
 async function openProjectFinance(){
