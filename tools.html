@@ -366,6 +366,7 @@ function withLoading(btn, label, fn){
 /* ===================== نظام التلميحات — "دي بتعمل إيه؟" ===================== */
 const HELP_TEXT={
   /* الشاشة الرئيسية */
+  collect:"طلبات التحصيل اللي المالية بعتتها — مين يكلّم العميل، بكام، وقبل امتى.",
   workorder:"تختار ملف من بيان الأعمال وتكلّف موظف بشغل محدد عليه — بيوصله إشعار وبيبقى في مهامه وتقييمه.",
   smart:"تكتب أو تقول كذا مهمة في جملة واحدة، والذكاء يفصلها لمهام منفصلة ويحدد المسؤول والموعد لكل واحدة.",
   ask:"تسأل قسمك سؤال بصوتك أو كتابة، والذكاء يرد عليك من بيانات الشركة الفعلية.",
@@ -407,6 +408,120 @@ const HELP_TEXT={
   decisions:"سجل القرارات الإدارية المهمة بتاريخها ومين اتخذها.",
   meeting:"تقرير اجتماع — بتسجّل المحضر والقرارات والمهام اللي طلعت منه."
 };
+/* ═══════════ تسعير الملف وطلب التحصيل — للمالية ═══════════ */
+async function openPriceJob(id, jobLabel, curVal){
+  if(!isFinanceUser()){ toast("التسعير للمالية بس","bad"); return; }
+  openSheet('<h3>تسعير الملف</h3>'
+    +'<div class="card flat" style="padding:9px 13px;margin-bottom:10px"><b style="font-size:12.5px">'+esc(jobLabel||"الملف")+'</b>'
+    +(Number(curVal)>0?'<div class="muted" style="font-size:11.5px;margin-top:2px">القيمة الحالية '+egp(curVal)+'</div>':'')+'</div>'
+    +'<div class="field"><label>قيمة العقد (ج)</label><input id="pjVal" type="number" min="0" inputmode="numeric" value="'+(Number(curVal)>0?Number(curVal):"")+'"/></div>'
+    +'<div class="field"><label>ملاحظة التسعير</label><input id="pjNote" placeholder="مثلاً: ترخيص فيلا 300م — شامل الرسوم"/></div>'
+    +'<div class="muted" style="font-size:11.5px;margin-bottom:10px;line-height:1.7">أول ما تسعّر، خطة الدفع بتتولّد تلقائي حسب نوع الخدمة لو الملف لسه مافيهوش أقساط.</div>'
+    +actGroup("",[{ label:"سجّل التسعير", kind:"green", lead:true, id:"pjGo" }])
+    +actMini([{ label:"إلغاء", on:"closeSheet()" }]));
+  addMicTo("pjNote");
+  $("pjGo").onclick=()=>withLoading($("pjGo"),"بيتسجّل…", async()=>{
+    const v=Number($("pjVal").value||0);
+    if(!(v>0)){ toast("اكتب قيمة العقد","bad"); return; }
+    const { data, error }=await sb.rpc("os_price_job",{ p_project:id, p_value:v, p_note:$("pjNote").value.trim()||null });
+    if(error){ toast(error.message,"bad"); return; }
+    toast("اتسعّر "+egp(v)+((data&&data.installments)?" · "+data.installments+" أقساط":""),"ok");
+    track("action","price_job"); openProjectDetail(id);
+  });
+}
+
+async function openCollectionNew(id, jobLabel, suggested){
+  if(!isFinanceUser()){ toast("طلب التحصيل من المالية بس","bad"); return; }
+  const staff=PROFILES.filter(p=>p.id!==ME.id);
+  openSheet('<h3>طلب تحصيل</h3>'
+    +'<div class="muted" style="margin:-6px 0 10px;font-size:12px">بيروح لمين يكلّم العميل — بإشعار وموعد.</div>'
+    +(id?'<input type="hidden" id="crPrj" value="'+esc(id)+'"/>'
+        +'<div class="card flat" style="padding:9px 13px;margin-bottom:10px"><b style="font-size:12.5px">'+esc(jobLabel||"الملف")+'</b></div>'
+      :jobPickerField("crPrj","على أي ملف؟"))
+    +'<div class="field"><label>المبلغ المطلوب (ج)</label><input id="crAmt" type="number" min="0" inputmode="numeric" value="'+(Number(suggested)>0?Number(suggested):"")+'"/></div>'
+    +'<div class="field"><label>مين يتابع التحصيل</label><select id="crWho"><option value="">— السكرتارية تلقائي —</option>'
+      +staff.map(p=>'<option value="'+p.id+'">'+esc(p.name)+(p.dept&&DEPT_BY_KEY[p.dept]?" · "+esc(DEPT_BY_KEY[p.dept].name):"")+'</option>').join("")+'</select></div>'
+    +'<div class="field"><label>مطلوب قبل</label><input id="crDue" type="date"/></div>'
+    +'<div class="field"><label>ملاحظة للمتابع</label><textarea id="crNote" rows="2" placeholder="مثلاً: الدفعة الأولى — العميل طلب يدفع بعد التسليم"></textarea></div>'
+    +actGroup("",[{ label:"ابعت الطلب", kind:"green", lead:true, id:"crGo" }])
+    +actMini([{ label:"إلغاء", on:"closeSheet()" }]));
+  addMicTo("crNote");
+  $("crGo").onclick=()=>withLoading($("crGo"),"بيتبعت…", async()=>{
+    const prj=$("crPrj").value; if(!prj){ toast("اختار الملف","bad"); return; }
+    const amt=Number($("crAmt").value||0); if(!(amt>0)){ toast("اكتب المبلغ","bad"); return; }
+    const { data, error }=await sb.rpc("os_request_collection",{
+      p_project:prj, p_amount:amt, p_assignee:$("crWho").value||null,
+      p_due:$("crDue").value||null, p_note:$("crNote").value.trim()||null });
+    if(error){ toast(error.message,"bad"); return; }
+    toast("اتبعت "+((data&&data.code)||"")+" لـ "+((data&&data.assignee)||""),"ok");
+    track("action","collection_request"); openCollections();
+  });
+}
+
+let _crFilter="open";
+async function openCollections(){
+  openSheet('<h3>طلبات التحصيل</h3>'
+    +'<div class="muted" style="margin:-6px 0 10px;font-size:12px">اللي المالية طلبت حد يكلّم العميل عشانه.</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="crF">'
+    +'<button class="chip on" data-cf="open">مفتوحة</button>'
+    +'<button class="chip" data-cf="late">متأخرة</button>'
+    +'<button class="chip" data-cf="done">اتحصّلت</button>'
+    +'<button class="chip" data-cf="all">الكل</button></div>'
+    +'<div id="crBox"><div class="skel"></div><div class="skel"></div></div>'
+    +(isFinanceUser()?actGroup("",[{ label:"طلب تحصيل جديد", kind:"green", lead:true, on:"openCollectionNew()" }]):"")
+    +actMini([{ label:"قفل", on:"closeSheet()" }]));
+  document.querySelectorAll("#crF [data-cf]").forEach(b=>b.onclick=()=>{
+    _crFilter=b.dataset.cf;
+    document.querySelectorAll("#crF [data-cf]").forEach(x=>x.className="chip");
+    b.className="chip on"; paintCollections();
+  });
+  await paintCollections();
+}
+
+async function paintCollections(){
+  const box=$("crBox"); if(!box) return;
+  try{
+    const { data, error }=await sb.from("os_collection_board").select("*").order("created_at",{ascending:false}).limit(60);
+    if(error) throw error;
+    let R=data||[];
+    if(_crFilter==="open") R=R.filter(x=>["open","contacted","promised"].includes(x.status));
+    else if(_crFilter==="late") R=R.filter(x=>x.overdue);
+    else if(_crFilter==="done") R=R.filter(x=>x.status==="collected");
+    if(!R.length){ box.innerHTML='<div class="empty">مفيش طلبات هنا.</div>'; return; }
+    const LBL={open:"مستني",contacted:"اتكلّمنا",promised:"وعد بالدفع",collected:"اتحصّل",cancelled:"ملغي"};
+    box.innerHTML=R.map(x=>{
+      const col=x.status==="collected"?"var(--green-d)":(x.overdue?"var(--red)":"var(--blue)");
+      return '<div class="card flat" style="border-right:4px solid '+col+'">'
+        +'<div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">'
+        +'<b style="font-size:14px;flex:1">'+egp(x.amount)+'</b>'
+        +'<span class="badge" style="background:'+col+';color:#fff;font-size:10px">'+esc(LBL[x.status]||x.status)+'</span></div>'
+        +'<div class="muted" style="font-size:11.5px;margin-top:4px">ملف '+esc(x.job_label||"—")
+        +(x.client_name?' · '+esc(x.client_name):'')
+        +(x.assignee_name?' · متابع: '+esc(x.assignee_name):'')+'</div>'
+        +(x.note?'<div style="font-size:12px;margin-top:5px;white-space:pre-wrap">'+esc(x.note)+'</div>':'')
+        +'<div class="meta"><span>'+esc(x.code||"")+'</span>'
+        +(x.due_date?'<span class="dot"></span><span'+(x.overdue?' style="color:var(--red);font-weight:800"':'')+'>قبل '+fmtDate(x.due_date)+'</span>':'')
+        +(x.client_phone?'<span class="dot"></span><a href="tel:'+esc(x.client_phone)+'" class="lnk">اتصل</a>':'')
+        +'</div>'
+        +(x.status!=="collected"&&x.status!=="cancelled"
+          ?'<div class="act-mini" style="margin-top:8px">'
+           +'<button class="btn" onclick="setCollState(\''+x.id+'\',\'contacted\')">اتكلّمت معاه</button>'
+           +'<button class="btn" onclick="setCollState(\''+x.id+'\',\'promised\')">وعد بالدفع</button>'
+           +(isFinanceUser()?'<button class="btn" onclick="setCollState(\''+x.id+'\',\'collected\')">اتحصّل</button>':'')
+           +'</div>':'')
+        +'</div>';
+    }).join("");
+  }catch(e){ box.innerHTML=failBox("معرفناش نجيبها.",paintCollections); }
+}
+
+async function setCollState(id, st){
+  const patch={ status:st };
+  if(st==="collected"||st==="cancelled") patch.closed_at=new Date().toISOString();
+  const { error }=await sb.from("os_collection_requests").update(patch).eq("id",id);
+  if(error){ toast(error.message,"bad"); return; }
+  toast("اتحدّث ✓","ok"); paintCollections();
+}
+
 /* ═══════════ أوامر الشغل — المالك يكلّف موظف على ملف ═══════════ */
 let _woFilter="open";
 
@@ -780,11 +895,15 @@ async function startApp(user){
   _sessionWatchId=setInterval(async()=>{ try{ const r=await sb.auth.getSession(); if(!r.data.session){ clearInterval(_sessionWatchId); toast("انتهت الجلسة — سجّل دخول تاني","bad"); setTimeout(()=>location.reload(),2500); } }catch(e){} },600000);
 }
 
-function isOwnerOps(){ return PROFILE.role==="owner"||PROFILE.role==="ops"; }
+/* coceo = مدير المكتب: صلاحيات الأوبريشن كاملة على الشغل — بدون المالية.
+   الداتابيز: os_role() بترجّعله 'ops'، ودوال المالية بتقرا الدور الخام فبتستبعده. */
+function isCoCeo(){ return PROFILE.role==="coceo"; }
+function isOwnerOps(){ return PROFILE.role==="owner"||PROFILE.role==="ops"||PROFILE.role==="coceo"; }
 function canSeeClients(){ return isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="hr"); }
 function canSeeLeads(){ if(isOwnerOps()) return true; if(PROFILE.position==="assistant") return true; if(PROFILE.role==="manager"&&String(PROFILE.dept||"").startsWith("off_")) return true; if(PROFILE.dept==="legal"||PROFILE.dept==="finance") return true; return false; }
 function userTitle(p){
   if(p.role==="owner") return "المالك · الإدارة العليا";
+  if(p.role==="coceo") return "مدير المكتب · الإدارة التنفيذية";
   if(p.role==="ops") return p.dept||"إدارة التشغيل";
   const dn=DEPT_BY_KEY[p.dept]?DEPT_BY_KEY[p.dept].name:(p.dept||"");
   return ({manager:"مدير قسم",employee:"موظف"}[p.role]||p.role)+(dn?(" · "+dn):"");
@@ -890,7 +1009,7 @@ async function renderHome(){
     if(myLate.length){ window._overdueReminded=true; setTimeout(()=>toast("عندك "+myLate.length+" مهمة متأخرة — ابدأ بيها","bad"),900); }
   }
   if(role==="owner") renderOwnerHome({tasks,openTasks,reqs,pendIn,evs,joins,greet});
-  else if(role==="ops") renderOpsHome({tasks,openTasks,reqs,pendIn,evs,joins,greet,evTxt});
+  else if(role==="ops"||role==="coceo") renderOpsHome({tasks,openTasks,reqs,pendIn,evs,joins,greet,evTxt});
   else if(role==="manager") renderManagerHome({tasks,openTasks,reqs,pendIn,evs,greet,evTxt});
   else renderEmployeeHome({tasks,openTasks,reqs,pendIn,evs,greet,evTxt});
 
@@ -3164,10 +3283,12 @@ async function refreshCostCats(){
   }catch(e){}
 }
 const egp=(n)=>Number(n||0).toLocaleString("en")+" ج";
-function isFinanceUser(){ return isOwnerOps()||PROFILE.dept==="finance"; }
+function isFinanceUser(){ if(isCoCeo()) return false;
+  return PROFILE.role==="owner"||PROFILE.role==="ops"||PROFILE.dept==="finance"; }
 
 /* قراءة مالية: المالية + المالك + الأوبريشن — مطابقة os_can_finance_read في الداتابيز */
-function canFinRead(){ try{ return isFinanceUser()||isOwnerOps()||PROFILE.role==="ops"; }catch(e){ return false; } }
+function canFinRead(){ try{ if(isCoCeo()) return false;
+  return isFinanceUser()||PROFILE.role==="owner"||PROFILE.role==="ops"; }catch(e){ return false; } }
 let _moreOpen=false;
 function toggleMore(btn){
   _moreOpen=!_moreOpen;
@@ -4347,6 +4468,8 @@ async function paintJob360(id, mountId){
       +(canFinRead()?'<button class="btn sm" onclick="openJobAccount(\''+id+'\')">كشف الحساب</button>':'')
       +'<button class="btn ghost sm" onclick="openRouteJob(\''+id+'\')">وجّه لقسم</button>'
       +(isFinanceUser()?'<button class="btn ghost sm" onclick="openCostNew(\''+id+'\')">سجّل مصروف</button>':'')
+      +(isFinanceUser()?'<button class="btn ghost sm" onclick="openPriceJob(\''+id+'\',\''+esc((j.job_code||j.name||"").replace(/'/g,""))+'\','+(Number(j.value_egp)||0)+')">سعّر الملف</button>':'')
+      +(isFinanceUser()?'<button class="btn ghost sm" onclick="openCollectionNew(\''+id+'\',\''+esc((j.job_code||j.name||"").replace(/'/g,""))+'\')">اطلب تحصيل</button>':'')
       +((isOwnerOps()||PROFILE.role==="manager")?'<button class="btn ghost sm" onclick="openWorkOrderNew({id:\''+id+'\',job_code:\''+esc(j.job_code||"")+'\',name:\''+esc((j.name||"").replace(/'/g,""))+'\'})">أمر شغل</button>':'')
       +'</div>';
 
@@ -5016,6 +5139,7 @@ async function openFinance(){
         { id:"finArch",  label:"الأرشيف", kind:"ghost" }])
     +actGroup("المتابعة",[
         { id:"finRecv", label:"المستحقات", kind:"" },
+        { label:"طلبات التحصيل", kind:"", on:"openCollections()" },
         { id:"finPay",  label:"الموردين", kind:"" },
         { id:"finProj", label:"ربحية الملفات", kind:"" }])
     +actMini([
@@ -6147,6 +6271,7 @@ function wireHome(el){
     const q=b.dataset.quick;
     track("action","quick:"+q);
     if(q==="workorder"){ openWorkOrders(); }
+    else if(q==="collect"){ openCollections(); }
     else if(q==="smart"){ switchTab("tasks"); setTimeout(openSmartTask,90); }
     else if(q==="ask"){ switchTab("ask"); }
     else if(q==="newreq"){ switchTab("req"); setTimeout(openNewReq,90); }
@@ -6780,7 +6905,7 @@ function openAddEmployee(){
     <div class="field"><label>الإيميل</label><input id="neEmail" type="email" placeholder="name@beit-alkhibra.com"/></div>
     <div class="field"><label>باسورد مؤقت (ابعتهوله)</label><input id="nePass" value="${tmpPass}"/></div>
     <div class="field"><label>القسم أو المكتب</label>${fullAccess?`<select id="neDept">${deptOpts}</select>`:`<div class="muted" style="font-size:12.5px">${esc((DEPT_BY_KEY[PROFILE.dept]&&DEPT_BY_KEY[PROFILE.dept].name)||"قسمك")} <input type="hidden" id="neDept" value="${esc(PROFILE.dept||"")}"/></div>`}</div>
-    <div class="field"><label>الدور</label>${fullAccess?`<select id="neRole"><option value="employee">موظف</option><option value="manager">مدير</option></select>`:`<div class="muted" style="font-size:12.5px">موظف <input type="hidden" id="neRole" value="employee"/></div>`}</div>
+    <div class="field"><label>الدور</label>${fullAccess?`<select id="neRole"><option value="employee">موظف</option><option value="manager">مدير قسم</option>${PROFILE.role==="owner"?'<option value="coceo">مدير المكتب (كل حاجة عدا المالية)</option><option value="ops">إدارة التشغيل (كل حاجة)</option>':""}</select>`:`<div class="muted" style="font-size:12.5px">موظف <input type="hidden" id="neRole" value="employee"/></div>`}</div>
     <div class="field"><label>المسمى (اختياري)</label><select id="nePos"><option value="">بدون تحديد</option>${posOpts}</select></div>
     <div class="row-actions"><button class="btn green" id="neGo">أنشئ الحساب ✓</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
   addMicTo("neName"); allowCustom("nePos","مسمى وظيفي تاني — اكتبه");
