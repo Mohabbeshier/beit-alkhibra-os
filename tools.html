@@ -370,6 +370,7 @@ function withLoading(btn, label, fn){
 /* ===================== نظام التلميحات — "دي بتعمل إيه؟" ===================== */
 const HELP_TEXT={
   /* الشاشة الرئيسية */
+  scaninbox:"وارد السكانر — الورق اللي اتسكن على اللابتوب واترفع، وبتوجّهيه لملفه من هنا.",
   parcels:"الأراضي — كل قطعة جواها ملفاتها (ترخيص، تصميم، مرافق…) وكل ملف جواه مرفقاته.",
   upload:"ارفع مرفق — دوّر على الملف بكوده أو رقم القطعة أو اسم العميل، والمرفق ينزل في مكانه.",
   officehub:"لوحة مدير المكتب — كل اللي متأخر أو محتاج متابعة في شاشة واحدة: الملفات، أوامر الشغل، التحصيل، الفريق.",
@@ -416,6 +417,136 @@ const HELP_TEXT={
   decisions:"سجل القرارات الإدارية المهمة بتاريخها ومين اتخذها.",
   meeting:"تقرير اجتماع — بتسجّل المحضر والقرارات والمهام اللي طلعت منه."
 };
+/* ═══════════ وارد السكانر ═══════════ */
+let _scFilter="new";
+async function openScanInbox(){
+  if(!isOwnerOps() && PROFILE.role!=="manager"){ toast("وارد السكانر للإدارة","bad"); return; }
+  openSheet('<h3>وارد السكانر</h3>'
+    +'<div class="muted" style="margin:-6px 0 10px;font-size:12px">الورق اللي اتسكن ولسه محتاج يتوجّه لملفه.</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="scF">'
+    +'<button class="chip on" data-sf="new">محتاج توجيه</button>'
+    +'<button class="chip" data-sf="filed">اتوجّه</button>'
+    +'<button class="chip" data-sf="all">الكل</button></div>'
+    +'<div id="scBox"><div class="skel"></div><div class="skel"></div></div>'
+    +actMini([{ label:"قفل", on:"closeSheet()" }]));
+  document.querySelectorAll("#scF [data-sf]").forEach(b=>b.onclick=()=>{
+    _scFilter=b.dataset.sf;
+    document.querySelectorAll("#scF [data-sf]").forEach(x=>x.className="chip");
+    b.className="chip on"; paintScanInbox();
+  });
+  await paintScanInbox();
+}
+
+async function paintScanInbox(){
+  const box=$("scBox"); if(!box) return;
+  try{
+    let q=sb.from("os_scan_board").select("*").order("scanned_at",{ascending:false}).limit(60);
+    if(_scFilter!=="all") q=q.eq("status",_scFilter);
+    const { data, error }=await q; if(error) throw error;
+    const R=data||[];
+    if(!R.length){ box.innerHTML='<div class="empty">مفيش ورق هنا.</div>'; return; }
+    box.innerHTML=R.map(x=>{
+      const filed=x.status==="filed";
+      return '<div class="card flat" style="border-right:4px solid '
+        +(filed?"var(--green-d)":(x.guess_code?"#B45309":"var(--blue)"))+'">'
+        +'<div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">'
+        +'<b style="flex:1;min-width:0;font-size:12.5px;word-break:break-all">'+esc(x.file_name||"")+'</b>'
+        +(filed?'<span class="badge" style="background:#E8F5E9;color:#2E7D32;font-size:10px">اتوجّه</span>':'')+'</div>'
+        +'<div class="meta" style="margin-top:4px">'
+        +(x.pages?'<span>'+x.pages+' ورقة</span><span class="dot"></span>':'')
+        +'<span>'+(x.size_mb||0)+' ميجا</span>'
+        +'<span class="dot"></span><span>'+relativeTime(x.scanned_at)+'</span>'
+        +(filed&&x.filed_by_name?'<span class="dot"></span><span>'+esc(x.filed_by_name)+'</span>':'')
+        +'</div>'
+        +(filed
+          ?'<div class="muted" style="font-size:11.5px;margin-top:4px">راح لملف: <b>'+esc(x.job_label||"—")+'</b></div>'
+          :(x.guess_code
+             ?'<div style="font-size:11.5px;margin-top:5px;color:#B45309">النظام خمّن: <b>'+esc(x.guess_code)+'</b> — راجعه قبل ما توافق</div>'
+             :'<div class="muted" style="font-size:11.5px;margin-top:5px">محتاج تحدّد الملف بنفسك</div>'))
+        +'<div class="act-mini" style="margin-top:8px">'
+        +(x.url?'<button class="btn" onclick="window.open(\''+esc(x.url)+'\',\'_blank\')">شوف</button>':'')
+        +(!filed?'<button class="btn" onclick="openScanFile(\''+x.id+'\')">وجّه لملف</button>':'')
+        +(!filed&&x.project_id?'<button class="btn" onclick="scanQuickFile(\''+x.id+'\',\''+x.project_id+'\')">وافق على التخمين</button>':'')
+        +'</div></div>';
+    }).join("");
+  }catch(e){ box.innerHTML=failBox("معرفناش نجيبها.",paintScanInbox); }
+}
+
+async function scanQuickFile(sid, pid){
+  confirmDlg("توجّه الورقة للملف اللي النظام خمّنه؟", async()=>{
+    const { error }=await sb.rpc("os_scan_file_it",{ p_scan:sid, p_project:pid, p_folder:null });
+    if(error){ toast(error.message,"bad"); return; }
+    toast("اتوجّهت \u2713","ok"); paintScanInbox();
+  });
+}
+
+async function openScanFile(sid){
+  let folders='';
+  try{
+    const { data:fo }=await sb.from("os_file_folders").select("code,name").order("sort_order");
+    folders=(fo||[]).map(f=>'<option value="'+esc(f.code)+'">'+esc(f.name)+'</option>').join("");
+  }catch(e){}
+  openSheet('<h3>وجّه الورقة لملفها</h3>'
+    +'<div class="field"><label>دوّر على الملف</label>'
+    +'<input id="sfQ" placeholder="كود الملف، رقم القطعة، اسم العميل…" oninput="sfSearch(this.value)"/></div>'
+    +'<div id="sfHits" style="max-height:200px;overflow:auto;margin-bottom:10px"></div>'
+    +'<div id="sfPicked"></div>'
+    +'<div class="field"><label>اسم المرفق (اختياري)</label><input id="sfTitle" placeholder="سيب فاضي عشان ياخد اسم الملف المسكون"/></div>'
+    +(folders?'<div class="field"><label>المجلد</label><select id="sfFolder">'+folders+'</select></div>':'')
+    +actGroup("",[{ label:"وجّه", kind:"green", lead:true, id:"sfGo" }])
+    +actMini([{ label:"رجوع", on:"openScanInbox()" }]));
+  window._SF_SCAN=sid; window._SF_JOB=null;
+  // نجيب التخمين لو موجود
+  try{
+    const { data }=await sb.from("os_scan_board").select("*").eq("id",sid).maybeSingle();
+    if(data){
+      $("sfQ").value=data.guess_code||data.file_name||"";
+      if(data.project_id) sfPick(data.project_id, data.guess_code||"");
+      await sfSearch($("sfQ").value);
+    }
+  }catch(e){}
+  $("sfGo").onclick=()=>withLoading($("sfGo"),"بيوجّه…", async()=>{
+    if(!window._SF_JOB){ toast("اختار الملف الأول","bad"); return; }
+    const { error }=await sb.rpc("os_scan_file_it",{
+      p_scan:sid, p_project:window._SF_JOB,
+      p_title:$("sfTitle").value.trim()||null,
+      p_folder:($("sfFolder")&&$("sfFolder").value)||null });
+    if(error){ toast(error.message,"bad"); return; }
+    toast("اتوجّهت \u2713","ok"); track("action","scan_filed"); openScanInbox();
+  });
+}
+
+let _sfT=null;
+function sfSearch(q){
+  clearTimeout(_sfT);
+  _sfT=setTimeout(async()=>{
+    const box=$("sfHits"); if(!box) return;
+    box.innerHTML='<div class="skel"></div>';
+    try{
+      const { data, error }=await sb.rpc("os_find_job",{ q:q||"", p_limit:15 });
+      if(error) throw error;
+      const R=data||[];
+      if(!R.length){ box.innerHTML='<div class="empty" style="padding:10px">مفيش ملف مطابق.</div>'; return; }
+      box.innerHTML=R.map(x=>'<button class="card flat" onclick="sfPick(\''+x.project_id+'\',\''
+        +esc((x.job_code||"").replace(/'/g,""))+'\')" style="width:100%;text-align:right;cursor:pointer;padding:8px 10px;margin-bottom:5px">'
+        +'<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">'
+        +(x.job_code?'<span class="badge" style="background:#eef2f7;color:#0D47A1;font-weight:800;font-size:10px">'+esc(x.job_code)+'</span>':'')
+        +'<b style="flex:1;min-width:0;font-size:12px">'+esc(x.job_name||"")+'</b></div>'
+        +'<div class="meta" style="margin-top:3px;font-size:10.5px">'
+        +(x.parcel_no?'<span>قطعة '+esc(x.parcel_no)+'</span>':'')
+        +(x.client_name?'<span class="dot"></span><span>'+esc(x.client_name)+'</span>':'')
+        +'</div></button>').join("");
+    }catch(e){ box.innerHTML=failBox("معرفناش ندوّر.",()=>sfSearch(q)); }
+  }, 260);
+}
+
+function sfPick(id, code){
+  window._SF_JOB=id;
+  $("sfPicked").innerHTML='<div class="card flat" style="border-right:4px solid var(--green-d);background:#F1F8E9;padding:8px 11px">'
+    +'<b style="font-size:12.5px">الملف: '+esc(code||"اتحدّد")+'</b></div>';
+  $("sfHits").innerHTML="";
+}
+
 /* ═══════════ الأراضي — القطعة جواها ملفات، والملف جواه مرفقات ═══════════ */
 async function openParcels(){
   openSheet('<h3>الأراضي</h3>'
@@ -799,7 +930,8 @@ async function openOfficeHub(){
         { label:"اطلب تحصيل", kind:"", on:"openCollectionNew()" },
         { label:"اطلب دفع", kind:"", on:"openPaymentReqNew()" },
         { label:"طلبات الدفع", kind:"", on:"openPaymentReqs()" },
-        { label:"طلبات التحصيل", kind:"", on:"openCollections()" }])
+        { label:"طلبات التحصيل", kind:"", on:"openCollections()" },
+        { label:"وارد السكانر", kind:"", on:"openScanInbox()" }])
     +actGroup("الشغل",[
         { label:"أمر شغل جديد", kind:"green", lead:true, on:"openWorkOrderNew()" },
         { label:"أوامر الشغل", kind:"", on:"openWorkOrders()" },
@@ -6913,6 +7045,7 @@ function wireHome(el){
     else if(q==="collect"){ openCollections(); }
     else if(q==="officehub"){ openOfficeHub(); }
     else if(q==="parcels"){ openParcels(); }
+    else if(q==="scaninbox"){ openScanInbox(); }
     else if(q==="upload"){ openUploadTo(); }
     else if(q==="payreq"){ openPaymentReqs(); }
     else if(q==="smart"){ switchTab("tasks"); setTimeout(openSmartTask,90); }
