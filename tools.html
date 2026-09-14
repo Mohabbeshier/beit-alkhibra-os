@@ -471,7 +471,7 @@ async function boot(){
   let session=null;
   try{ const r=await Promise.race([ sb.auth.getSession(), new Promise(function(res){ setTimeout(function(){ res({data:{session:null}}); },5000); }) ]); session=r.data.session; }catch(e){}
   try{
-    if(session && session.user){ await startApp(session.user); }
+    if(session && session.user){ await startApp(session.user); refreshCostCats(); }
     else{ showLogin(); }
   }catch(_e){ showLogin(); }
   clearTimeout(_bootSafety);
@@ -2846,7 +2846,15 @@ function openContractNew(){
 }
 /* ===================== المالية — نظام محاسبة المشاريع ===================== */
 const PAY_STATUS={planned:["مخططة","b-grey"],due:["مستحقة — جاهزة للفوترة","b-amber"],invoiced:["مفوترة","b-blue"],partial:["محصّلة جزئيًا","#7C3AED"],paid:["محصّلة ✓","b-green"],cancelled:["ملغية","b-grey"]};
-const COST_CAT={salary:"أجور",subcontractor:"مقاول باطن",permit:"رسوم ورخص",materials:"مواد وطباعة",transport:"انتقالات",other:"أخرى"};
+let COST_CAT={permit:"رسوم حكومية وتراخيص",subcontractor:"مقاول باطن",materials:"مواد ومستلزمات",
+  transport:"انتقالات ومواصلات",salary:"رواتب وأجور",rent:"إيجارات",utilities:"مرافق وخدمات",
+  admin:"مصروفات إدارية",other:"مصروفات أخرى"};
+async function refreshCostCats(){
+  try{
+    const { data }=await sb.from("os_fin_categories").select("code,name").eq("kind","expense").eq("active",true).order("sort_order");
+    if(data&&data.length){ const m={}; data.forEach(c=>{ m[c.code||c.name]=c.name; }); COST_CAT=m; }
+  }catch(e){}
+}
 const egp=(n)=>Number(n||0).toLocaleString("en")+" ج";
 function isFinanceUser(){ return isOwnerOps()||PROFILE.dept==="finance"; }
 /* ═══════════ البحث الموحّد ═══════════ */
@@ -3413,21 +3421,28 @@ async function openProjectFinance(){
   }catch(e){ $("pfBox").innerHTML=failBox("معرفناش نجيب الربحية.",openProjectFinance); }
 }
 async function openPaymentNew(){
-  let prjOpts='<option value="">اختار المشروع</option>';
-  try{ const { data:prjs }=await sb.from("os_projects").select("id,name,client_id").eq("status","open").order("created_at",{ascending:false}).limit(100);
-    prjOpts+=(prjs||[]).map(p=>'<option value="'+p.id+'" data-cl="'+(p.client_id||"")+'">'+esc(p.name)+'</option>').join(""); }catch(e){}
-  openSheet('<h3>دفعة جديدة</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">اربط الدفعة بمرحلة — والنظام هيفكّرك أول ما المشروع يوصلها.</div>'
-    +'<div class="field"><label>المشروع</label><select id="pyPrj">'+prjOpts+'</select></div>'
+  let prjOpts='<option value="">اختار الملف</option>';
+  let msOpts='<option value="">من غير ربط</option>';
+  try{
+    const [{ data:prjs },{ data:defs }]=await Promise.all([
+      sb.from("os_projects").select("id,job_code,name,client_id").neq("status","closed").order("created_at",{ascending:false}).limit(200),
+      sb.from("os_stage_defs").select("seq,name").order("seq")
+    ]);
+    prjOpts+=(prjs||[]).map(p=>'<option value="'+p.id+'" data-cl="'+(p.client_id||"")+'">'+esc((p.job_code?p.job_code+' — ':'')+p.name)+'</option>').join("");
+    msOpts+=(defs||[]).map(d=>'<option value="'+esc(d.name)+'">'+esc(d.seq+'. '+d.name)+'</option>').join("");
+  }catch(e){}
+  openSheet('<h3>دفعة جديدة</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">اربط الدفعة بمرحلة — والنظام هيفكّرك أول ما الملف يوصلها.</div>'
+    +'<div class="field"><label>الملف</label><select id="pyPrj">'+prjOpts+'</select></div>'
     +'<div class="field"><label>وصف الدفعة</label><input id="pyTitle" placeholder="مثلاً: دفعة الرسومات التنفيذية (30%)"/></div>'
-    +'<div class="field"><label>مربوطة بمرحلة</label><select id="pyMs"><option value="">من غير ربط</option><option value="جديد">جديد</option><option value="تسعير">تسعير</option><option value="تنفيذ">تنفيذ</option><option value="تسليم">تسليم</option></select></div>'
+    +'<div class="field"><label>مربوطة بمرحلة</label><select id="pyMs">'+msOpts+'</select></div>'
     +'<div class="field"><label>المبلغ (ج)</label><input id="pyAmt" type="number" min="0" inputmode="numeric"/></div>'
     +'<div class="field"><label>الحالة</label><select id="pySt"><option value="planned">مخططة (لسه</option><option value="due">مستحقة دلوقتي</option></select></div>'
     +'<div class="field"><label>تاريخ الاستحقاق (اختياري)</label><input id="pyDue" type="date"/></div>'
     +'<div class="row-actions"><button class="btn green" id="pyGo">أضف الدفعة</button><button class="btn ghost" onclick="openFinance()">إلغاء</button></div>');
-  addMicTo("pyTitle"); makeSearchable("pyPrj","دوّر باسم المشروع…");
+  addMicTo("pyTitle"); makeSearchable("pyPrj","دوّر بكود أو اسم الملف…");
   $("pyGo").onclick=async()=>{
     const prj=$("pyPrj").value, title=$("pyTitle").value.trim(), amt=parseFloat($("pyAmt").value);
-    if(!prj){ toast("اختار المشروع","bad"); return; }
+    if(!prj){ toast("اختار الملف","bad"); return; }
     if(!title){ toast("اكتب وصف الدفعة","bad"); return; }
     if(!amt||amt<=0){ toast("اكتب المبلغ","bad"); return; }
     const btn=$("pyGo"); btn.disabled=true; btn.textContent="بيضيف…";
@@ -3439,26 +3454,41 @@ async function openPaymentNew(){
   };
 }
 async function openCostNew(){
-  let prjOpts='<option value="">اختار المشروع</option>';
-  try{ const { data:prjs }=await sb.from("os_projects").select("id,name").eq("status","open").order("created_at",{ascending:false}).limit(100);
-    prjOpts+=(prjs||[]).map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join(""); }catch(e){}
-  openSheet('<h3>سجّل مصروف على مشروع</h3>'
-    +'<div class="field"><label>المشروع</label><select id="csPrj">'+prjOpts+'</select></div>'
-    +'<div class="field"><label>البند</label><input id="csTitle" placeholder="مثلاً: أتعاب مهندس إنشائي"/></div>'
-    +'<div class="field"><label>التصنيف</label><select id="csCat">'+Object.entries(COST_CAT).map(([k,v])=>'<option value="'+k+'">'+v+'</option>').join("")+'</select></div>'
+  /* المصروف نوعين: على ملف (رسوم، مقاول) أو عام (إيجار، كهرباء، رواتب) */
+  let prjOpts='<option value="">\u2014 مصروف عام (مش على ملف) \u2014</option>';
+  let catOpts='';
+  try{
+    const [{ data:prjs },{ data:cats }]=await Promise.all([
+      sb.from("os_projects").select("id,job_code,name").neq("status","closed").order("created_at",{ascending:false}).limit(200),
+      sb.from("os_fin_categories").select("code,name").eq("kind","expense").eq("active",true).order("sort_order")
+    ]);
+    prjOpts+=(prjs||[]).map(p=>'<option value="'+p.id+'">'+esc((p.job_code?p.job_code+' — ':'')+p.name)+'</option>').join("");
+    catOpts=(cats||[]).map(c=>'<option value="'+esc(c.code||c.name)+'">'+esc(c.name)+'</option>').join("");
+  }catch(e){}
+  if(!catOpts) catOpts=Object.entries(COST_CAT).map(([k,v])=>'<option value="'+k+'">'+v+'</option>').join("");
+  openSheet('<h3>سجّل مصروف</h3>'
+    +'<div class="muted" style="margin:-6px 0 12px;font-size:12px">لو المصروف على ملف معيّن اختاره — ولو مصروف عام (إيجار، كهرباء، رواتب) سيبه زي ما هو.</div>'
+    +'<div class="field"><label>على ملف؟</label><select id="csPrj">'+prjOpts+'</select></div>'
+    +'<div class="field"><label>البند</label><input id="csTitle" placeholder="مثلاً: رسوم جهاز المدينة"/></div>'
+    +'<div class="field"><label>التصنيف</label><select id="csCat">'+catOpts+'</select></div>'
     +'<div class="field"><label>المبلغ (ج)</label><input id="csAmt" type="number" min="0" inputmode="numeric"/></div>'
     +'<div class="field"><label>تاريخ الصرف</label><input id="csDate" type="date" value="'+todayStr()+'"/></div>'
-    +'<div class="row-actions"><button class="btn green" id="csGo">سجّل المصروف</button><button class="btn ghost" onclick="openFinance()">إلغاء</button></div>');
-  addMicTo("csTitle"); makeSearchable("csPrj","دوّر باسم المشروع…"); allowCustom("csCat","تصنيف تاني — اكتبه");
+    +'<div class="row-actions"><button class="btn green" id="csGo">سجّل المصروف</button>'
+    +'<button class="btn ghost" onclick="openFinance()">إلغاء</button></div>');
+  addMicTo("csTitle"); makeSearchable("csPrj","دوّر بكود أو اسم الملف…");
   $("csGo").onclick=async()=>{
-    const prj=$("csPrj").value, title=$("csTitle").value.trim(), amt=parseFloat($("csAmt").value);
-    if(!prj){ toast("اختار المشروع","bad"); return; }
+    const prj=$("csPrj").value||null, title=$("csTitle").value.trim(), amt=parseFloat($("csAmt").value);
     if(!title){ toast("اكتب البند","bad"); return; }
     if(!amt||amt<=0){ toast("اكتب المبلغ","bad"); return; }
     const btn=$("csGo"); btn.disabled=true; btn.textContent="بيسجّل…";
-    const { error }=await sb.from("os_project_costs").insert({ project_id:prj, title, category:readSelect("csCat"), amount:amt, spent_on:$("csDate").value||todayStr(), created_by:ME.id });
-    if(error){ toast("معرفناش نسجّل: "+error.message,"bad"); btn.disabled=false; btn.textContent="سجّل المصروف"; return; }
-    toast("المصروف اتسجّل ✓","ok"); openFinance();
+    const { error }=await sb.from("os_project_costs").insert({ project_id:prj, title,
+      category:readSelect("csCat"), amount:amt, spent_on:$("csDate").value||todayStr(), created_by:ME.id });
+    if(error){
+      const m=error.message||"";
+      toast(m.includes('مقفلة')?'الفترة المالية مقفلة':("معرفناش نسجّل: "+m),"bad");
+      btn.disabled=false; btn.textContent="سجّل المصروف"; return;
+    }
+    toast(prj?"المصروف اتسجّل على الملف \u2713":"المصروف العام اتسجّل \u2713","ok"); openFinance();
   };
 }
 /* ===== بينتهي قريب — تدرج 30/60/90 يوم (معيار عالمي) ===== */
