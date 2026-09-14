@@ -406,6 +406,58 @@ const HELP_TEXT={
   decisions:"سجل القرارات الإدارية المهمة بتاريخها ومين اتخذها.",
   meeting:"تقرير اجتماع — بتسجّل المحضر والقرارات والمهام اللي طلعت منه."
 };
+/* فحص سلامة الخزينة — لازم الفرق = صفر. لو مش صفر يبقى فيه حركة مش متقيّدة */
+async function paintTreasuryCheck(){
+  const box=$("trChk"); if(!box) return;
+  const egp=(n)=>Number(n||0).toLocaleString("en",{maximumFractionDigits:0})+" ج";
+  try{
+    const { data }=await sb.from("os_treasury_check").select("*").maybeSingle();
+    if(!data){ box.innerHTML=""; return; }
+    const diff=Number(data.diff||0);
+    if(Math.abs(diff)<0.01){
+      box.innerHTML='<div class="card flat" style="background:#F1F8F2;border-color:#A5D6A7;padding:9px 13px">'
+        +'<b style="font-size:12.5px;color:var(--green-d)">الخزينة مطابقة للدفاتر</b>'
+        +'<div class="muted" style="font-size:11px;margin-top:2px">كل حركة نقدية ليها قيد محاسبي</div></div>';
+    } else {
+      box.innerHTML='<div class="card flat" style="background:#FFF5F5;border-right:4px solid var(--red);padding:9px 13px">'
+        +'<b style="font-size:13px;color:var(--red)">تحذير: الخزينة مش مطابقة للدفاتر</b>'
+        +'<div style="font-size:12px;margin-top:4px">رصيد الخزينة: <b>'+egp(data.treasury_balance)+'</b>'
+        +' · الدفاتر: <b>'+egp(data.ledger_cash)+'</b> · الفرق: <b style="color:var(--red)">'+egp(diff)+'</b></div>'
+        +'<div class="muted" style="font-size:11px;margin-top:3px">فيه حركة نقدية اتسجّلت من غير قيد. راجع الدفاتر.</div></div>';
+    }
+  }catch(e){ box.innerHTML=""; }
+}
+
+/* المجلس الاستشاري — 10 مجالس و200 عضو كانوا مبنيين ومفيش طريق ليهم */
+async function openCouncils(){
+  openSheet('<h3>المجالس الاستشارية</h3>'
+    +'<div class="muted" style="margin:-6px 0 12px;font-size:12px">بيوت خبرة متخصصة — تقدر ترجعلها في أي قرار فني.</div>'
+    +'<div id="cnBox"><div class="skel"></div><div class="skel"></div></div>'
+    +actMini([{ label:"قفل", on:"closeSheet()" }]));
+  try{
+    const [cR,mR]=await Promise.all([
+      sb.from("os_councils").select("*").order("sort"),
+      sb.from("os_council_members").select("*").order("sort")
+    ]);
+    const cs=cR.data||[], ms=mR.data||[];
+    if(!cs.length){ $("cnBox").innerHTML='<div class="empty">مفيش مجالس.</div>'; return; }
+    $("cnBox").innerHTML=cs.map(c=>{
+      const mem=ms.filter(m=>String(m.council_id)===String(c.id));
+      return '<div class="card flat" style="border-right:4px solid '+esc(c.color||"var(--blue)")+'">'
+        +'<b style="font-size:13.5px">'+esc(c.name)+'</b>'
+        +(c.description?'<div class="muted" style="font-size:11.5px;margin-top:3px">'+esc(c.description)+'</div>':'')
+        +'<div class="muted" style="font-size:11px;margin-top:5px">'+mem.length+' عضو</div>'
+        +(mem.length?'<details style="margin-top:6px"><summary class="lnk" style="font-size:11.5px;cursor:pointer;list-style:none">شوف الأعضاء</summary>'
+          +'<div style="margin-top:6px">'+mem.map(m=>'<div style="display:flex;gap:8px;align-items:baseline;padding:4px 0;border-bottom:1px dashed var(--line);font-size:12.5px">'
+            +'<b style="flex:1">'+esc(m.name||"")+'</b>'
+            +(m.specialization?'<span class="muted" style="font-size:11px">'+esc(m.specialization)+'</span>':'')
+            +(m.years_exp?'<span class="muted" style="font-size:11px;white-space:nowrap">'+m.years_exp+' سنة</span>':'')
+            +'</div>').join("")+'</div></details>':'')
+        +'</div>';
+    }).join("");
+  }catch(e){ $("cnBox").innerHTML=failBox("معرفناش نجيبها.",openCouncils); }
+}
+
 /* استخدام الأزرار — الدليل اللي بنقرر بيه نشيل إيه */
 async function openButtonUsage(){
   openSheet('<h3>استخدام الأزرار</h3>'
@@ -2510,6 +2562,7 @@ async function openAdminHub(){
         { id:"ahDec", label:"القرارات", kind:"" },
         { id:"ahMin", label:"المحاضر", kind:"" },
         { id:"ahPrj", label:"بيان الأعمال", kind:"" },
+        { label:"المجالس الاستشارية", kind:"", on:"openCouncils()" },
         (isOwnerOps()?{ id:"ahCmp", label:"الشكاوى", kind:"" }:null)])
     +((isOwnerOps()||PROFILE.role==="owner")?actGroup("أدوات المالك",[
         (isOwnerOps()?{ id:"ahUsage", label:"تحليلات الاستخدام", kind:"ghost" }:null),
@@ -4810,7 +4863,7 @@ async function reopenPeriod(id){
 
 async function openFinance(){
   if(!canFinRead()&&PROFILE.role!=="manager"){ toast("الشاشة دي للمالية والإدارة","bad"); return; }
-  openSheet('<h3>المالية — نظرة شاملة</h3><div id="finBox"><div class="skel"></div><div class="skel"></div></div>'
+  openSheet('<h3>المالية — نظرة شاملة</h3><div id="trChk"></div><div id="finBox"><div class="skel"></div><div class="skel"></div></div>'
     +(isFinanceUser()?actGroup("تسجيل حركة",[
         { id:"finNewPay",  label:"دفعة جديدة", kind:"green", lead:true },
         { id:"finNewCost", label:"سجّل مصروف", kind:"" },
@@ -4841,6 +4894,7 @@ async function openFinance(){
   const np=$("finNewPay"); if(np) np.onclick=()=>openPaymentNew();
   const nc=$("finNewCost"); if(nc) nc.onclick=()=>openCostNew();
   await paintFinanceDash();
+  paintTreasuryCheck();
 }
 async function paintFinanceDash(){
   const box=$("finBox"); if(!box) return;
