@@ -772,7 +772,7 @@ function renderOwnerHome(d){
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:10px 2px 3px;opacity:.85">أنشئ بسرعة</div>
     <div class="row-actions" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب'+helpDot("newreq")+'</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك'+helpDot("smart")+'</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع'+helpDot("meeting")+'</button></div>
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:11px 2px 3px;opacity:.85">روح لـ</div>
-    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات'+helpDot("sales")+'</button><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال'+helpDot("projects")+'</button><button class="btn ghost sm" data-quick="adminhub">الإدارية'+helpDot("adminhub")+'</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="contracts">العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات'+helpDot("decisions")+'</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير'+helpDot("roadmap")+'</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام'+helpDot("syshealth")+'</button>':""}</div>`;
+    <div class="row-actions" style="margin-top:0"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال'+helpDot("projects")+'</button><button class="btn ghost sm" data-quick="sales">المبيعات'+helpDot("sales")+'</button><button class="btn ghost sm" data-quick="adminhub">الإدارية'+helpDot("adminhub")+'</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="contracts">العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات'+helpDot("decisions")+'</button>':""}<button class="btn ghost sm" data-quick="roadmap" data-more="1">خطة التطوير'+helpDot("roadmap")+'</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام'+helpDot("syshealth")+'</button>':""}<button class="btn ghost sm" id="moreBtn" onclick="toggleMore(this)" style="opacity:.7">كل الأقسام ⌄</button></div>`;
   if(d.evs.length){
     body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   }
@@ -808,7 +808,7 @@ function renderOpsHome(d){
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:10px 2px 3px;opacity:.85">أنشئ بسرعة</div>
     <div class="row-actions" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب'+helpDot("newreq")+'</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك'+helpDot("smart")+'</button><button class="btn ghost sm" data-quick="event">موعد'+helpDot("event")+'</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع'+helpDot("meeting")+'</button></div>
     <div class="muted" style="font-size:10.5px;font-weight:800;margin:11px 2px 3px;opacity:.85">روح لـ</div>
-    <div class="row-actions" style="margin-top:0"><button class="btn ghost sm" data-quick="sales">المبيعات'+helpDot("sales")+'</button><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال'+helpDot("projects")+'</button><button class="btn ghost sm" data-quick="adminhub">الإدارية'+helpDot("adminhub")+'</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="contracts">العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات'+helpDot("decisions")+'</button>':""}<button class="btn ghost sm" data-quick="roadmap">خطة التطوير'+helpDot("roadmap")+'</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام'+helpDot("syshealth")+'</button>':""}</div>`;
+    <div class="row-actions" style="margin-top:0"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال'+helpDot("projects")+'</button><button class="btn ghost sm" data-quick="sales">المبيعات'+helpDot("sales")+'</button><button class="btn ghost sm" data-quick="adminhub">الإدارية'+helpDot("adminhub")+'</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="contracts">العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات'+helpDot("decisions")+'</button>':""}<button class="btn ghost sm" data-quick="roadmap" data-more="1">خطة التطوير'+helpDot("roadmap")+'</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام'+helpDot("syshealth")+'</button>':""}<button class="btn ghost sm" id="moreBtn" onclick="toggleMore(this)" style="opacity:.7">كل الأقسام ⌄</button></div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   body+='<div id="presBox"></div><div id="wwBox"></div><div id="wlBox"></div><div id="activityBox"></div>';
   el.innerHTML=body;
@@ -1598,6 +1598,7 @@ async function openProjects(){
       +'<div id="pjHint" class="muted" style="font-size:11.5px;margin:2px 0 8px"></div>'
       +'<div class="row-actions"><button class="btn green" id="pjGo">افتح بيان الأعمال</button></div>':"")
     +'<button class="btn sm" style="margin-top:10px" onclick="openFind()">\ud83d\udd0d بحث في الملفات والقطع</button>'
+    +'<button class="btn ghost sm" style="margin-top:10px" onclick="openArchive()">الأرشيف</button>'
     +((isOwnerOps()||PROFILE.role==="manager")?'<button class="btn sm" style="margin-top:10px" onclick="openTeamLoad()">حِمل الفريق وأداء المراحل</button>':'')
     +'<button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
   if(canAddPrj){
@@ -2859,6 +2860,29 @@ async function refreshCostCats(){
 }
 const egp=(n)=>Number(n||0).toLocaleString("en")+" ج";
 function isFinanceUser(){ return isOwnerOps()||PROFILE.dept==="finance"; }
+let _moreOpen=false;
+function toggleMore(btn){
+  _moreOpen=!_moreOpen;
+  document.querySelectorAll('[data-quick]').forEach(b=>{
+    const keep=["projects","sales","myday","newreq","adminhub","finance"];
+    if(keep.includes(b.dataset.quick)) return;
+    b.style.display=_moreOpen?"":"none";
+  });
+  if(btn) btn.textContent=_moreOpen?"أقل ⌃":"كل الأقسام ⌄";
+}
+document.addEventListener("DOMContentLoaded",()=>{
+  const mo=new MutationObserver(()=>{ if(document.querySelector('[data-quick="syshealth"]')) applyQuickCollapse(); });
+  mo.observe(document.body,{childList:true,subtree:true});
+});
+function applyQuickCollapse(){
+  if(_moreOpen) return;
+  document.querySelectorAll('[data-quick]').forEach(b=>{
+    const keep=["projects","sales","myday","newreq","adminhub","finance"];
+    if(!keep.includes(b.dataset.quick)) b.style.display="none";
+  });
+  const mb=document.getElementById("moreBtn"); if(mb) mb.style.display="";
+}
+
 /* ═══════════ بيان الأعمال ٣٦٠ ═══════════ */
 async function paintJob360(id, mountId){
   const box=$(mountId); if(!box) return;
@@ -2893,7 +2917,11 @@ async function paintJob360(id, mountId){
         +'<span class="dot"></span><span>'+esc(j.area||"—")+'</span>'
         +(j.land_code?'<span class="dot"></span><span>كود الأرض '+esc(j.land_code)+'</span>':'')
         +'</div>'
-        +'<button class="btn ghost sm" style="margin-top:7px" onclick="openParcelHistory(\''+j.parcel_id+'\')">كل ملفات القطعة دي</button>'
+        +'<div class="row-actions" style="margin-top:7px">'
+        +'<button class="btn ghost sm" onclick="openParcelHistory(\''+j.parcel_id+'\')">كل ملفات القطعة</button>'
+        +'<button class="btn ghost sm" onclick="newJobOnParcel(\''+j.parcel_id+'\',\''+esc(j.parcel_code||"")+'\')">\u002b ملف جديد عليها</button>'
+        +((isOwnerOps()||isFinanceUser())&&j.status==="closed"?'<button class="btn ghost sm" onclick="archiveJob(\''+id+'\',\''+esc(j.job_code||"")+'\')">أرشف</button>':'')
+        +'</div>'
         :'<div class="muted" style="font-size:11.5px;margin-top:4px">مفيش قطعة مربوطة</div>')
       +'</div>';
 
@@ -2957,6 +2985,62 @@ async function paintJob360(id, mountId){
     box.innerHTML=h;
   }catch(e){ box.innerHTML='<div class="empty">تعذّر تحميل ملخص الملف.</div>'; }
 }
+async function archiveJob(id, code){
+  if(!confirm("تأرشف "+(code||"الملف")+"؟\nهيختفي من القوايم ويفضل في البحث والتاريخ.")) return;
+  const { error }=await sb.rpc("os_archive_job",{ p_project:id, p_undo:false });
+  if(error){ toast(error.message,"bad"); return; }
+  toast("اتأرشف \u2713","ok"); closeSheet(); openProjects();
+}
+async function unarchiveJob(id){
+  const { error }=await sb.rpc("os_archive_job",{ p_project:id, p_undo:true });
+  if(error){ toast(error.message,"bad"); return; }
+  toast("رجع للقوايم \u2713","ok"); openArchive();
+}
+async function openArchive(){
+  openSheet('<h3>أرشيف بيان الأعمال</h3><div id="arcBox"><div class="skel"></div></div>'
+    +'<button class="btn ghost" style="margin-top:10px" onclick="openProjects()">رجوع</button>');
+  try{
+    const { data }=await sb.from("os_jobs_archived").select("*").order("archived_at",{ascending:false}).limit(60);
+    const R=data||[];
+    if(!R.length){ $("arcBox").innerHTML='<div class="empty">الأرشيف فاضي.</div>'; return; }
+    $("arcBox").innerHTML=R.map(x=>
+      '<div class="card flat" style="margin-bottom:8px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+      +'<b style="font-size:13px;flex:1;min-width:0">'+esc(x.name||"—")+'</b>'
+      +'<span class="badge" style="background:#eef2f7;color:#0D47A1;font-weight:800">'+esc(x.job_code||"—")+'</span></div>'
+      +'<div class="meta" style="margin-top:4px"><span>'+esc(x.client_name||"—")+'</span>'
+      +(x.parcel_code?'<span class="dot"></span><span>'+esc(x.parcel_code)+'</span>':'')
+      +'<span class="dot"></span><span>محصّل '+egp(x.collected)+'</span>'
+      +(x.archived_at?'<span class="dot"></span><span>أُرشف '+fmtDate(x.archived_at)+'</span>':'')+'</div>'
+      +'<div class="row-actions" style="margin-top:7px">'
+      +'<button class="btn ghost sm" onclick="openProjectDetail(\''+x.project_id+'\')">افتح</button>'
+      +(isOwnerOps()||isFinanceUser()?'<button class="btn sm" onclick="unarchiveJob(\''+x.project_id+'\')">رجّعه</button>':'')
+      +'</div></div>').join("");
+  }catch(e){ $("arcBox").innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
+}
+async function newJobOnParcel(parcelId, parcelCode){
+  let svcOpts='';
+  try{ const { data }=await sb.from("os_service_types").select("code,name").eq("active",true).order("sort_order");
+    svcOpts=(data||[]).map(x=>'<option value="'+x.code+'">'+esc(x.name)+'</option>').join(""); }catch(e){}
+  openSheet('<h3>ملف جديد على '+esc(parcelCode||"القطعة")+'</h3>'
+    +'<div class="muted" style="margin:-6px 0 12px;font-size:12px">الجهاز والمنطقة والعميل هيتاخدوا من القطعة تلقائي.</div>'
+    +'<div class="field"><label>نوع الملف</label><select id="npSvc">'+svcOpts+'</select></div>'
+    +'<div class="field"><label>اسم الملف</label><input id="npName" placeholder="مثلاً: إنشاءات الفيلا"/></div>'
+    +'<div class="field"><label>القيمة (جنيه — اختياري)</label><input id="npVal" type="number" inputmode="numeric" min="0"/></div>'
+    +'<div class="row-actions"><button class="btn green" id="npGo">افتح الملف</button>'
+    +'<button class="btn ghost" onclick="openParcelHistory(\''+parcelId+'\')">إلغاء</button></div>');
+  addMicTo("npName");
+  $("npGo").onclick=async()=>{
+    const nm=$("npName").value.trim(); if(!nm){ toast("اكتب اسم الملف","bad"); return; }
+    const b=$("npGo"); b.disabled=true;
+    const { data, error }=await sb.rpc("os_new_job_on_parcel",{
+      p_parcel:parcelId, p_name:nm, p_service:$("npSvc").value||"O",
+      p_value:parseFloat($("npVal").value)||null, p_dept:PROFILE.dept||null });
+    if(error){ toast(error.message,"bad"); b.disabled=false; return; }
+    toast("الملف اتفتح \u2713","ok"); openProjectDetail(data);
+  };
+}
+
 async function buildPlan(id){
   const { data:p }=await sb.from("os_projects").select("value_egp,name").eq("id",id).maybeSingle();
   let val=p&&p.value_egp;
@@ -3028,7 +3112,8 @@ async function runFind(q){
 /* ═══════════ تاريخ القطعة ═══════════ */
 async function openParcelHistory(pid){
   openSheet('<h3>تاريخ القطعة</h3><div id="phBox"><div class="skel"></div></div>'
-    +'<button class="btn ghost" style="margin-top:10px" onclick="openFind()">رجوع للبحث</button>');
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="phNew">\u002b ملف جديد على القطعة دي</button>'
+    +'<button class="btn ghost sm" onclick="openFind()">رجوع للبحث</button></div>');
   try{
     const { data }=await sb.from("os_parcel_history").select("*").eq("parcel_id",pid).order("opened_on");
     const R=data||[];
@@ -3063,6 +3148,7 @@ async function openParcelHistory(pid){
       });
     }
     $("phBox").innerHTML=h;
+    const nb=$("phNew"); if(nb) nb.onclick=()=>newJobOnParcel(pid, h0.parcel_code);
   }catch(e){ $("phBox").innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
 }
 
