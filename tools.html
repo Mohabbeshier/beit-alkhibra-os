@@ -414,6 +414,116 @@ const HELP_TEXT={
   decisions:"سجل القرارات الإدارية المهمة بتاريخها ومين اتخذها.",
   meeting:"تقرير اجتماع — بتسجّل المحضر والقرارات والمهام اللي طلعت منه."
 };
+/* ═══════════ مراحل إنهاء الملف ═══════════ */
+async function buildStages(id, force){
+  const go=async()=>{
+    const { data, error }=await sb.rpc("os_build_stages",{ p_project:id, p_force:!!force });
+    if(error){ toast(error.message,"bad"); return; }
+    if(data&&data.skipped){ toast("الملف فيه مراحل بالفعل","bad"); return; }
+    toast("اتبنى "+((data&&data.stages)||0)+" مرحلة \u2713","ok");
+    track("action","build_stages"); openProjectDetail(id);
+  };
+  if(force) confirmDlg("هيمسح المراحل الحالية ويبنيها من أول وجديد. متأكد؟", go); else go();
+}
+
+async function openAddStage(id){
+  if(!isOwnerOps() && PROFILE.role!=="manager"){ toast("إضافة المراحل للإدارة","bad"); return; }
+  let afterOpts='<option value="">في آخر المسار</option>';
+  let staffOpts='<option value="">من غير تحديد شخص</option>';
+  try{
+    const [{ data:stg },{ data:ppl }]=await Promise.all([
+      sb.from("os_job_stages").select("stage_seq,stage_name").eq("project_id",id).order("stage_seq"),
+      sb.from("os_profiles").select("id,name,dept").order("name")
+    ]);
+    (stg||[]).forEach(x=>{ afterOpts+='<option value="'+x.stage_seq+'">بعد: '+esc(x.stage_name)+'</option>'; });
+    (ppl||[]).filter(p=>p.id!==ME.id||true).forEach(p=>{
+      staffOpts+='<option value="'+p.id+'">'+esc(p.name)+((DEPT_BY_KEY[p.dept]&&" — "+DEPT_BY_KEY[p.dept].name)||"")+'</option>'; });
+  }catch(e){}
+  openSheet('<h3>أضف مرحلة للملف</h3>'
+    +'<div class="muted" style="margin:-6px 0 10px;font-size:12px">المرحلة دي للملف ده بس — القالب مش هيتغيّر.</div>'
+    +'<div class="field"><label>اسم المرحلة</label><input id="asName" placeholder="مثلاً: تصاريح الحفر"/></div>'
+    +'<div class="field"><label>مكانها</label><select id="asAfter">'+afterOpts+'</select></div>'
+    +'<div class="field"><label>مسؤول عنها</label><select id="asWho">'+staffOpts+'</select></div>'
+    +'<div class="field"><label>لحد امتى</label><input id="asDue" type="date"/></div>'
+    +'<div class="field"><label>ملاحظة</label><input id="asNote" placeholder="اختياري"/></div>'
+    +actGroup("",[{ label:"أضف المرحلة", kind:"green", lead:true, id:"asGo" }])
+    +actMini([{ label:"إلغاء", on:"closeSheet()" }]));
+  $("asGo").onclick=()=>withLoading($("asGo"),"بيضيف…", async()=>{
+    const nm=$("asName").value.trim(); if(!nm){ toast("اكتب اسم المرحلة","bad"); return; }
+    const { error }=await sb.rpc("os_add_stage",{
+      p_project:id, p_name:nm,
+      p_after:$("asAfter").value?Number($("asAfter").value):null,
+      p_due:$("asDue").value||null, p_owner:$("asWho").value||null,
+      p_notes:$("asNote").value.trim()||null });
+    if(error){ toast(error.message,"bad"); return; }
+    toast("اتضافت \u2713","ok"); track("action","add_stage"); openProjectDetail(id);
+  });
+}
+
+/* قوالب المراحل — لكل خدمة مسارها */
+async function openStageTemplates(preSvc){
+  openSheet('<h3>قوالب المراحل</h3>'
+    +'<div class="muted" style="margin:-6px 0 10px;font-size:12px">كل خدمة ليها مسار مراحل خاص بيها. الملفات الجديدة بتتبني منه.</div>'
+    +'<div class="field"><label>الخدمة</label><select id="stSvc"></select></div>'
+    +'<div id="stBox"><div class="skel"></div></div>'
+    +(isOwnerOps()?actGroup("",[{ label:"أضف مرحلة للقالب", kind:"green", lead:true, on:"openAddStageTpl()" }]):"")
+    +actMini([{ label:"قفل", on:"closeSheet()" }]));
+  try{
+    const { data }=await sb.from("os_service_types").select("code,name").eq("active",true).order("sort_order");
+    $("stSvc").innerHTML=(data||[]).map(x=>'<option value="'+esc(x.code)+'"'
+      +((preSvc&&x.code===preSvc)?' selected':'')+'>'+esc(x.name)+'</option>').join("");
+    $("stSvc").onchange=paintStageTpl;
+    await paintStageTpl();
+  }catch(e){ $("stBox").innerHTML=failBox("معرفناش نجيبها.",()=>openStageTemplates(preSvc)); }
+}
+
+async function paintStageTpl(){
+  const box=$("stBox"), svc=$("stSvc")&&$("stSvc").value; if(!box||!svc) return;
+  box.innerHTML='<div class="skel"></div>';
+  try{
+    const { data }=await sb.from("os_stage_defs").select("*").eq("service_code",svc)
+      .eq("active",true).order("seq");
+    const R=data||[];
+    if(!R.length){ box.innerHTML='<div class="empty">الخدمة دي ملهاش مراحل لسه.</div>'; return; }
+    const tot=R.reduce((a,x)=>a+(+x.sla_days||0),0);
+    box.innerHTML='<div class="card flat" style="margin-bottom:8px;text-align:center">'
+      +'<b style="font-size:15px">'+R.length+' مرحلة</b>'
+      +'<div class="muted" style="font-size:11.5px">المدة المتوقعة للملف: '+tot+' يوم</div></div>'
+      +R.map(x=>'<div class="card flat" style="padding:9px 11px">'
+        +'<div style="display:flex;align-items:center;gap:9px">'
+        +'<span style="width:24px;height:24px;border-radius:50%;background:#eef2f7;color:var(--blue-d);'
+        +'display:inline-flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:800;flex:none">'+x.seq+'</span>'
+        +'<b style="flex:1;font-size:12.5px">'+esc(x.name)+'</b>'
+        +'<span class="muted" style="font-size:11px">'+(+x.sla_days||0)+' يوم</span></div></div>').join("");
+  }catch(e){ box.innerHTML=failBox("معرفناش نجيبها.",paintStageTpl); }
+}
+
+async function openAddStageTpl(){
+  if(!isOwnerOps()){ toast("تعديل القوالب للإدارة العليا","bad"); return; }
+  const svc=$("stSvc")&&$("stSvc").value; if(!svc){ toast("اختار الخدمة","bad"); return; }
+  let posOpts='<option value="">في آخر المسار</option>';
+  try{
+    const { data }=await sb.from("os_stage_defs").select("seq,name").eq("service_code",svc)
+      .eq("active",true).order("seq");
+    (data||[]).forEach(x=>{ posOpts+='<option value="'+x.seq+'">مكان: '+esc(x.name)+'</option>'; });
+  }catch(e){}
+  openSheet('<h3>مرحلة جديدة في القالب</h3>'
+    +'<div class="muted" style="margin:-6px 0 10px;font-size:12px">هتظهر في كل ملف جديد للخدمة دي. الملفات القديمة مش هتتأثر.</div>'
+    +'<div class="field"><label>اسم المرحلة</label><input id="stName" placeholder="مثلاً: شبكة الحريق"/></div>'
+    +'<div class="field"><label>مكانها</label><select id="stPos">'+posOpts+'</select></div>'
+    +'<div class="field"><label>المدة المتوقعة (يوم)</label><input id="stSla" type="number" min="1" value="5"/></div>'
+    +actGroup("",[{ label:"أضف للقالب", kind:"green", lead:true, id:"stGo" }])
+    +actMini([{ label:"رجوع", on:"openStageTemplates(\'"+svc+"\')" }]));
+  $("stGo").onclick=()=>withLoading($("stGo"),"بيضيف…", async()=>{
+    const nm=$("stName").value.trim(); if(!nm){ toast("اكتب اسم المرحلة","bad"); return; }
+    const { error }=await sb.rpc("os_add_stage_template",{
+      p_service:svc, p_name:nm, p_sla:Number($("stSla").value||5),
+      p_seq:$("stPos").value?Number($("stPos").value):null, p_owner_pos:"staff" });
+    if(error){ toast(error.message,"bad"); return; }
+    toast("اتضافت للقالب \u2713","ok"); openStageTemplates(svc);
+  });
+}
+
 /* ═══════════ ذاكرة التنقّل — الرجوع يرجّع لآخر شاشة مش للرئيسية ═══════════ */
 var _NAV=[], _CUR=null, _NAV_SILENT=false;
 
@@ -2671,6 +2781,18 @@ async function paintProjectDetail(id){
              :'')
           +'</div>';
       }).join("")+'</div>';
+      if(isOwnerOps()||PROFILE.role==="manager")
+        h+='<div class="act-mini" style="margin:-4px 0 12px">'
+          +'<button class="btn" onclick="openAddStage(\''+id+'\')">أضف مرحلة</button>'
+          +'<button class="btn" onclick="openStageTemplates(\''+esc(prj.service_code||"")+'\')">قالب الخدمة</button></div>';
+    } else if(isOwnerOps()||PROFILE.role==="manager"){
+      h+='<div class="sec-h">مراحل الملف <span class="ln"></span></div>'
+        +'<div class="card flat" style="border-right:4px solid #B45309">'
+        +'<b style="font-size:13px">الملف لسه مفيهوش مراحل</b>'
+        +'<div class="muted" style="font-size:12px;margin-top:3px">ابنيها من قالب الخدمة عشان تعرف الملف واقف فين وعند مين.</div>'
+        +'<div class="act-mini" style="margin-top:8px">'
+        +'<button class="btn" onclick="buildStages(\''+id+'\')">ابني المراحل</button>'
+        +'<button class="btn" onclick="openAddStage(\''+id+'\')">أضف مرحلة يدوي</button></div></div>';
     }
 
     /* معالم ومهام المشروع */
