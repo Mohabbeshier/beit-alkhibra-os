@@ -2884,6 +2884,109 @@ function applyQuickCollapse(){
   const mb=document.getElementById("moreBtn"); if(mb) mb.style.display="";
 }
 
+/* ═══════════ إضافة تصنيف من أي فورم ═══════════ */
+async function catOptions(kind){
+  try{
+    const { data }=await sb.from("os_fin_categories").select("code,name")
+      .eq("kind",kind).eq("active",true).order("sort_order");
+    return (data||[]).map(c=>'<option value="'+esc(c.code||c.name)+'">'+esc(c.name)+'</option>').join("")
+      +'<option value="__new">\u002b تصنيف جديد…</option>';
+  }catch(e){ return '<option value="other">أخرى</option>'; }
+}
+/* لو اتختار «جديد» بيطلب الاسم ويسجّله ويرجّع كوده */
+async function resolveCat(selId, kind){
+  const sel=$(selId); if(!sel) return null;
+  if(sel.value!=="__new") return sel.value||null;
+  const nm=prompt("اسم التصنيف الجديد؟"); if(!nm||!nm.trim()) return null;
+  let { data, error }=await sb.from("os_fin_categories")
+    .insert({ kind, name:nm.trim() }).select("code,name").single();
+  if(error){
+    const { data:ex }=await sb.from("os_fin_categories").select("code,name")
+      .eq("kind",kind).eq("name",nm.trim()).limit(1);
+    data = ex&&ex.length ? ex[0] : null;
+  }
+  if(!data){ toast("معرفناش نضيف التصنيف","bad"); return null; }
+  const v=data.code||data.name;
+  const o=document.createElement("option"); o.value=v; o.textContent=data.name;
+  sel.insertBefore(o, sel.lastElementChild); sel.value=v;
+  return v;
+}
+
+/* ═══════════ تصفية العهدة بالبنود ═══════════ */
+let _setLines=[];
+async function openSettleAdvance(profileId, staffName, balance){
+  if(!isFinanceUser()&&!isOwnerOps()){ toast("تصفية العهد للمالية","bad"); return; }
+  _setLines=[];
+  const [cats, prjs]=await Promise.all([
+    catOptions("expense"),
+    sb.from("os_projects").select("id,job_code,name").neq("status","closed").order("created_at",{ascending:false}).limit(200)
+  ]);
+  const prjOpts='<option value="">\u2014 مصروف عام \u2014</option>'
+    +((prjs.data)||[]).map(p=>'<option value="'+p.id+'">'+esc((p.job_code?p.job_code+' — ':'')+p.name)+'</option>').join("");
+  openSheet('<h3>تصفية عهدة '+esc(staffName||"")+'</h3>'
+    +'<div class="card flat" style="text-align:center"><b style="display:block;font-size:20px">'+egp(balance)+'</b>'
+    +'<span class="muted" style="font-size:11.5px">العهدة المفتوحة</span></div>'
+    +'<div class="sec-h">اتصرفت في إيه؟ <span class="ln"></span></div>'
+    +'<div id="slList"></div>'
+    +'<div class="card flat">'
+    +'<div class="field"><label>البند</label><input id="slTitle" placeholder="مثلاً: رسوم استمارة"/></div>'
+    +'<div class="field"><label>المبلغ</label><input id="slAmt" type="number" inputmode="numeric" min="1"/></div>'
+    +'<div class="field"><label>التصنيف</label><select id="slCat">'+cats+'</select></div>'
+    +'<div class="field"><label>على ملف؟</label><select id="slPrj">'+prjOpts+'</select></div>'
+    +'<button class="btn sm" id="slAdd">\u002b ضيف البند</button></div>'
+    +'<div class="field" style="margin-top:10px"><label>الباقي النقدي المرتجع</label>'
+    +'<input id="slCash" type="number" inputmode="numeric" min="0" value="0"/></div>'
+    +'<div id="slSum" class="muted" style="font-size:12px;margin:6px 0"></div>'
+    +'<div class="row-actions"><button class="btn green" id="slGo">صفّي العهدة</button>'
+    +'<button class="btn ghost" onclick="openAdvances()">إلغاء</button></div>');
+  addMicTo("slTitle"); makeSearchable("slPrj","دوّر بكود أو اسم الملف…");
+  const recalc=()=>{
+    const spent=_setLines.reduce((a,b)=>a+Number(b.amount||0),0);
+    const cash=parseFloat($("slCash").value)||0;
+    const left=Number(balance)-spent-cash;
+    $("slSum").innerHTML='مصروف: <b>'+egp(spent)+'</b> · باقي نقدي: <b>'+egp(cash)+'</b> · '
+      +(Math.abs(left)<0.01?'<b style="color:var(--green-d)">مظبوطة \u2713</b>'
+        :left>0?'<b style="color:#B45309">لسه '+egp(left)+' مش متفسّرة</b>'
+        :'<b style="color:var(--red)">زيادة '+egp(-left)+'</b>');
+  };
+  const paint=()=>{
+    $("slList").innerHTML=_setLines.length? _setLines.map((x,i)=>
+      '<div class="card flat" style="display:flex;align-items:center;gap:8px;padding:8px">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:12.5px">'+esc(x.title)+'</div>'
+      +'<div class="muted" style="font-size:11px">'+esc(x.catName||"")+(x.prjName?' · '+esc(x.prjName):' · عام')+'</div></div>'
+      +'<b style="font-size:12.5px">'+egp(x.amount)+'</b>'
+      +'<button class="btn ghost sm" onclick="rmSettleLine('+i+')" style="color:var(--red)">\u2715</button></div>').join("")
+      :'<div class="muted" style="font-size:12px;margin-bottom:6px">مفيش بنود لسه.</div>';
+    recalc();
+  };
+  window.rmSettleLine=(i)=>{ _setLines.splice(i,1); paint(); };
+  $("slCash").oninput=recalc;
+  $("slAdd").onclick=async()=>{
+    const t=$("slTitle").value.trim(), a=parseFloat($("slAmt").value);
+    if(!t){ toast("اكتب البند","bad"); return; }
+    if(!(a>0)){ toast("اكتب المبلغ","bad"); return; }
+    const cat=await resolveCat("slCat","expense");
+    const cs=$("slCat"), ps=$("slPrj");
+    _setLines.push({ title:t, amount:a, category:cat,
+      catName:cs.options[cs.selectedIndex]?cs.options[cs.selectedIndex].textContent:"",
+      project_id:ps.value||null,
+      prjName:ps.value?(ps.options[ps.selectedIndex]||{}).textContent:"" });
+    $("slTitle").value=""; $("slAmt").value=""; paint();
+  };
+  $("slGo").onclick=async()=>{
+    const cash=parseFloat($("slCash").value)||0;
+    if(!_setLines.length&&!(cash>0)){ toast("ضيف بنود أو باقي نقدي","bad"); return; }
+    const b=$("slGo"); b.disabled=true;
+    const { data, error }=await sb.rpc("os_settle_advance",{
+      p_profile:profileId,
+      p_lines:_setLines.map(x=>({ title:x.title, amount:x.amount, category:x.category, project_id:x.project_id })),
+      p_cash_back:cash, p_notes:null });
+    if(error){ toast(error.message,"bad"); b.disabled=false; return; }
+    toast("العهدة اتصفّت \u2713","ok"); _setLines=[]; openAdvances();
+  };
+  paint();
+}
+
 /* ═══════════ مشتملات بيان الأعمال ═══════════ */
 async function paintScope(id, mountId){
   const box=$(mountId); if(!box) return;
@@ -3616,9 +3719,9 @@ async function openTreasury(){
 async function openAdvances(){
   if(!isFinanceUser()&&!isOwnerOps()){ toast("الشاشة دي للمالية","bad"); return; }
   openSheet('<h3>العهد والسلف</h3><div id="advBox"><div class="skel"></div><div class="skel"></div></div>'
-    +'<div class="sec-h">حركة جديدة <span class="ln"></span></div>'
+    +'<div class="sec-h">اصرف عهدة جديدة <span class="ln"></span></div>'
     +'<div class="field"><label>الموظف</label><select id="advWho">'+PROFILES.filter(p=>!/^suspended/.test(p.email||"")).map(p=>'<option value="'+p.id+'">'+esc(p.name||p.email)+'</option>').join("")+'</select></div>'
-    +'<div class="field"><label>النوع</label><select id="advDir"><option value="issue">صرف عهدة</option><option value="settle">تصفية عهدة</option></select></div>'
+    +'<input type="hidden" id="advDir" value="issue"/>'
     +'<div class="field"><label>المبلغ (جنيه)</label><input id="advAmt" type="number" inputmode="decimal" min="1"/></div>'
     +'<div class="field"><label>البيان</label><input id="advNote" placeholder="مثلاً: مصاريف جهاز المدينة"/></div>'
     +'<div class="row-actions"><button class="btn green" id="advGo">حفظ</button><button class="btn ghost" onclick="openFinance()">رجوع للمالية</button></div>');
@@ -3645,9 +3748,11 @@ async function paintAdvances(){
     const B=(bal||[]).filter(x=>Number(x.outstanding||0)!==0);
     let h="";
     if(!B.length) h+='<div class="empty">مفيش عهد مفتوحة.</div>';
-    else h+='<div class="card flat">'+B.map(x=>'<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #eef2f7">'
-      +'<span style="font-size:13px;font-weight:700">'+esc(x.holder||"\u2014")+'</span>'
-      +'<span style="font-weight:800;color:'+(Number(x.outstanding)>0?'var(--red)':'var(--green-d)')+'">'+egp(x.outstanding)+'</span></div>').join("")+'</div>';
+    else h+='<div class="card flat">'+B.map(x=>'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #eef2f7">'
+      +'<span style="font-size:13px;font-weight:700;flex:1;min-width:0">'+esc(x.holder||"\u2014")+'</span>'
+      +'<span style="font-weight:800;flex:none;color:'+(Number(x.outstanding)>0?'var(--red)':'var(--green-d)')+'">'+egp(x.outstanding)+'</span>'
+      +(Number(x.outstanding)>0?'<button class="btn sm" style="flex:none" onclick="openSettleAdvance(\''+x.profile_id+'\',\''+esc(x.holder||"")+'\','+Number(x.outstanding)+')">صفّي</button>':'')
+      +'</div>').join("")+'</div>';
     if((mv||[]).length) h+='<div class="sec-h">آخر الحركات <span class="ln"></span></div><div class="card flat">'
       +mv.map(x=>'<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #eef2f7">'
       +'<span style="font-size:12px;flex:1;min-width:0">'+(x.direction==="issue"?"\u2b06 صرف":"\u2b07 تصفية")+' \u2014 '+esc(x.holder_name||"\u2014")+(x.notes?' \u00b7 '+esc(x.notes):'')+'</span>'
@@ -3808,12 +3913,14 @@ async function openPaymentNew(){
   openSheet('<h3>دفعة جديدة</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">اربط الدفعة بمرحلة — والنظام هيفكّرك أول ما الملف يوصلها.</div>'
     +'<div class="field"><label>الملف</label><select id="pyPrj">'+prjOpts+'</select></div>'
     +'<div class="field"><label>وصف الدفعة</label><input id="pyTitle" placeholder="مثلاً: دفعة الرسومات التنفيذية (30%)"/></div>'
+    +'<div class="field"><label>تصنيف الإيراد</label><select id="pyCat"></select></div>'
     +'<div class="field"><label>مربوطة بمرحلة</label><select id="pyMs">'+msOpts+'</select></div>'
     +'<div class="field"><label>المبلغ (ج)</label><input id="pyAmt" type="number" min="0" inputmode="numeric"/></div>'
     +'<div class="field"><label>الحالة</label><select id="pySt"><option value="planned">مخططة (لسه</option><option value="due">مستحقة دلوقتي</option></select></div>'
     +'<div class="field"><label>تاريخ الاستحقاق (اختياري)</label><input id="pyDue" type="date"/></div>'
     +'<div class="row-actions"><button class="btn green" id="pyGo">أضف الدفعة</button><button class="btn ghost" onclick="openFinance()">إلغاء</button></div>');
   addMicTo("pyTitle"); makeSearchable("pyPrj","دوّر بكود أو اسم الملف…");
+  catOptions("income").then(o=>{ const c=$("pyCat"); if(c) c.innerHTML=o; });
   $("pyGo").onclick=async()=>{
     const prj=$("pyPrj").value, title=$("pyTitle").value.trim(), amt=parseFloat($("pyAmt").value);
     if(!prj){ toast("اختار الملف","bad"); return; }
@@ -3840,6 +3947,7 @@ async function openCostNew(){
     catOpts=(cats||[]).map(c=>'<option value="'+esc(c.code||c.name)+'">'+esc(c.name)+'</option>').join("");
   }catch(e){}
   if(!catOpts) catOpts=Object.entries(COST_CAT).map(([k,v])=>'<option value="'+k+'">'+v+'</option>').join("");
+  catOpts+='<option value="__new">\u002b تصنيف جديد…</option>';
   openSheet('<h3>سجّل مصروف</h3>'
     +'<div class="muted" style="margin:-6px 0 12px;font-size:12px">لو المصروف على ملف معيّن اختاره — ولو مصروف عام (إيجار، كهرباء، رواتب) سيبه زي ما هو.</div>'
     +'<div class="field"><label>على ملف؟</label><select id="csPrj">'+prjOpts+'</select></div>'
@@ -3855,8 +3963,9 @@ async function openCostNew(){
     if(!title){ toast("اكتب البند","bad"); return; }
     if(!amt||amt<=0){ toast("اكتب المبلغ","bad"); return; }
     const btn=$("csGo"); btn.disabled=true; btn.textContent="بيسجّل…";
+    const cat=await resolveCat("csCat","expense");
     const { error }=await sb.from("os_project_costs").insert({ project_id:prj, title,
-      category:readSelect("csCat"), amount:amt, spent_on:$("csDate").value||todayStr(), created_by:ME.id });
+      category:cat||readSelect("csCat"), amount:amt, spent_on:$("csDate").value||todayStr(), created_by:ME.id });
     if(error){
       const m=error.message||"";
       toast(m.includes('مقفلة')?'الفترة المالية مقفلة':("معرفناش نسجّل: "+m),"bad");
