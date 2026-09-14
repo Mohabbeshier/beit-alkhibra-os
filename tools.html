@@ -1744,6 +1744,22 @@ function openProjectMilestoneNew(projectId,prj){
     toast("اتضاف للمشروع ✓","ok"); openProjectDetail(projectId);
   };
 }
+/* ===== تعطيل مرحلة: الملف واقف على حاجة برّه إيدنا ===== */
+async function blockJobStage(stageId, projectId){
+  const why=prompt("واقف على إيه؟ (مثلاً: العميل ما جابش صورة العقد)");
+  if(!why||!why.trim()) return;
+  const { error }=await sb.rpc("os_block_stage",{ p_stage:stageId, p_why:why.trim() });
+  if(error){ toast("معرفناش نعطّلها: "+error.message,"bad"); return; }
+  toast("اتسجّل — والإدارة اتبلغت","ok");
+  await paintProjectDetail(projectId);
+}
+async function unblockJobStage(stageId, projectId){
+  const { error }=await sb.rpc("os_unblock_stage",{ p_stage:stageId });
+  if(error){ toast("معرفناش نفكها: "+error.message,"bad"); return; }
+  toast("المرحلة رجعت تشتغل \u2713","ok");
+  await paintProjectDetail(projectId);
+}
+
 /* ===== إقفال مرحلة في بيان الأعمال — المرحلة اللي بعدها بتبدأ لوحدها ===== */
 async function doneJobStage(stageId, projectId){
   try{
@@ -1817,17 +1833,24 @@ async function paintProjectDetail(id){
       if(isLate) h+='<div class="card flat" style="border-right:4px solid var(--red);margin-bottom:8px"><b style="font-size:13px;color:var(--red)">\u26a0 متأخر: '+esc(cur.stage_name)+'</b><div class="meta" style="margin-top:3px"><span>كان المفروض يخلص '+fmtDate(cur.due_on)+'</span></div></div>';
       h+='<div class="card flat">'+stg.map(x=>{
         const late=x.status==="active"&&x.due_on&&x.due_on<today;
-        const bul=x.status==="done"?'<span style="width:22px;height:22px;border-radius:50%;background:#2E7D32;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex:none">\u2713</span>'
+        const bul=x.status==="blocked"?'<span style="width:22px;height:22px;border-radius:50%;background:#C62828;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex:none">\u26d4</span>'
+          :x.status==="done"?'<span style="width:22px;height:22px;border-radius:50%;background:#2E7D32;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex:none">\u2713</span>'
           :x.status==="active"?'<span style="width:22px;height:22px;border-radius:50%;background:#0D47A1;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex:none">'+x.stage_seq+'</span>'
           :'<span style="width:22px;height:22px;border-radius:50%;background:#eef2f7;color:#90a4ae;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex:none">'+x.stage_seq+'</span>';
-        const sub=x.status==="done"?('خلصت '+(x.done_at?fmtDate(x.done_at):"—"))
+        const sub=x.status==="blocked"?('\u26d4 واقفة: '+esc(x.blocked_why||"سبب غير محدد"))
+          :x.status==="done"?('خلصت '+(x.done_at?fmtDate(x.done_at):"—"))
           :x.status==="active"?(late?'متأخرة — كانت لـ '+fmtDate(x.due_on):'جارية — لـ '+(x.due_on?fmtDate(x.due_on):"—"))
           :'في الانتظار';
         return '<div style="display:flex;align-items:flex-start;gap:9px;padding:9px 0;border-bottom:1px solid #eef2f7">'+bul
           +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">'+esc(x.stage_name)+'</div>'
           +'<div class="muted" style="font-size:11.5px;margin-top:2px'+(late?';color:var(--red);font-weight:700':'')+'">'+sub+'</div>'
           +(x.owner_name?'<div class="muted" style="font-size:11px;margin-top:1px">\ud83d\udc64 '+esc(x.owner_name)+(x.owner_id===ME.id?' (إنت)':'')+'</div>':'')+'</div>'
-          +(x.status==="active"&&(isOwnerOps()||x.owner_id===ME.id||prj.created_by===ME.id||(PROFILE.role==="manager"&&prj.dept===PROFILE.dept))?'<button class="btn sm" onclick="doneJobStage(\''+x.id+'\',\''+id+'\')">تم</button>':'')
+          +((x.status==="active"||x.status==="blocked")&&(isOwnerOps()||x.owner_id===ME.id||prj.created_by===ME.id||(PROFILE.role==="manager"&&prj.dept===PROFILE.dept))
+             ?(x.status==="blocked"
+                ?'<button class="btn sm" onclick="unblockJobStage(\''+x.id+'\',\''+id+'\')">كمّل</button>'
+                :'<button class="btn sm" onclick="doneJobStage(\''+x.id+'\',\''+id+'\')">تم</button>'
+                 +'<button class="btn ghost sm" style="margin-inline-start:5px" onclick="blockJobStage(\''+x.id+'\',\''+id+'\')">واقف</button>')
+             :'')
           +'</div>';
       }).join("")+'</div>';
     }
