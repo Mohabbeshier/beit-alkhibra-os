@@ -1579,39 +1579,116 @@ async function openProjects(){
   const canAddPrj=true; /* أي موظف يقدر يفتح بيان أعمال */
   openSheet('<h3>المشاريع</h3><div id="prjBox"><div class="skel"></div><div class="skel"></div></div>'
     +(canAddPrj?'<div class="sec-h">مشروع جديد <span class="ln"></span></div>'
-      +'<div class="field"><label>اسم المشروع</label><input id="pjName" placeholder="فيلا الشيخ زايد — عميل X"/></div>'
-      +'<div class="field"><label>القسم</label><select id="pjDept">'+DEPTS.map(d=>'<option value="'+d.key+'"'+(d.key===PROFILE.dept?" selected":"")+'>'+esc(d.name)+'</option>').join("")+'</select></div>'
-      +'<div class="field"><label>المرحلة</label><select id="pjStage"><option value="جديد">جديد</option><option value="تسعير">تسعير</option><option value="تنفيذ">تنفيذ</option><option value="تسليم">تسليم</option><option value="مغلق">مغلق</option></select></div>'
+      +'<div class="field"><label>جهاز المدينة</label>'
+        +'<select id="pjAuth"><option value="">— اختار —</option><option value="__new">\u002b جهاز جديد…</option></select>'
+        +'<input id="pjAuthNew" placeholder="اسم الجهاز الجديد" style="display:none;margin-top:6px"/></div>'
+      +'<div class="field"><label>المنطقة</label>'
+        +'<select id="pjArea"><option value="">— اختار الجهاز الأول —</option></select>'
+        +'<input id="pjAreaNew" placeholder="اسم المنطقة الجديدة" style="display:none;margin-top:6px"/></div>'
+      +'<div class="field"><label>رقم القطعة</label><input id="pjParcel" inputmode="numeric" placeholder="مثلاً: 145"/></div>'
       +'<div class="field"><label>اسم العميل</label><input id="pjCli" placeholder="صاحب القطعة"/></div>'
       +'<div class="field"><label>رقم الهاتف</label><input id="pjPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx"/></div>'
+      +'<div class="field"><label>كود الأرض (اختياري)</label><input id="pjLand" placeholder="الكود الرسمي من الجهاز"/></div>'
+      +'<div class="field"><label>نوع الملف / الطلب</label>'
+        +'<select id="pjSvc"><option value="">— اختار —</option><option value="__new">\u002b نوع جديد…</option></select>'
+        +'<input id="pjSvcNew" placeholder="اسم النوع الجديد" style="display:none;margin-top:6px"/></div>'
+      +'<div class="field"><label>اسم الملف</label><input id="pjName" placeholder="مثلاً: ترخيص فيلا — م. أحمد"/></div>'
       +'<div class="field"><label>القيمة (جنيه — اختياري)</label><input id="pjVal" type="number" inputmode="numeric" min="0"/></div>'
-      +'<div class="muted" style="font-size:11.5px;margin:2px 0 6px">الأرض اختيارية — تقدر تكمّلها بعدين</div>'
-      +'<div class="field"><label>جهاز المدينة</label><select id="pjAuth"><option value="">— بدون —</option></select></div>'
-      +'<div class="field"><label>المنطقة</label><select id="pjArea"><option value="">— بدون —</option></select></div>'
-      +'<div class="field"><label>رقم القطعة</label><input id="pjParcel" placeholder="مثلاً: 145"/></div>'
-      +'<div class="row-actions"><button class="btn green" id="pjGo">أضف المشروع</button></div>':"")
+      +'<div class="field"><label>القسم</label><select id="pjDept">'+DEPTS.map(d=>'<option value="'+d.key+'"'+(d.key===PROFILE.dept?" selected":"")+'>'+esc(d.name)+'</option>').join("")+'</select></div>'
+      +'<div id="pjHint" class="muted" style="font-size:11.5px;margin:2px 0 8px"></div>'
+      +'<div class="row-actions"><button class="btn green" id="pjGo">افتح بيان الأعمال</button></div>':"")
     +'<button class="btn sm" style="margin-top:10px" onclick="openFind()">\ud83d\udd0d بحث في الملفات والقطع</button>'
     +((isOwnerOps()||PROFILE.role==="manager")?'<button class="btn sm" style="margin-top:10px" onclick="openTeamLoad()">حِمل الفريق وأداء المراحل</button>':'')
     +'<button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
   if(canAddPrj){
     addMicTo("pjName");
     /* تعبئة أجهزة المدن والمناطق */
+    /* أي قايمة فيها «+ جديد» بتفتح خانة كتابة */
+    function wireNew(selId, inpId, after){
+      const sel=$(selId), inp=$(inpId); if(!sel||!inp) return;
+      sel.onchange=()=>{
+        if(sel.value==="__new"){ inp.style.display="block"; inp.focus(); }
+        else { inp.style.display="none"; inp.value=""; }
+        if(after) after(sel.value);
+      };
+    }
+    async function fillAreas(authId){
+      const ar=$("pjArea"); if(!ar) return;
+      ar.innerHTML='<option value="">— اختار —</option>';
+      if(!authId||authId==="__new"){
+        ar.innerHTML='<option value="">— اكتب الجهاز الجديد الأول —</option>';
+        if(authId==="__new"){ ar.innerHTML='<option value="__new">\u002b منطقة جديدة…</option>'; ar.value="__new";
+          $("pjAreaNew").style.display="block"; }
+        return;
+      }
+      try{
+        const { data:areas }=await sb.from("os_areas").select("id,name").eq("authority_id",authId).order("name");
+        (areas||[]).forEach(a=>{ const o=document.createElement("option"); o.value=a.id; o.textContent=a.name; ar.appendChild(o); });
+      }catch(e){}
+      const o=document.createElement("option"); o.value="__new"; o.textContent="\u002b منطقة جديدة…"; ar.appendChild(o);
+    }
     (async()=>{
       try{
-        const { data:auths }=await sb.from("os_city_authorities").select("id,name").eq("active",true).order("name");
-        const sel=$("pjAuth"); if(!sel) return;
-        (auths||[]).forEach(a=>{ const o=document.createElement("option"); o.value=a.id; o.textContent=a.name; sel.appendChild(o); });
-        sel.onchange=async()=>{
-          const ar=$("pjArea"); ar.innerHTML='<option value="">— بدون —</option>';
-          if(!sel.value) return;
-          const { data:areas }=await sb.from("os_areas").select("id,name").eq("authority_id",sel.value).eq("active",true).order("name");
-          (areas||[]).forEach(a=>{ const o=document.createElement("option"); o.value=a.id; o.textContent=a.name; ar.appendChild(o); });
-        };
+        const [{ data:auths },{ data:svcs }]=await Promise.all([
+          sb.from("os_city_authorities").select("id,name").order("name"),
+          sb.from("os_service_types").select("code,name").order("sort_order")
+        ]);
+        const sel=$("pjAuth");
+        if(sel) (auths||[]).forEach(a=>{
+          const o=document.createElement("option"); o.value=a.id; o.textContent=a.name;
+          sel.insertBefore(o, sel.lastElementChild); });
+        const sv=$("pjSvc");
+        if(sv) (svcs||[]).forEach(x=>{
+          const o=document.createElement("option"); o.value=x.code; o.textContent=x.name;
+          sv.insertBefore(o, sv.lastElementChild); });
       }catch(e){}
+      wireNew("pjAuth","pjAuthNew", (v)=>fillAreas(v));
+      wireNew("pjArea","pjAreaNew");
+      wireNew("pjSvc","pjSvcNew");
     })();
     $("pjGo").onclick=async()=>{
-      const name=$("pjName").value.trim(); if(!name){ toast("اكتب اسم المشروع","bad"); return; }
+      const name=$("pjName").value.trim(); if(!name){ toast("اكتب اسم الملف","bad"); return; }
       const v=parseFloat($("pjVal").value)||null;
+      const go=$("pjGo"); go.disabled=true;
+      const hint=(t)=>{ const h=$("pjHint"); if(h) h.textContent=t||""; };
+
+      /* الجديد اللي اتكتب يدوي بيتسجّل الأول ويفضل في القايمة بعد كده */
+      let authId=$("pjAuth")?$("pjAuth").value:"";
+      let areaId=$("pjArea")?$("pjArea").value:"";
+      let svcCode=$("pjSvc")?$("pjSvc").value:"";
+      try{
+        if(authId==="__new"){
+          const nm=$("pjAuthNew").value.trim();
+          if(!nm){ toast("اكتب اسم الجهاز","bad"); go.disabled=false; return; }
+          hint("بيسجّل الجهاز…");
+          let { data:a }=await sb.from("os_city_authorities").insert({ name:nm }).select("id").single();
+          if(!a){ const { data:ex }=await sb.from("os_city_authorities").select("id").eq("name",nm).limit(1);
+                  a = ex&&ex.length ? ex[0] : null; }
+          if(!a){ toast("معرفناش نضيف الجهاز","bad"); go.disabled=false; return; }
+          authId=a.id;
+        }
+        if(areaId==="__new"){
+          const nm=$("pjAreaNew").value.trim();
+          if(!nm||!authId){ toast("اكتب اسم المنطقة","bad"); go.disabled=false; return; }
+          hint("بيسجّل المنطقة…");
+          let { data:ar }=await sb.from("os_areas").insert({ name:nm, authority_id:authId }).select("id").single();
+          if(!ar){ const { data:ex }=await sb.from("os_areas").select("id").eq("authority_id",authId).eq("name",nm).limit(1);
+                   ar = ex&&ex.length ? ex[0] : null; }
+          if(!ar){ toast("معرفناش نضيف المنطقة","bad"); go.disabled=false; return; }
+          areaId=ar.id;
+        }
+        if(svcCode==="__new"){
+          const nm=$("pjSvcNew").value.trim();
+          if(!nm){ toast("اكتب نوع الملف","bad"); go.disabled=false; return; }
+          hint("بيسجّل النوع…");
+          let { data:sv }=await sb.from("os_service_types").insert({ name:nm }).select("code").single();
+          if(!sv){ const { data:ex }=await sb.from("os_service_types").select("code").eq("name",nm).limit(1);
+                   sv = ex&&ex.length ? ex[0] : null; }
+          if(!sv){ toast("معرفناش نضيف النوع","bad"); go.disabled=false; return; }
+          svcCode=sv.code;
+        }
+      }catch(e){ toast("حصل خطأ في الإضافة","bad"); go.disabled=false; return; }
+      hint("");
       /* ربط بالعميل — بيتعاد استخدامه لو الرقم موجود */
       let clientId=null;
       try{
@@ -1643,13 +1720,13 @@ async function openProjects(){
       /* ربط بقطعة أرض — بتتعمل لو مش موجودة */
       let parcelId=null;
       try{
-        const areaId=$("pjArea")&&$("pjArea").value, authId=$("pjAuth")&&$("pjAuth").value;
         const pno=$("pjParcel")?$("pjParcel").value.trim():"";
+        const landCode=$("pjLand")?$("pjLand").value.trim():"";
         if(areaId&&pno){
           const { data:found }=await sb.from("os_parcels").select("id").eq("area_id",areaId).eq("parcel_no",pno).limit(1);
           if(found&&found.length){ parcelId=found[0].id; }
           else{
-            const mk=await sb.from("os_parcels").insert({ area_id:areaId, authority_id:authId, parcel_no:pno, client_id:clientId }).select("id").single();
+            const mk=await sb.from("os_parcels").insert({ area_id:areaId, authority_id:authId, parcel_no:pno, land_code:landCode||null, client_id:clientId }).select("id").single();
             if(mk.data) parcelId=mk.data.id;
             else{
               const { data:again }=await sb.from("os_parcels").select("id").eq("area_id",areaId).eq("parcel_no",pno).limit(1);
@@ -1658,7 +1735,8 @@ async function openProjects(){
           }
         }
       }catch(e){}
-      const { error }=await sb.from("os_projects").insert({ name, dept:$("pjDept").value, stage:$("pjStage").value, value_egp:v, created_by:ME.id, client_id:clientId, parcel_id:parcelId, opened_on:todayStr() });
+      const { error }=await sb.from("os_projects").insert({ name, dept:$("pjDept").value, stage:"جديد", value_egp:v, created_by:ME.id, client_id:clientId, parcel_id:parcelId, service_code:svcCode||null, opened_on:todayStr() });
+      go.disabled=false;
       if(error){
         const m=error.message||"";
         toast(
@@ -1667,7 +1745,9 @@ async function openProjects(){
           /Failed to fetch|NetworkError/i.test(m) ? 'النت فصل — الملف ما اتحفظش، جرّب تاني' :
           "معرفناش نضيف: "+m, "bad");
         return; }
-      toast("المشروع اتضاف","ok"); $("pjName").value=""; paintProjects();
+      toast("بيان الأعمال اتفتح \u2713","ok");
+      ["pjName","pjParcel","pjCli","pjPhone","pjLand","pjVal","pjAuthNew","pjAreaNew","pjSvcNew"].forEach(i=>{ if($(i)) $(i).value=""; });
+      openProjects();
     };
   }
   await paintProjects();
