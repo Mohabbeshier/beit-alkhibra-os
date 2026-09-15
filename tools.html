@@ -1796,6 +1796,302 @@ function canContracts(){ return myDeptKey()==="legal"; }
 
 /* ===================== TABS ===================== */
 
+
+/* ═══════════════ المرحلة ٤ — الدفعات والشاشات الإدارية ═══════════════ */
+
+const SVC_AR={C:"إنشاءات",D:"تصميم ورسومات",L:"ترخيص",O:"خدمات أخرى",S:"إشراف ومتابعة",U:"مرافق"};
+
+function isAdminRole(){ return ["owner","coceo"].includes((PROFILE&&PROFILE.role)||""); }
+/* من يعدّل قوالب الدفعات — مطابق لـ os_save_payment_plan في قاعدة البيانات */
+function canEditPlans(){
+  const r=(PROFILE&&PROFILE.role)||"";
+  return ["owner","coceo"].includes(r) || (r==="manager" && PROFILE.dept==="finance");
+}
+
+/* ── بناء جدول الدفعات لملف ── */
+async function openBuildInstallments(jid, curValue){
+  const { data:plans } = await sb.from("os_payment_plans")
+    .select("service_code,seq_no,title,pct").eq("active",true).order("seq_no");
+  const { data:prj } = await sb.from("os_projects")
+    .select("id,job_code,name,service_code,value_egp").eq("id",jid).maybeSingle();
+  if(!prj) return toast("الملف مش موجود","err");
+
+  const mine=(plans||[]).filter(p=>p.service_code===prj.service_code);
+  const val = curValue || prj.value_egp;
+
+  let preview='';
+  if(!mine.length){
+    preview='<div class="empty-state"><b>مفيش قالب دفعات لخدمة '+esc(SVC_AR[prj.service_code]||prj.service_code)+'</b>'
+      +'<div class="muted" style="font-size:12px;margin-top:4px">اعمله من «المزيد ← أنواع الخدمات»</div></div>';
+  }else{
+    preview='<table class="dtable"><thead><tr><th>#</th><th>الدفعة</th><th>النسبة</th><th>المبلغ</th></tr></thead><tbody>'
+      + mine.map(p=>'<tr><td>'+p.seq_no+'</td><td>'+esc(p.title)+'</td>'
+          +'<td class="ltr">'+p.pct+'%</td>'
+          +'<td class="ltr">'+(val?Math.round(val*p.pct/100).toLocaleString("en"):'—')+'</td></tr>').join("")
+      + '</tbody></table>';
+  }
+
+  openSheet('<h3>جدول الدفعات</h3>'
+    +'<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">'
+    +esc(prj.job_code||"")+' — '+esc(SVC_AR[prj.service_code]||"")+'</div>'
+    +'<div class="field"><label>قيمة الملف (ج)</label>'
+    +'<input id="biVal" class="ltr" type="number" step="1" value="'+(val||"")+'" placeholder="اكتب القيمة"/></div>'
+    +'<div id="biPrev">'+preview+'</div>'
+    +'<div class="row-actions" style="margin-top:12px">'
+    +(mine.length?'<button class="btn primary" id="biGo">ابنِ الجدول</button>':'')
+    +'<button class="btn secondary" onclick="closeSheet()">قفل</button></div>');
+
+  const iv=$("biVal");
+  if(iv) iv.oninput=()=>{
+    const v=Number(iv.value||0);
+    $("biPrev").innerHTML = mine.length
+      ? '<table class="dtable"><thead><tr><th>#</th><th>الدفعة</th><th>النسبة</th><th>المبلغ</th></tr></thead><tbody>'
+        + mine.map(p=>'<tr><td>'+p.seq_no+'</td><td>'+esc(p.title)+'</td>'
+            +'<td class="ltr">'+p.pct+'%</td>'
+            +'<td class="ltr">'+(v?Math.round(v*p.pct/100).toLocaleString("en"):'—')+'</td></tr>').join("")
+        + '</tbody></table>'
+      : preview;
+  };
+  const go=$("biGo");
+  if(go) go.onclick=()=>doBuildInstallments(jid, Number($("biVal").value||0), false);
+}
+
+async function doBuildInstallments(jid, val, replace){
+  if(!val || val<=0) return toast("اكتب قيمة الملف الأول","err");
+  const btn=$("biGo"); if(btn){ btn.disabled=true; btn.textContent="بيبني…"; }
+  try{
+    const { data, error } = await sb.rpc("os_build_installments",
+      { p_project:jid, p_value:val, p_replace:replace });
+    if(error) throw error;
+    if(data && data.ok===false){
+      if(btn){ btn.disabled=false; btn.textContent="ابنِ الجدول"; }
+      return confirmReplace(jid, val, data.existing||0);
+    }
+    toast("الجدول اتبنى — "+(data.count||0)+" أقساط","ok");
+    closeSheet();
+    if(typeof openProjectDetail==="function") openProjectDetail(jid);
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.textContent="ابنِ الجدول"; }
+    toast(String(e.message||e),"err");
+  }
+}
+
+function confirmReplace(jid, val, n){
+  openSheet('<h3>فيه جدول موجود</h3>'
+    +'<div style="font-size:13.5px;margin-bottom:10px">الملف ده عنده <b>'+n+'</b> أقساط.</div>'
+    +'<div class="muted" style="font-size:12px;margin-bottom:12px">'
+    +'الاستبدال بيلغي الأقساط غير المحصّلة — مش بيمسحها. الأقساط اللي اتحصّلت بتمنع الاستبدال.</div>'
+    +'<div class="danger-zone"><div class="row-actions">'
+    +'<button class="btn danger" id="biRep">استبدل الجدول</button>'
+    +'<button class="btn secondary" onclick="openBuildInstallments(\''+jid+'\','+val+')">رجوع</button>'
+    +'</div></div>');
+  $("biRep").onclick=async()=>{
+    const b=$("biRep"); b.disabled=true; b.textContent="بيستبدل…";
+    try{
+      const { data, error } = await sb.rpc("os_build_installments",
+        { p_project:jid, p_value:val, p_replace:true });
+      if(error) throw error;
+      toast("الجدول اتبدّل — "+(data.count||0)+" أقساط","ok");
+      closeSheet();
+      if(typeof openProjectDetail==="function") openProjectDetail(jid);
+    }catch(e){ b.disabled=false; b.textContent="استبدل الجدول"; toast(String(e.message||e),"err"); }
+  };
+}
+
+/* ── أنواع الخدمات وقوالب الدفعات ── */
+async function openServiceTypes(){
+  if(!canEditPlans()) return toast("الشاشة دي للإدارة والمالية","err");
+  openSheet('<h3>أنواع الخدمات</h3><div id="stBox"><div class="skel"></div></div>'
+    +actMini([{label:"قفل",on:"closeSheet()"}]));
+  try{
+    const [{ data:svc },{ data:plans },{ data:stg }]=await Promise.all([
+      sb.from("os_service_types").select("code,name,active").order("code"),
+      sb.from("os_payment_plans").select("service_code,seq_no,title,pct,stage_seq,active").order("seq_no"),
+      sb.from("os_stage_defs").select("service_code,seq,name").order("seq")
+    ]);
+    const P=plans||[], S=stg||[];
+    let h='<div class="muted" style="font-size:11.5px;margin-bottom:10px">'
+      +'النسب دي بتتحوّل لجدول دفعات على كل ملف جديد. المجموع لازم 100%.</div>';
+    (svc||[]).forEach(v=>{
+      const mine=P.filter(p=>p.service_code===v.code && p.active);
+      const tot=mine.reduce((a,b)=>a+(+b.pct||0),0);
+      const ns=S.filter(x=>x.service_code===v.code).length;
+      h+='<div class="card" style="margin-bottom:10px">'
+        +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+        +'<b style="flex:1;font-size:13.5px">'+esc(v.name)+' <span class="muted ltr">('+esc(v.code)+')</span></b>'
+        +'<span class="muted" style="font-size:11px">'+ns+' مرحلة</span>'
+        +(tot===100?'<span class="ok-note" style="font-size:11.5px">100%</span>'
+                   :'<span class="chip-warn">'+tot+'% — مش 100</span>')
+        +'</div>';
+      if(!mine.length){
+        h+='<div class="warn-inline" style="margin-top:6px">⚠️ مفيش قالب دفعات — الملفات دي مش هيتبنى ليها جدول</div>';
+      }else{
+        h+='<table class="dtable" style="margin-top:8px"><thead><tr>'
+          +'<th>#</th><th>الدفعة</th><th>%</th><th>عند مرحلة</th></tr></thead><tbody>';
+        mine.forEach(p=>{
+          const sn=S.find(x=>x.service_code===v.code && x.seq===p.stage_seq);
+          h+='<tr><td>'+p.seq_no+'</td><td>'+esc(p.title)+'</td>'
+            +'<td class="ltr">'+p.pct+'%</td>'
+            +'<td>'+(sn?esc(sn.name):'<span class="muted">—</span>')+'</td></tr>';
+        });
+        h+='</tbody></table>';
+      }
+      h+='<div class="act-mini" style="margin-top:8px">'
+        +'<button class="btn secondary sm" onclick="openEditPlan(\''+v.code+'\')">عدّل الدفعات</button></div>';
+      h+='</div>';
+    });
+    $("stBox").innerHTML=h;
+  }catch(e){ $("stBox").innerHTML=failBox("معرفناش نجيبها.",()=>openServiceTypes()); }
+}
+
+async function openEditPlan(code){
+  if(!canEditPlans()) return toast("تعديل القوالب للإدارة والمالية","err");
+  const [{ data:plans },{ data:stg }]=await Promise.all([
+    sb.from("os_payment_plans").select("id,seq_no,title,pct,stage_seq,active")
+      .eq("service_code",code).order("seq_no"),
+    sb.from("os_stage_defs").select("seq,name").eq("service_code",code).order("seq")
+  ]);
+  const P=plans||[], S=stg||[];
+  const opt=(sel)=>'<option value="">— من غير مرحلة —</option>'
+    + S.map(x=>'<option value="'+x.seq+'"'+(x.seq===sel?' selected':'')+'>'+esc(x.name)+'</option>').join("");
+
+  let rows = P.map((p,i)=>planRow(i,p.seq_no,p.title,p.pct,p.stage_seq,opt)).join("");
+  if(!rows) rows = planRow(0,1,"",0,null,opt);
+
+  openSheet('<h3>دفعات — '+esc(SVC_AR[code]||code)+'</h3>'
+    +'<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">'
+    +'المجموع لازم يساوي 100%. ربط الدفعة بمرحلة بيخلّيها تستحق أول ما المرحلة تبدأ.</div>'
+    +'<div id="planRows">'+rows+'</div>'
+    +'<div style="display:flex;align-items:center;gap:8px;margin:10px 0">'
+    +'<button class="btn tertiary sm" id="planAdd">+ دفعة</button>'
+    +'<span style="flex:1"></span><span id="planSum" class="muted"></span></div>'
+    +'<div class="row-actions">'
+    +'<button class="btn primary" id="planSave">احفظ</button>'
+    +'<button class="btn secondary" onclick="openServiceTypes()">رجوع</button></div>');
+
+  $("planAdd").onclick=()=>{
+    const n=document.querySelectorAll("#planRows .plan-row").length;
+    $("planRows").insertAdjacentHTML("beforeend", planRow(n,n+1,"",0,null,opt));
+    wirePlanSum();
+  };
+  $("planSave").onclick=()=>savePlan(code);
+  wirePlanSum();
+}
+
+function planRow(i,seq,title,pct,stage,opt){
+  return '<div class="plan-row" style="display:flex;gap:6px;align-items:flex-start;margin-bottom:7px">'
+    +'<input class="p-title" style="flex:2;min-width:0" placeholder="اسم الدفعة" value="'+esc(title||"")+'"/>'
+    +'<input class="p-pct ltr" style="flex:0 0 66px" type="number" step="0.01" min="0" max="100" '
+    +'placeholder="%" value="'+(pct||"")+'"/>'
+    +'<select class="p-stage" style="flex:1;min-width:0">'+opt(stage)+'</select>'
+    +'<button class="btn tertiary sm p-del" style="flex:0 0 auto" title="شيل">✕</button></div>';
+}
+
+function wirePlanSum(){
+  const upd=()=>{
+    let t=0;
+    document.querySelectorAll("#planRows .p-pct").forEach(x=>t+=Number(x.value||0));
+    const el=$("planSum");
+    el.textContent="المجموع "+t.toFixed(2)+"%";
+    el.className = Math.abs(t-100)<0.01 ? "ok-note" : "warn-inline";
+  };
+  document.querySelectorAll("#planRows .p-pct").forEach(x=>x.oninput=upd);
+  document.querySelectorAll("#planRows .p-del").forEach(b=>b.onclick=()=>{
+    if(document.querySelectorAll("#planRows .plan-row").length<=1) return toast("لازم دفعة واحدة على الأقل","err");
+    b.closest(".plan-row").remove(); upd();
+  });
+  upd();
+}
+
+async function savePlan(code){
+  const rows=[...document.querySelectorAll("#planRows .plan-row")].map(r=>({
+    title: (r.querySelector(".p-title").value||"").trim(),
+    pct: Number(r.querySelector(".p-pct").value||0),
+    stage_seq: r.querySelector(".p-stage").value ? Number(r.querySelector(".p-stage").value) : null
+  }));
+  if(rows.some(r=>!r.title)) return toast("كل دفعة لازم ليها اسم","err");
+  const tot=rows.reduce((a,b)=>a+b.pct,0);
+  if(Math.abs(tot-100)>0.01) return toast("المجموع "+tot.toFixed(2)+"% — لازم 100%","err");
+
+  const btn=$("planSave"); btn.disabled=true; btn.textContent="بيحفظ…";
+  try{
+    /* عملية واحدة ذرّية — الحذف والإدراج في معاملة واحدة.
+       نداءان منفصلان كان ممكن يسيبوا الخدمة من غير قالب لو التاني فشل. */
+    const { data, error } = await sb.rpc("os_save_payment_plan",
+      { p_service: code, p_rows: rows });
+    if(error) throw error;
+    toast("القالب اتحفظ — "+(data.count||rows.length)+" دفعات","ok");
+    openServiceTypes();
+  }catch(e){
+    btn.disabled=false; btn.textContent="احفظ";
+    toast(String(e.message||e),"err");
+  }
+}
+
+/* ── المستخدمون ── */
+async function openUsers(){
+  if(!isAdminRole()) return toast("الشاشة دي للإدارة","err");
+  openSheet('<h3>المستخدمون</h3><div id="usBox"><div class="skel"></div></div>'
+    +actMini([{label:"قفل",on:"closeSheet()"}]));
+  try{
+    const { data, error } = await sb.from("os_profiles")
+      .select("id,name,email,role,dept,phone").order("role").order("name");
+    if(error) throw error;
+    const R=data||[];
+    const RA={owner:"المالك",coceo:"الرئيس التنفيذي",ops:"التشغيل",
+              manager:"مدير قسم",employee:"موظف"};
+    const DA={engineering:"هندسة",finance:"مالية",legal:"قانوني",hr:"موارد بشرية",
+              marketing:"تسويق",procurement:"مشتريات",ops:"تشغيل"};
+    let h='<table class="dtable"><thead><tr><th>الاسم</th><th>الصفة</th><th>القسم</th><th>التليفون</th></tr></thead><tbody>';
+    R.forEach(u=>{
+      const susp=(u.email||"").startsWith("suspended");
+      h+='<tr'+(susp?' style="opacity:.55"':'')+'>'
+        +'<td><b>'+esc(u.name||"—")+'</b>'+(susp?' <span class="chip-warn">موقوف</span>':'')
+        +'<div class="muted ltr" style="font-size:11px">'+esc(u.email||"")+'</div></td>'
+        +'<td>'+esc(RA[u.role]||u.role||"—")+'</td>'
+        +'<td>'+esc(DA[u.dept]||u.dept||"—")+'</td>'
+        +'<td class="ltr">'+esc(u.phone||"—")+'</td></tr>';
+    });
+    h+='</tbody></table>'
+      +'<div class="muted" style="font-size:11.5px;margin-top:8px">'
+      +'إضافة مستخدم بتتم من لوحة Supabase — الصفات بتتظبط من هنا في تحديث جاي.</div>';
+    $("usBox").innerHTML=h;
+  }catch(e){ $("usBox").innerHTML=failBox("معرفناش نجيبهم.",()=>openUsers()); }
+}
+
+/* ── سجل التدقيق ── */
+async function openAuditLog(){
+  if((PROFILE&&PROFILE.role)!=="owner") return toast("سجل التدقيق للمالك بس","err");
+  openSheet('<h3>سجل التدقيق</h3>'
+    +'<div class="field"><input id="alQ" class="inp gsearch" placeholder="فلتر بالاسم أو الوصف" autocomplete="off"/></div>'
+    +'<div id="alBox"><div class="skel"></div></div>'
+    +actMini([{label:"قفل",on:"closeSheet()"}]));
+  const load=async(q)=>{
+    try{
+      let qq=sb.from("os_activity_log")
+        .select("created_at,actor_name,action,entity,summary")
+        .order("created_at",{ascending:false}).limit(120);
+      if(q) qq=qq.or("summary.ilike.%"+q+"%,actor_name.ilike.%"+q+"%");
+      const { data, error } = await qq;
+      if(error) throw error;
+      const R=data||[];
+      if(!R.length){ $("alBox").innerHTML='<div class="empty-state"><b>مفيش حركات</b></div>'; return; }
+      let h='<table class="dtable"><thead><tr><th>الوقت</th><th>مين</th><th>إيه</th></tr></thead><tbody>';
+      R.forEach(r=>{
+        h+='<tr><td class="ltr muted" style="font-size:11px;white-space:nowrap">'
+          +new Date(r.created_at).toLocaleString("ar-EG",{month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"})+'</td>'
+          +'<td>'+esc(r.actor_name||"—")+'</td>'
+          +'<td>'+esc(r.summary||r.action||"")+'</td></tr>';
+      });
+      $("alBox").innerHTML=h+'</tbody></table>'
+        +'<div class="muted" style="font-size:11px;margin-top:6px">آخر '+R.length+' حركة · السجل غير قابل للتعديل أو الحذف</div>';
+    }catch(e){ $("alBox").innerHTML=failBox("معرفناش نجيبه.",()=>openAuditLog()); }
+  };
+  const q=$("alQ");
+  if(q){ let t=null; q.oninput=()=>{ clearTimeout(t); t=setTimeout(()=>load(q.value.trim()),250); }; }
+  load("");
+}
+
 /* ═══════════════ المرحلة ٣ب — الملكية والأطراف وسجل العميل ═══════════════ */
 
 const ROLE_AR={owner:"مالك",representative:"وكيل",lawyer:"محامٍ",
@@ -2403,7 +2699,7 @@ function renderMore(){
     ])
   + grp("الإدارة",[
       {id:"staff",   label:"الفريق والأحمال", show:isMgr},
-      {id:"services",label:"أنواع الخدمات والقوالب", show:isAdmin},
+      {id:"services",label:"أنواع الخدمات وقوالب الدفعات", show:canEditPlans()},
       {id:"users",   label:"المستخدمون", show:isAdmin},
       {id:"audit",   label:"سجل التدقيق", show:r==="owner"},
     ])
@@ -3998,7 +4294,10 @@ async function paintProjectDetail(id){
         +'<div class="field"><label>اختار ملف (أقصى 20 ميجا)</label><input id="pdFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.dwg" style="font-size:12px"/></div>'
         +'<div id="pdStatus" class="muted" style="font-size:12px;margin-bottom:8px"></div>'
         +'<div class="row-actions"><button class="btn primary sm" id="pdUp">ارفع للمشروع</button>'
-        +'<button class="btn secondary sm" onclick="openJobParties(\''+id+'\')">أطراف الملف</button></div></div>';
+        +'<button class="btn secondary sm" onclick="openJobParties(\''+id+'\')">أطراف الملف</button>'
+        +(["owner","coceo","ops","manager"].includes(PROFILE.role)
+          ?'<button class="btn secondary sm" onclick="openBuildInstallments(\''+id+'\')">جدول الدفعات</button>':'')
+        +'</div></div>';
     }
     h+='<div id="ftBox" style="margin-top:8px"><div class="skel"></div></div>';
     setTimeout(()=>paintFileTree(id,"ftBox"), 40);
