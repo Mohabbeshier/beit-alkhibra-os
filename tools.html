@@ -264,6 +264,39 @@ button.stat,button.dept-card{font-family:inherit;cursor:pointer;}
   color:var(--ink);border-radius:9px;padding:5px 11px;font-family:inherit;font-size:12px;font-weight:800;
   cursor:pointer;margin:0 0 10px}
 .nav-back:active{background:#E4E7EA}
+
+/* ═══ المرحلة ٣ — نظام التصميم ═══
+   الأخضر خرج من الأزرار (كان 105 استخدام يخلط الفعل بالنجاح).
+   أزرق = الفعل الرئيسي · أحمر = خطر · رمادي = الباقي · أخضر = نجاح فقط. */
+.btn.primary{background:var(--blue);color:#fff;border:1px solid var(--blue);font-weight:700}
+.btn.primary:active{filter:brightness(.94)}
+.btn.secondary{background:#fff;color:#334155;border:1px solid var(--line);font-weight:600}
+.btn.tertiary{background:transparent;border:none;color:#475569;text-decoration:underline;padding:4px 2px}
+.btn.danger{background:#fff;color:#b91c1c;border:1px solid #fca5a5}
+.danger-zone{margin-top:22px;padding-top:14px;border-top:1px dashed #fca5a5}
+.ok-note{color:var(--green-d);font-weight:700}
+.gsearch-wrap{position:relative}
+.inp.gsearch{width:100%;padding:11px 13px;font-size:15px;border-radius:12px;border:1px solid var(--line);background:#fff}
+.inp.gsearch:focus{outline:2px solid var(--blue);outline-offset:1px;border-color:var(--blue)}
+.dtable{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.dtable th{text-align:right;font-size:11.5px;font-weight:600;color:#64748b;padding:9px 11px;background:#f8fafc;border-bottom:1px solid var(--line);white-space:nowrap}
+.dtable td{padding:10px 11px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+.dtable tbody tr:last-child td{border-bottom:none}
+.dtable tbody tr{cursor:pointer;transition:background .1s ease}
+.dtable tbody tr:hover{background:#f8fafc}
+.dtable tbody tr:active{background:#f1f5f9}
+.res-row{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:right;background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:7px;cursor:pointer;font-size:13.5px}
+.res-row:hover{background:#f8fafc}
+.row-go{color:#94a3b8;font-size:17px}
+.more-grp{margin-bottom:16px}
+.more-lbl{font-size:11.5px;font-weight:600;color:#64748b;margin:0 2px 6px}
+.more-row{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:right;background:#fff;border:1px solid var(--line);border-radius:11px;padding:12px 13px;margin-bottom:6px;cursor:pointer;font-size:14px}
+.more-row:hover{background:#f8fafc}
+.empty-state{text-align:center;padding:34px 18px;color:#475569;background:#fff;border:1px dashed var(--line);border-radius:14px}
+.chip-warn{display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:8px;padding:1px 6px;font-size:10.5px;font-weight:600;margin-right:4px}
+.warn-inline{color:#b45309;font-weight:600;font-size:12.5px}
+.ltr{direction:ltr;unicode-bidi:isolate;display:inline-block}
+.dtable tbody tr:focus-visible,.res-row:focus-visible,.more-row:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
 </style>
 </head>
 <body>
@@ -319,6 +352,9 @@ button.stat,button.dept-card{font-family:inherit;cursor:pointer;}
     <section class="view" id="v-chat"></section>
     <!-- TASKS -->
     <section class="view" id="v-tasks"></section>
+    <!-- المرحلة ٣ -->
+    <section class="view" id="v-archive"></section>
+    <section class="view" id="v-more"></section>
   </div>
 
   <nav class="tabbar" id="tabbar"></nav>
@@ -1757,20 +1793,323 @@ function myDeptKey(){ return DEPT_BY_KEY[PROFILE.dept] ? PROFILE.dept : null; }
 function canContracts(){ return myDeptKey()==="legal"; }
 
 /* ===================== TABS ===================== */
+/* ═══════════════ المرحلة ٣ — البحث العام ═══════════════
+   الترتيب متدرّج: المطابقة التامة للكود تكسب دايماً — حتى لو الملف مؤرشف.
+   الأحدثية والنشاط مرجّحات داخل الطبقة الواحدة فقط، مش مضاعِفات. */
+
+function normAr(t){
+  return (t||"").toString().trim().toLowerCase()
+    .replace(/[\u064B-\u0652\u0670]/g,"")        /* تشكيل */
+    .replace(/[أإآٱ]/g,"ا").replace(/ة/g,"ه").replace(/[ىئ]/g,"ي").replace(/ؤ/g,"و")
+    .replace(/[٠-٩]/g,d=>"٠١٢٣٤٥٦٧٨٩".indexOf(d))  /* أرقام عربية */
+    .replace(/\s+/g," ");
+}
+function normCode(t){ return normAr(t).replace(/[-_\s/]/g,""); }
+function normPhone(t){ return (t||"").replace(/[^0-9]/g,""); }
+
+/* الطبقات: 1 كود تام · 2 اسم/تليفون تام · 3 بداية · 4 احتواء */
+function rankTier(q, row){
+  const nq=normAr(q), cq=normCode(q), pq=normPhone(q);
+  const codes=[row.job_code,row.parcel_code,row.contract_no,row.permit_no].filter(Boolean).map(normCode);
+  const nums =[row.parcel_no].filter(Boolean).map(normCode);
+  const names=[row.client_name,row.job_name,row.title].filter(Boolean).map(normAr);
+  const phone=normPhone(row.phone);
+
+  if(cq && (codes.includes(cq) || nums.includes(cq))) return 1;
+  if(nq && names.includes(nq)) return 2;
+  if(pq && phone && phone===pq) return 2;
+  if(cq && (codes.some(c=>c.startsWith(cq)) || nums.some(n=>n.startsWith(cq)))) return 3;
+  if(nq && names.some(n=>n.startsWith(nq))) return 3;
+  if(pq && phone && (phone.startsWith(pq)||phone.endsWith(pq))) return 3;
+  return 4;
+}
+
+async function gsearch(q){
+  const nq=normAr(q), pq=normPhone(q), like="%"+q.trim()+"%";
+  const out={clients:[],parcels:[],jobs:[]};
+  const jobs = sb.from("os_client_tree")
+    .select("client_id,client_name,phone,parcel_id,parcel_no,parcel_code,job_id,job_code,job_name,status,archived")
+    .or(`client_name.ilike.${like},job_code.ilike.${like},parcel_no.ilike.${like},parcel_code.ilike.${like},job_name.ilike.${like}`)
+    .limit(60);
+  const parcels = sb.from("os_parcel_owners_now")
+    .select("parcel_id,parcel_no,parcel_code,owners_label,total_share,has_unverified")
+    .or(`parcel_no.ilike.${like},parcel_code.ilike.${like},owners_label.ilike.${like}`)
+    .limit(40);
+  const clients = pq.length>=3
+    ? sb.from("clients").select("id,name,phone,code").ilike("phone","%"+pq+"%").limit(20)
+    : sb.from("clients").select("id,name,phone,code").ilike("name",like).limit(20);
+
+  const [j,p,c] = await Promise.all([jobs,parcels,clients]);
+  if(j.error) throw j.error;
+
+  const seenJob=new Set(), seenCl=new Set();
+  (j.data||[]).forEach(r=>{
+    if(r.job_id && !seenJob.has(r.job_id)){ seenJob.add(r.job_id); out.jobs.push(r); }
+    if(r.client_id && !seenCl.has(r.client_id)){
+      seenCl.add(r.client_id);
+      out.clients.push({id:r.client_id,name:r.client_name,phone:r.phone});
+    }
+  });
+  (c.data||[]).forEach(r=>{ if(!seenCl.has(r.id)){ seenCl.add(r.id);
+      out.clients.push({id:r.id,name:r.name,phone:r.phone}); }});
+  out.parcels = p.data||[];
+
+  /* الترتيب: الطبقة أولاً · ثم النشاط · ثم الاسم */
+  const srt=(a,b)=>{
+    const ta=rankTier(q,a), tb=rankTier(q,b);
+    if(ta!==tb) return ta-tb;                       /* الطبقة تحكم */
+    const aa=a.archived?1:0, ab=b.archived?1:0;
+    if(aa!==ab) return aa-ab;                       /* مرجّح داخل الطبقة */
+    return normAr(a.job_code||a.parcel_no||a.name||"").localeCompare(
+           normAr(b.job_code||b.parcel_no||b.name||""));
+  };
+  out.jobs.sort(srt); out.parcels.sort(srt); out.clients.sort(srt);
+  return out;
+}
+
+function gsearchHTML(res,q){
+  const n=res.clients.length+res.parcels.length+res.jobs.length;
+  if(!n) return `<div class="empty-state"><b>مفيش نتيجة لـ «${esc(q)}»</b>
+      <div class="muted" style="font-size:12px;margin-top:4px">جرّب رقم القطعة أو آخر أرقام التليفون</div></div>`;
+  let h="";
+  if(res.parcels.length){
+    h+=`<div class="sec-h">📍 الأراضي (${res.parcels.length}) <span class="ln"></span></div>`;
+    h+=res.parcels.slice(0,6).map(r=>`<button class="res-row" data-gp="${r.parcel_id}">
+        <div><b>قطعة ${esc(r.parcel_no)}</b> <span class="muted ltr">${esc(r.parcel_code||"")}</span>
+        <div class="muted" style="font-size:12px">${r.owners_label?esc(r.owners_label):'⚠️ مفيش مالك مسجّل'}</div></div>
+        <span class="row-go">›</span></button>`).join("");
+  }
+  if(res.clients.length){
+    h+=`<div class="sec-h">🧑 العملاء (${res.clients.length}) <span class="ln"></span></div>`;
+    h+=res.clients.slice(0,6).map(r=>`<button class="res-row" data-gc="${r.id}">
+        <div><b>${esc(r.name)}</b>
+        <div class="muted ltr" style="font-size:12px">${esc(r.phone||"")}</div></div>
+        <span class="row-go">›</span></button>`).join("");
+  }
+  if(res.jobs.length){
+    h+=`<div class="sec-h">📁 الملفات (${res.jobs.length}) <span class="ln"></span></div>`;
+    h+=res.jobs.slice(0,8).map(r=>`<button class="res-row" data-gj="${r.job_id}">
+        <div><b class="ltr">${esc(r.job_code||"")}</b> ${esc(r.job_name||"")}
+        ${r.archived?'<span class="chip-warn">مؤرشف</span>':''}
+        <div class="muted" style="font-size:12px">${esc(r.client_name||"")}${r.parcel_no?" · قطعة "+esc(r.parcel_no):""}</div></div>
+        <span class="row-go">›</span></button>`).join("");
+  }
+  return h;
+}
+
+function wireGsearchRows(){
+  document.querySelectorAll("[data-gj]").forEach(b=>b.onclick=()=>{
+    if(typeof openProjectDetail==="function") openProjectDetail(b.dataset.gj);
+  });
+  document.querySelectorAll("[data-gp]").forEach(b=>b.onclick=()=>{
+    if(typeof openParcel==="function") openParcel(b.dataset.gp);
+    else toast("سجل الأرض جاي قريب","ok");
+  });
+  document.querySelectorAll("[data-gc]").forEach(b=>b.onclick=()=>{
+    if(typeof openClientRecord==="function") openClientRecord(b.dataset.gc);
+    else toast("سجل العميل جاي قريب","ok");
+  });
+}
+
+/* ═══════════════ المرحلة ٣ — بيان الأعمال + المزيد ═══════════════ */
+
+/* ── ١ بيان الأعمال: العميل أولاً ── */
+let ARCH_TAB = "clients";   /* clients | parcels */
+
+async function renderArchive(){
+  const el=$("v-archive"); if(!el) return;
+  el.innerHTML = `
+    <div class="page-h"><div><h2>بيان الأعمال</h2>
+      <div class="sub">أرشيف المكتب الكامل</div></div></div>
+    <div class="gsearch-wrap" style="margin-bottom:12px">
+      <input id="archQ" class="inp gsearch" placeholder="ابحث باسم العميل · التليفون · رقم القطعة · كود الملف"
+             autocomplete="off" inputmode="search">
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:12px">
+      <button class="chip ${ARCH_TAB==='clients'?'on':''}" data-atab="clients">العملاء</button>
+      <button class="chip ${ARCH_TAB==='parcels'?'on':''}" data-atab="parcels">الأراضي</button>
+    </div>
+    <div id="archBody"><div class="muted" style="padding:20px;text-align:center">بيحمّل…</div></div>`;
+
+  el.querySelectorAll("[data-atab]").forEach(b=>b.onclick=()=>{
+    ARCH_TAB=b.dataset.atab; renderArchive();
+  });
+  const q=$("archQ");
+  if(q){
+    let t=null;
+    q.oninput=()=>{ clearTimeout(t); t=setTimeout(()=>archSearch(q.value.trim()),220); };
+    q.onkeydown=e=>{ if(e.key==="Enter"){ clearTimeout(t); archSearch(q.value.trim()); } };
+  }
+  await archLoad();
+}
+
+async function archLoad(){
+  const body=$("archBody"); if(!body) return;
+  try{
+    if(ARCH_TAB==="clients"){
+      const { data, error } = await sb.from("os_client_tree")
+        .select("client_id,client_name,phone,parcel_no,job_code,job_name,status")
+        .order("client_name").limit(400);
+      if(error) throw error;
+      body.innerHTML = archClients(data||[]);
+    }else{
+      const { data, error } = await sb.from("os_parcel_owners_now")
+        .select("parcel_id,parcel_no,parcel_code,owners_label,owners_count,total_share,has_unverified")
+        .order("parcel_no").limit(400);
+      if(error) throw error;
+      body.innerHTML = archParcels(data||[]);
+    }
+    wireArchRows();
+  }catch(e){
+    body.innerHTML = `<div class="empty-state">
+      <b>مقدرناش نحمّل البيانات</b>
+      <div class="muted" style="font-size:12px;margin-top:4px">${esc(e.message||"خطأ غير معروف")}</div>
+      <button class="btn sm" style="margin-top:10px" onclick="renderArchive()">جرّب تاني</button></div>`;
+  }
+}
+
+/* شجرة العميل — عميل ← أراضيه ← ملفاته */
+function archClients(rows){
+  if(!rows.length) return archEmpty("مفيش عملاء لسه","أول عميل هيظهر هنا أول ما يتسجّل");
+  const byClient = {};
+  rows.forEach(r=>{
+    if(!byClient[r.client_id]) byClient[r.client_id]={name:r.client_name,phone:r.phone,parcels:{}};
+    const key = r.parcel_no || "__none__";
+    if(!byClient[r.client_id].parcels[key]) byClient[r.client_id].parcels[key]=[];
+    if(r.job_code) byClient[r.client_id].parcels[key].push(r);
+  });
+  let h = `<table class="dtable"><thead><tr>
+      <th>العميل</th><th>التليفون</th><th>الأراضي</th><th>الملفات</th><th></th></tr></thead><tbody>`;
+  Object.entries(byClient).forEach(([id,c])=>{
+    const pk = Object.keys(c.parcels).filter(k=>k!=="__none__");
+    const jobs = Object.values(c.parcels).reduce((a,b)=>a+b.length,0);
+    h += `<tr data-client="${id}">
+      <td><b>${esc(c.name)}</b></td>
+      <td class="ltr">${esc(c.phone||"—")}</td>
+      <td>${pk.length? pk.map(p=>"قطعة "+esc(p)).join(" · ") : '<span class="muted">—</span>'}</td>
+      <td>${jobs||'<span class="muted">—</span>'}</td>
+      <td class="row-go">›</td></tr>`;
+  });
+  return h+"</tbody></table>";
+}
+
+/* الأراضي — بالمُلّاك الحاليين */
+function archParcels(rows){
+  if(!rows.length) return archEmpty("مفيش أراضي لسه","أول أرض هتظهر هنا أول ما تتسجّل");
+  let h = `<table class="dtable"><thead><tr>
+      <th>القطعة</th><th>الكود</th><th>المُلّاك</th><th>الحصص</th><th></th></tr></thead><tbody>`;
+  rows.forEach(r=>{
+    const owners = r.owners_label
+      ? esc(r.owners_label) + (r.has_unverified ? ' <span class="chip-warn">غير موثّق</span>' : '')
+      : '<span class="warn-inline">⚠️ مفيش مالك مسجّل</span>';
+    const share = r.total_share ? esc(r.total_share)+"%" : '<span class="muted">—</span>';
+    h += `<tr data-parcel="${r.parcel_id}">
+      <td><b>قطعة ${esc(r.parcel_no)}</b></td>
+      <td class="ltr muted">${esc(r.parcel_code||"—")}</td>
+      <td>${owners}</td><td>${share}</td>
+      <td class="row-go">›</td></tr>`;
+  });
+  return h+"</tbody></table>";
+}
+
+function archEmpty(title,hint){
+  return `<div class="empty-state"><b>${esc(title)}</b>
+    <div class="muted" style="font-size:12px;margin-top:4px">${esc(hint)}</div></div>`;
+}
+
+function wireArchRows(){
+  document.querySelectorAll("#archBody tr[data-client]").forEach(tr=>{
+    tr.onclick=()=>{ if(typeof openClientRecord==="function") openClientRecord(tr.dataset.client);
+                     else toast("سجل العميل جاي في التحديث الجاي","ok"); };
+  });
+  document.querySelectorAll("#archBody tr[data-parcel]").forEach(tr=>{
+    tr.onclick=()=>{ if(typeof openParcel==="function") openParcel(tr.dataset.parcel);
+                     else toast("سجل الأرض جاي في التحديث الجاي","ok"); };
+  });
+}
+
+/* بحث داخل الأرشيف */
+async function archSearch(q){
+  const body=$("archBody"); if(!body) return;
+  if(!q){ return archLoad(); }
+  body.innerHTML = '<div class="muted" style="padding:16px;text-align:center">بيدوّر…</div>';
+  try{
+    const res = await gsearch(q);
+    body.innerHTML = gsearchHTML(res, q);
+    wireGsearchRows();
+  }catch(e){
+    body.innerHTML = `<div class="empty-state"><b>البحث وقف</b>
+      <div class="muted" style="font-size:12px;margin-top:4px">${esc(e.message||"")}</div></div>`;
+  }
+}
+
+/* ── ٢ المزيد ── */
+function renderMore(){
+  const el=$("v-more"); if(!el) return;
+  const r = (PROFILE&&PROFILE.role)||"employee";
+  const isAdmin = ["owner","coceo"].includes(r);
+  const isFin   = r==="owner" || (r==="manager" && (PROFILE.dept==="finance"));
+  const isMgr   = ["owner","coceo","ops","manager"].includes(r);
+
+  const grp=(t,items)=>{
+    const vis=items.filter(i=>i.show!==false);
+    if(!vis.length) return "";
+    return `<div class="more-grp"><div class="more-lbl">${t}</div>`
+      + vis.map(i=>`<button class="more-row" data-more="${i.id}">
+           <span>${esc(i.label)}</span><span class="row-go">›</span></button>`).join("")
+      + `</div>`;
+  };
+
+  el.innerHTML = `<div class="page-h"><div><h2>المزيد</h2></div></div>`
+  + grp("الشغل",[
+      {id:"tasks",   label:"المهام وأوامر الشغل"},
+      {id:"contract",label:"العقود", show:(typeof canContracts==="function")&&canContracts()},
+      {id:"chat",    label:"الدردشة"},
+    ])
+  + grp("المالية",[
+      {id:"finance", label:"المالية", show:isFin},
+      {id:"vouchers",label:"سندات القبض والصرف", show:isFin},
+    ])
+  + grp("الإدارة",[
+      {id:"staff",   label:"الفريق والأحمال", show:isMgr},
+      {id:"services",label:"أنواع الخدمات والقوالب", show:isAdmin},
+      {id:"users",   label:"المستخدمون", show:isAdmin},
+      {id:"audit",   label:"سجل التدقيق", show:r==="owner"},
+    ])
+  + grp("مساعدة",[
+      {id:"ask",     label:"اسأل مساعد القسم"},
+    ]);
+
+  el.querySelectorAll("[data-more]").forEach(b=>b.onclick=()=>moreGo(b.dataset.more));
+}
+
+function moreGo(id){
+  const direct={tasks:"tasks",contract:"contract",chat:"chat",ask:"ask"};
+  if(direct[id]) return switchTab(direct[id]);
+  const fn={finance:"openFinance",vouchers:"openVouchers",staff:"openStaffProgress",
+            services:"openServiceTypes",users:"openUsers",audit:"openAuditLog"}[id];
+  if(fn && typeof window[fn]==="function") return window[fn]();
+  toast("الشاشة دي جاية في التحديث الجاي","ok");
+}
+
 function buildTabs(){
-  const tabs=[{id:"home",ic:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',nm:"الرئيسية"},{id:"req",ic:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5c-1.6 0-3.1-.4-4.4-1.2L3 20l1.2-4.6A8.5 8.5 0 1 1 21 11.5z"/></svg>',nm:"الطلبات"}];
-  if(canContracts()) tabs.push({id:"contract",ic:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>',nm:"العقود"});
-  tabs.push({id:"ask",ic:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.3a2.5 2.5 0 0 1 4.9.7c0 1.7-2.4 2-2.4 3.4"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',nm:"اسأل"});
-  tabs.push({id:"chat",ic:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',nm:"الدردشة"});
-  tabs.push({id:"tasks",ic:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>',nm:"المهام"});
+  /* المرحلة ٣ — أربعة عناصر فقط.
+     «اسأل» و«الدردشة» و«العقود» خرجوا من التنقّل: صفر استخدام مقاس أو ليسوا وجهة.
+     الوزن البصري = التكرار × الأهمية × الإلحاح × المخاطرة. */
+  const tabs=[
+    {id:"home",    ic:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>', nm:"شغلي"},
+    {id:"archive", ic:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>', nm:"بيان الأعمال"},
+    {id:"req",     ic:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.5 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.5A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.5z"/></svg>', nm:"الوارد"},
+    {id:"more",    ic:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>', nm:"المزيد"}
+  ];
   $("tabbar").innerHTML = tabs.map(t=>`
-    <button class="tab ${t.id===activeTab?'on':''}" data-tab="${t.id}">
+    <button class="tab ${t.id===activeTab?'on':''}" data-tab="${t.id}" aria-label="${t.nm}">
       <span class="ic">${t.ic}</span>${t.nm}
       ${t.id==="req"?`<span class="nbadge" id="reqBadge"></span>`:""}
-      ${t.id==="chat"?'<span class="nbadge chat-badge" id="chatBadge" style="position:relative;display:none;background:var(--green-d);color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;margin-right:4px;"></span>':""}
     </button>`).join("");
   $("tabbar").querySelectorAll(".tab").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
 }
+
 function switchTab(id){
   track("screen",id);
   try{ checkAppVersion(); }catch(e){}
@@ -1778,13 +2117,17 @@ function switchTab(id){
   if(sRecOn){ stopSheetMic(true); toast("التسجيل اتقفل عشان غيّرت الشاشة","ok"); }
   activeTab=id;
   $("tabbar").querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.tab===id));
-  ["home","req","contract","ask","chat","tasks"].forEach(v=>$("v-"+v).classList.toggle("active",v===id));
+  ["home","req","contract","ask","chat","tasks","archive","more"].forEach(v=>{
+    const el=$("v-"+v); if(el) el.classList.toggle("active",v===id);
+  });
   if(id==="home") renderHome();
   if(id==="req") renderRequests();
   if(id==="contract") renderContract();
   if(id==="ask") renderAsk();
   if(id==="chat"){ clearChatBadge(); renderChatRoom(); }
   if(id==="tasks") renderTasks();
+  if(id==="archive") renderArchive();
+  if(id==="more") renderMore();
   window.scrollTo(0,0);
 }
 
@@ -8099,12 +8442,46 @@ async function paintSysDiag(){
   }catch(e){ box.innerHTML='<div class="empty">القراءة متاحة للإدارة وفريق التطوير بس.</div>'; }
 }
 async function openGlobalSearch(){
-  openSheet('<h3>بحث موحّد</h3>'
-    +'<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">المهام · الطلبات · المستندات · المشاريع</div>'
-    +'<div class="field"><input id="gsIn" placeholder="اكتب كلمة ودوّر…" autocomplete="off"/></div>'
-    +'<div id="gsBox" style="margin-top:10px;min-height:120px"><div class="empty">اكتب حاجة للبحث.</div></div>'
-    +'<div class="row-actions" style="margin-top:10px"><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
-  const inp=$("gsIn"); if(inp){ inp.focus(); inp.oninput=(e)=>{ const q=(e.target.value||"").trim(); clearTimeout(window._gsT); window._gsT=setTimeout(()=>runGlobalSearch(q),300); }; }
+  /* المرحلة ٣ — البحث هو المنتج: عميل · أرض · ملف · تليفون · كود */
+  openSheet('<h3>بحث</h3>'
+    +'<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">'
+    +'الاسم · التليفون · رقم القطعة · كود الملف</div>'
+    +'<div class="field"><input id="gsIn" class="inp gsearch" '
+    +'placeholder="اكتب أي حاجة…" autocomplete="off" inputmode="search"/></div>'
+    +'<div id="gsBox" style="margin-top:10px;min-height:120px">'
+    +'<div class="muted" style="padding:18px;text-align:center;font-size:12.5px">'
+    +'ابحث بآخر أرقام التليفون · أو رقم القطعة · أو كود الملف</div></div>'
+    +'<div class="row-actions" style="margin-top:10px">'
+    +'<button class="btn secondary sm" onclick="closeSheet()">قفل</button></div>');
+  const inp=$("gsIn");
+  if(inp){
+    inp.focus();
+    const go=()=>{ const q=(inp.value||"").trim(); gsRun(q); };
+    inp.oninput=()=>{ clearTimeout(window._gsT); window._gsT=setTimeout(go,240); };
+    inp.onkeydown=e=>{ if(e.key==="Enter"){ clearTimeout(window._gsT); go(); } };
+  }
+}
+
+async function gsRun(q){
+  const box=$("gsBox"); if(!box) return;
+  if(!q){ box.innerHTML='<div class="muted" style="padding:18px;text-align:center;font-size:12.5px">'
+    +'ابحث بآخر أرقام التليفون · أو رقم القطعة · أو كود الملف</div>'; return; }
+  box.innerHTML='<div class="muted" style="padding:16px;text-align:center">بيدوّر…</div>';
+  try{
+    const res=await gsearch(q);
+    box.innerHTML=gsearchHTML(res,q);
+    box.querySelectorAll("[data-gj]").forEach(b=>b.onclick=()=>{
+      closeSheet(); if(typeof openProjectDetail==="function") openProjectDetail(b.dataset.gj); });
+    box.querySelectorAll("[data-gp]").forEach(b=>b.onclick=()=>{
+      closeSheet(); if(typeof openParcel==="function") openParcel(b.dataset.gp);
+      else toast("سجل الأرض جاي قريب","ok"); });
+    box.querySelectorAll("[data-gc]").forEach(b=>b.onclick=()=>{
+      closeSheet(); if(typeof openClientRecord==="function") openClientRecord(b.dataset.gc);
+      else toast("سجل العميل جاي قريب","ok"); });
+  }catch(e){
+    box.innerHTML='<div class="empty-state"><b>البحث وقف</b>'
+      +'<div class="muted" style="font-size:12px;margin-top:4px">'+esc(e.message||"")+'</div></div>';
+  }
 }
 async function runGlobalSearch(q){
   const box=$("gsBox"); if(!box) return;
