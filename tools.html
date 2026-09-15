@@ -1808,6 +1808,76 @@ function canContracts(){ return myDeptKey()==="legal"; }
 
 
 
+
+/* ═══════════════ المرحلة ٨ — صحة العمود الفقري ═══════════════
+   القياس أثبت إن كل حاجة كانت بتقدر تهرب من بيان الأعمال بصمت.
+   القيود بتمنع الجديد — والشاشة دي بتكشف الباقي. */
+
+const UNLINK_AR={cost:"مصروف",approval:"موافقة",gov_case:"معاملة حكومية",
+                 task:"مهمة هندسية",file:"مرفق",journal:"قيد محاسبي"};
+
+async function openSpineHealth(){
+  if(!["owner","coceo","ops"].includes((PROFILE&&PROFILE.role)||""))
+    return toast("الشاشة دي للإدارة","err");
+  openSheet('<h3>صحة بيان الأعمال</h3>'
+    +'<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">'
+    +'إيه اللي بيمشي من غير ما يترّبط بملف</div>'
+    +'<div id="shBox"><div class="skel"></div></div>'
+    +actMini([{label:"قفل",on:"closeSheet()"}]));
+  try{
+    const [{ data:h },{ data:rows }]=await Promise.all([
+      sb.from("os_spine_health").select("*").maybeSingle(),
+      sb.from("os_unlinked_work").select("kind,ref,item,amount,on_date,note,why")
+        .order("on_date",{ascending:false}).limit(150)
+    ]);
+    const R=rows||[], H=h||{};
+
+    let x='<div class="card" style="margin-bottom:12px">'
+      +'<div style="display:flex;gap:10px;text-align:center;flex-wrap:wrap">'
+      +'<div style="flex:1;min-width:70px"><b style="display:block;font-size:17px">'+(+H.jobs_open||0)+'</b>'
+      +'<span class="muted" style="font-size:10.5px">ملف مفتوح</span></div>'
+      +'<div style="flex:1;min-width:70px"><b style="display:block;font-size:17px;color:'
+      +((+H.unlinked_costs||0)>0?'#b45309':'#16a34a')+'">'+(+H.unlinked_costs||0)+'</b>'
+      +'<span class="muted" style="font-size:10.5px">مصروف بلا ملف</span></div>'
+      +'<div style="flex:1;min-width:70px"><b style="display:block;font-size:17px;color:'
+      +((+H.unlinked_approvals||0)>0?'#b45309':'#16a34a')+'">'+(+H.unlinked_approvals||0)+'</b>'
+      +'<span class="muted" style="font-size:10.5px">موافقة بلا ملف</span></div>'
+      +'</div>';
+    if(+H.unlinked_cost_amount>0)
+      x+='<div class="warn-inline" style="margin-top:8px">'
+        +'قيمة المصروفات غير المربوطة: <b>'+Number(H.unlinked_cost_amount).toLocaleString("en")+' ج</b></div>';
+    if(+H.jobs_no_engagement>0)
+      x+='<div class="warn-inline" style="margin-top:6px">⚠️ '+H.jobs_no_engagement
+        +' ملف بلا ارتباط — مش هيظهر في سجل العميل</div>';
+    x+='</div>';
+
+    if(!R.length){
+      x+='<div class="empty-state"><b>كل حاجة مربوطة</b>'
+        +'<div class="muted" style="font-size:12px;margin-top:4px">'
+        +'مفيش شغل ولا فلوس بره بيان الأعمال</div></div>';
+    }else{
+      const byKind={};
+      R.forEach(r=>{ (byKind[r.kind]=byKind[r.kind]||[]).push(r); });
+      Object.entries(byKind).forEach(([k,list])=>{
+        x+='<div class="sec-h">'+esc(UNLINK_AR[k]||k)+' ('+list.length+') <span class="ln"></span></div>';
+        x+='<div class="muted" style="font-size:11.5px;margin:-4px 2px 6px">'+esc(list[0].why||"")+'</div>';
+        x+='<table class="dtable"><thead><tr><th>البند</th><th>التاريخ</th><th>المبلغ</th></tr></thead><tbody>';
+        list.forEach(r=>{
+          x+='<tr><td><b>'+esc(r.item||"—")+'</b>'
+            +(r.note?'<div class="muted" style="font-size:11px">'+esc(r.note)+'</div>':'')+'</td>'
+            +'<td class="ltr muted" style="font-size:11.5px">'+esc(r.on_date||"—")+'</td>'
+            +'<td class="ltr">'+(r.amount?Number(r.amount).toLocaleString("en"):'—')+'</td></tr>';
+        });
+        x+='</tbody></table>';
+      });
+      x+='<div class="muted" style="font-size:11.5px;margin-top:10px">'
+        +'البنود دي مش غلط بالضرورة — مصروفات المكتب ومعاملاته مالهاش ملف بطبيعتها. '
+        +'الشاشة عشان تراجع اللي المفروض يكون على ملف.</div>';
+    }
+    $("shBox").innerHTML=x;
+  }catch(e){ $("shBox").innerHTML=failBox("معرفناش نجيبها.",()=>openSpineHealth()); }
+}
+
 /* ═══════════════ المرحلة ٦ — الصلاحيات والانتهاء ═══════════════
    المنتهي كان بيختفي من المراقبة. دلوقتي بيفضل ظاهر سنة كاملة. */
 
@@ -2846,6 +2916,8 @@ function renderMore(){
     ])
   + grp("الإدارة",[
       {id:"expiry",  label:"الصلاحيات والانتهاء"},
+      {id:"spine",   label:"صحة بيان الأعمال",
+       show:["owner","coceo","ops"].includes(r)},
       {id:"staff",   label:"الفريق والأحمال", show:isMgr},
       {id:"services",label:"أنواع الخدمات وقوالب الدفعات", show:canEditPlans()},
       {id:"users",   label:"المستخدمون", show:isAdmin},
@@ -2861,6 +2933,7 @@ function renderMore(){
 function moreGo(id){
   if(id==="retro")  return openRetroJob();
   if(id==="expiry") return openExpiring();
+  if(id==="spine")  return openSpineHealth();
   const direct={tasks:"tasks",contract:"contract",chat:"chat",ask:"ask"};
   if(direct[id]) return switchTab(direct[id]);
   const fn={finance:"openFinance",vouchers:"openVouchers",staff:"openStaffProgress",
@@ -4723,7 +4796,8 @@ async function openGovCaseNew(){
   $("gcGo").onclick=async()=>{
     const title=$("gcTitle").value.trim(); if(!title){ toast("اكتب عنوان المعاملة","bad"); return; }
     const btn=$("gcGo"); btn.disabled=true; btn.textContent="بيضيف…";
-    const payload={ title, case_type:readSelect("gcType"), government_body:$("gcBody").value.trim()||null, project_id:$("gcProject").value||null, target_date:$("gcTarget").value||null, notes:$("gcNotes").value.trim()||null, dept:PROFILE.dept||null, assigned_to:ME.id, assigned_to_name:PROFILE.name, created_by:ME.id, created_by_name:PROFILE.name };
+    const payload={ title, case_type:readSelect("gcType"), government_body:$("gcBody").value.trim()||null, project_id:$("gcProject").value||null, target_date:$("gcTarget").value||null, notes:$("gcNotes").value.trim()||null, dept:PROFILE.dept||null,
+      scope: ($("gcProject").value ? 'job' : 'office'), assigned_to:ME.id, assigned_to_name:PROFILE.name, created_by:ME.id, created_by_name:PROFILE.name };
     const { error }=await sb.from("os_gov_cases").insert(payload);
     if(error){ toast("معرفناش نضيف: "+error.message,"bad"); btn.disabled=false; btn.textContent="أضف المعاملة"; return; }
     toast("المعاملة اتضافت","ok"); openGovCases();
@@ -7307,18 +7381,26 @@ async function openCostNew(preJobId){
     +'<div class="field"><label>التصنيف</label><select id="csCat">'+catOpts+'</select></div>'
     +'<div class="field"><label>المبلغ (ج)</label><input id="csAmt" type="number" min="0" inputmode="numeric"/></div>'
     +'<div class="field"><label>تاريخ الصرف</label><input id="csDate" type="date" value="'+todayStr()+'"/></div>'
-    +'<div class="row-actions"><button class="btn green" id="csGo">سجّل المصروف</button>'
+    +'<div id="csScope" class="warn-inline" style="display:none;margin-bottom:8px">'
+    +'⚠️ هيتسجّل كمصروف مكتب عام — مش على أي ملف</div>'
+    +'<div class="row-actions"><button class="btn primary" id="csGo">سجّل المصروف</button>'
     +'<button class="btn ghost" onclick="openFinance()">إلغاء</button></div>');
   addMicTo("csTitle");
   _pickRebind=()=>{ addMicTo("csTitle"); bindCs(); };
   function bindCs(){
+  const _sc=$("csScope"), _pj=$("csPrj");
+  const _upd=()=>{ if(_sc) _sc.style.display = (_pj && _pj.value) ? "none" : "block"; };
+  if(_pj){ _pj.onchange=_upd; _pj.oninput=_upd; }
+  _upd();
   $("csGo").onclick=async()=>{
     const prj=$("csPrj").value||null, title=$("csTitle").value.trim(), amt=parseFloat($("csAmt").value);
     if(!title){ toast("اكتب البند","bad"); return; }
     if(!amt||amt<=0){ toast("اكتب المبلغ","bad"); return; }
     const btn=$("csGo"); btn.disabled=true; btn.textContent="بيسجّل…";
     const cat=await resolveCat("csCat","expense");
-    const { data, error }=await sb.from("os_project_costs").insert({ project_id:prj, title,
+    /* scope صريح: إما على ملف أو مصروف مكتب — مفيش حالة تالتة صامتة */
+    const { data, error }=await sb.from("os_project_costs").insert({ project_id:prj||null, title,
+      scope: prj ? 'job' : 'overhead',
       category:cat||readSelect("csCat"), amount:amt, spent_on:$("csDate").value||todayStr(), created_by:ME.id }).select("id,approved");
     if(error){
       const m=error.message||"";
@@ -7361,6 +7443,7 @@ async function openExpiring(){
       const target=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
       const { error }=await sb.from("os_gov_cases").insert({
         title:"تجديد: "+item, case_type:"renewal", dept:PROFILE.dept||null,
+        scope:'office',
         status:"new", progress:0, target_date:target,
         assigned_to:ME.id, assigned_to_name:PROFILE.name, created_by:ME.id, created_by_name:PROFILE.name,
         notes:"اتعملت أوتوماتيك من تنبيه الانتهاء — باقي "+days+" يوم"
@@ -7386,6 +7469,9 @@ async function openApprovals(){
     +'<div class="sec-h">اطلب موافقة <span class="ln"></span></div>'
     +'<div class="field"><label>النوع</label><select id="apKind">'+APPROVAL_KINDS.map(k=>'<option value="'+k[0]+'">'+k[1]+'</option>').join("")+'</select></div>'
     +'<div class="field"><label>العنوان</label><input id="apTitle" placeholder="مثلًا: شراء طابعة للقسم"/></div>'
+    +jobPickerField("apPrj","على ملف؟ (سيبه فاضي لو مصروف مكتب)")
+    +'<div id="apScope" class="warn-inline" style="display:none;margin-bottom:8px">'
+    +'⚠️ مش مربوطة بملف — هتتحسب مصروف مكتب</div>'
     +'<div class="field"><label>المبلغ (بالجنيه) *</label><input id="apAmt" type="number" inputmode="numeric" min="0" placeholder="مثلاً: 3500"/><div class="muted" id="apAmtHint" style="font-size:12px;display:none;margin-top:4px"></div></div>'
     +'<div class="field"><label>تفاصيل</label><textarea id="apDet" placeholder="ليه محتاجها؟"></textarea></div>'
     +'<div class="row-actions"><button class="btn green" id="apGo">ابعت للموافقة</button><button class="btn ghost" onclick="closeSheet()">قفل</button></div>');
@@ -7405,9 +7491,15 @@ async function openApprovals(){
     const amtRaw=parseFloat($("apAmt").value);
     if(isNaN(amtRaw)||amtRaw<=0){ $("apAmt").style.borderColor="var(--red)"; toast("اكتب المبلغ — الموافقات هنا مالية. لو طلبك مش مالي ابعته من شاشة الطلبات","bad"); setTimeout(()=>$("apAmt").style.borderColor="",2500); return; }
     const amt=amtRaw;
-    const { error }=await sb.from("os_approvals").insert({ kind:$("apKind").value, title, details:$("apDet").value.trim()||null, amount:amt, requester_id:ME.id, requester_name:PROFILE.name, status:"pending" });
+    const _ap=$("apPrj"), _apv=_ap?(_ap.value||null):null;
+    const { error }=await sb.from("os_approvals").insert({ kind:$("apKind").value, title, details:$("apDet").value.trim()||null, amount:amt, requester_id:ME.id, requester_name:PROFILE.name, status:"pending", project_id:_apv, scope:(_apv?'job':'overhead') });
     if(error){ toast("معرفناش نبعت: "+error.message,"bad"); return; }
     toast("اتبعتت للموافقة","ok"); paintApprovals();
+  const _apj=$("apPrj"), _aps=$("apScope");
+  const _apu=()=>{ if(_aps) _aps.style.display=(_apj&&_apj.value)?"none":"block"; };
+  if(_apj){ _apj.onchange=_apu; _apj.oninput=_apu; }
+  _apu();
+    if(_ap) _ap.value=""; if($("apScope")) $("apScope").style.display="block";
     $("apTitle").value=""; $("apAmt").value=""; $("apDet").value="";
   };
   await paintApprovals();
