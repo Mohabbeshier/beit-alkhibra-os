@@ -300,6 +300,12 @@ button.stat,button.dept-card{font-family:inherit;cursor:pointer;}
 
 .chip-retro{display:inline-block;background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;border-radius:8px;padding:1px 7px;font-size:10.5px;font-weight:600;margin-right:4px}
 .retro-banner{background:#faf5ff;border:1px solid #ddd6fe;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:13px;color:#4c1d95}
+
+.exp-chip{display:inline-block;border-radius:8px;padding:1px 7px;font-size:10.5px;font-weight:600;white-space:nowrap}
+.exp-red{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+.exp-amber{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
+.exp-blue{background:#dbeafe;color:#1e40af;border:1px solid #93c5fd}
+.exp-grey{background:#f1f5f9;color:#475569;border:1px solid #cbd5e1}
 </style>
 </head>
 <body>
@@ -1801,6 +1807,63 @@ function canContracts(){ return myDeptKey()==="legal"; }
 
 
 
+
+/* ═══════════════ المرحلة ٦ — الصلاحيات والانتهاء ═══════════════
+   المنتهي كان بيختفي من المراقبة. دلوقتي بيفضل ظاهر سنة كاملة. */
+
+const EXP_KIND={document:"مستند",mandate:"توكيل",contract:"عقد عمل",probation:"فترة اختبار"};
+const EXP_URG={expired:{t:"منتهي",c:"exp-red"},urgent:{t:"عاجل",c:"exp-amber"},
+               soon:{t:"قريب",c:"exp-blue"},watch:{t:"مراقبة",c:"exp-grey"}};
+
+async function openExpiring(){
+  openSheet('<h3>الصلاحيات والانتهاء</h3>'
+    +'<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">'
+    +'المنتهي بيفضل ظاهر — مش بيختفي أول ما ينتهي</div>'
+    +'<div id="expBox"><div class="skel"></div></div>'
+    +actMini([{label:"قفل",on:"closeSheet()"}]));
+  try{
+    const { data, error } = await sb.from("os_expiring_soon")
+      .select("kind,item,expires,dept,days_left,urgency,state_ar,project_id")
+      .order("days_left");
+    if(error) throw error;
+    const R=data||[];
+    if(!R.length){
+      $("expBox").innerHTML='<div class="empty-state"><b>مفيش حاجة قرّبت تنتهي</b>'
+        +'<div class="muted" style="font-size:12px;margin-top:4px">'
+        +'بنراقب المستندات والتوكيلات وعقود العمل وفترات الاختبار</div></div>';
+      return;
+    }
+    const grp={expired:[],urgent:[],soon:[],watch:[]};
+    R.forEach(r=>{ (grp[r.urgency]||grp.watch).push(r); });
+
+    let h='';
+    const sec=(key,title,note)=>{
+      const rows=grp[key]; if(!rows.length) return "";
+      let x='<div class="sec-h">'+title+' ('+rows.length+') <span class="ln"></span></div>';
+      if(note) x+='<div class="muted" style="font-size:11.5px;margin:-4px 2px 6px">'+note+'</div>';
+      x+='<table class="dtable"><thead><tr><th>النوع</th><th>البند</th><th>الحالة</th></tr></thead><tbody>';
+      rows.forEach(r=>{
+        const u=EXP_URG[r.urgency]||EXP_URG.watch;
+        x+='<tr'+(r.project_id?' data-expjob="'+r.project_id+'"':'')+'>'
+          +'<td><span class="exp-chip '+u.c+'">'+esc(EXP_KIND[r.kind]||r.kind)+'</span></td>'
+          +'<td><b>'+esc(r.item)+'</b>'
+          +'<div class="muted ltr" style="font-size:11px">'+esc(r.expires)+'</div></td>'
+          +'<td>'+esc(r.state_ar)+(r.project_id?' <span class="row-go">›</span>':'')+'</td></tr>';
+      });
+      return x+'</tbody></table>';
+    };
+    h+=sec("expired","⚠️ منتهي فعلاً","توكيل منتهي معناه شغل بيتعمل بلا صفة قانونية");
+    h+=sec("urgent","خلال 30 يوم","");
+    h+=sec("soon","خلال 60 يوم","");
+    h+=sec("watch","تحت المراقبة","");
+    $("expBox").innerHTML=h;
+    document.querySelectorAll("#expBox tr[data-expjob]").forEach(tr=>{
+      tr.onclick=()=>{ closeSheet();
+        if(typeof openProjectDetail==="function") openProjectDetail(tr.dataset.expjob); };
+    });
+  }catch(e){ $("expBox").innerHTML=failBox("معرفناش نجيبها.",()=>openExpiring()); }
+}
+
 /* ═══════════════ المرحلة ٥ — الإدخال الرجعي ═══════════════
    الكشف تلقائي في قاعدة البيانات. الواجهة بتعرض الختم وبتسمح
    بتاريخ تقريبي («2024» من غير شهر ويوم). */
@@ -2782,6 +2845,7 @@ function renderMore(){
       {id:"vouchers",label:"سندات القبض والصرف", show:isFin},
     ])
   + grp("الإدارة",[
+      {id:"expiry",  label:"الصلاحيات والانتهاء"},
       {id:"staff",   label:"الفريق والأحمال", show:isMgr},
       {id:"services",label:"أنواع الخدمات وقوالب الدفعات", show:canEditPlans()},
       {id:"users",   label:"المستخدمون", show:isAdmin},
@@ -2795,7 +2859,8 @@ function renderMore(){
 }
 
 function moreGo(id){
-  if(id==="retro") return openRetroJob();
+  if(id==="retro")  return openRetroJob();
+  if(id==="expiry") return openExpiring();
   const direct={tasks:"tasks",contract:"contract",chat:"chat",ask:"ask"};
   if(direct[id]) return switchTab(direct[id]);
   const fn={finance:"openFinance",vouchers:"openVouchers",staff:"openStaffProgress",
