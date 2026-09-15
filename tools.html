@@ -297,6 +297,9 @@ button.stat,button.dept-card{font-family:inherit;cursor:pointer;}
 .warn-inline{color:#b45309;font-weight:600;font-size:12.5px}
 .ltr{direction:ltr;unicode-bidi:isolate;display:inline-block}
 .dtable tbody tr:focus-visible,.res-row:focus-visible,.more-row:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+
+.chip-retro{display:inline-block;background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;border-radius:8px;padding:1px 7px;font-size:10.5px;font-weight:600;margin-right:4px}
+.retro-banner{background:#faf5ff;border:1px solid #ddd6fe;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:13px;color:#4c1d95}
 </style>
 </head>
 <body>
@@ -1797,6 +1800,85 @@ function canContracts(){ return myDeptKey()==="legal"; }
 /* ===================== TABS ===================== */
 
 
+
+/* ═══════════════ المرحلة ٥ — الإدخال الرجعي ═══════════════
+   الكشف تلقائي في قاعدة البيانات. الواجهة بتعرض الختم وبتسمح
+   بتاريخ تقريبي («2024» من غير شهر ويوم). */
+
+const PREC_AR={exact:"",month:"تقريبي — الشهر",year:"تقريبي — السنة"};
+
+function retroStamp(p){
+  if(!p || !p.is_retro) return "";
+  const pr = p.date_precision && p.date_precision!=="exact"
+    ? ' <span class="muted" style="font-size:10.5px">('+esc(PREC_AR[p.date_precision])+')</span>' : "";
+  return '<span class="chip-retro">مُدخل لاحقاً</span>'+pr;
+}
+
+function retroBanner(p){
+  if(!p || !p.is_retro) return "";
+  return '<div class="retro-banner">📜 <b>ملف مُدخل لاحقاً</b>'
+    +'<div style="font-size:12px;margin-top:3px">'
+    +'تاريخ الحدث '+esc(p.opened_on||"—")
+    +(p.entered_at?' · اتسجّل في النظام '+esc(String(p.entered_at).slice(0,10)):'')
+    +'<br>الإشعارات متسكّتة والمهام الفايتة مش محسوبة متأخرة.</div></div>';
+}
+
+/* فتح ملف بتاريخ قديم — تاريخ كامل أو تقريبي */
+function openRetroJob(){
+  if(!["owner","coceo","ops","manager"].includes((PROFILE&&PROFILE.role)||""))
+    return toast("تسجيل ملفات قديمة للإدارة","err");
+  const yrs=[]; const Y=new Date().getFullYear();
+  for(let y=Y;y>=Y-15;y--) yrs.push(y);
+  openSheet('<h3>تسجيل ملف قديم</h3>'
+    +'<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">'
+    +'للأرشيف. النظام بيكتشف إنه قديم لوحده ويسكّت الإشعارات.</div>'
+    +'<div class="field"><label>دقة التاريخ</label><select id="rjPrec">'
+    +'<option value="exact">تاريخ محدد</option>'
+    +'<option value="month">الشهر بس</option>'
+    +'<option value="year">السنة بس</option></select></div>'
+    +'<div class="field" id="rjExactF"><label>التاريخ</label><input id="rjExact" type="date"/></div>'
+    +'<div class="field" id="rjMonthF" style="display:none"><label>الشهر</label><input id="rjMonth" type="month"/></div>'
+    +'<div class="field" id="rjYearF" style="display:none"><label>السنة</label><select id="rjYear">'
+    +yrs.map(y=>'<option value="'+y+'">'+y+'</option>').join("")+'</select></div>'
+    +'<div class="muted" style="font-size:11.5px;margin-bottom:10px">'
+    +'التاريخ التقريبي بيتحفظ كأول يوم في الفترة، وبيتعرض بعلامة «تقريبي».</div>'
+    +'<div class="row-actions"><button class="btn primary" id="rjGo">كمّل بيانات الملف</button>'
+    +'<button class="btn secondary" onclick="closeSheet()">قفل</button></div>');
+
+  const pr=$("rjPrec");
+  pr.onchange=()=>{
+    $("rjExactF").style.display = pr.value==="exact"?"":"none";
+    $("rjMonthF").style.display = pr.value==="month"?"":"none";
+    $("rjYearF").style.display  = pr.value==="year" ?"":"none";
+  };
+  $("rjGo").onclick=()=>{
+    const p=pr.value; let d=null;
+    if(p==="exact") d=$("rjExact").value||null;
+    else if(p==="month") d=($("rjMonth").value||"")+"-01";
+    else d=$("rjYear").value+"-01-01";
+    if(!d || d.length<10) return toast("اختار التاريخ","err");
+    if(new Date(d) > new Date()) return toast("التاريخ في المستقبل","err");
+    RETRO_PENDING={date:d, precision:p};
+    closeSheet();
+    if(typeof openQuickJob==="function") openQuickJob();
+    else toast("افتح ملف جديد والتاريخ هيتطبّق","ok");
+  };
+}
+let RETRO_PENDING=null;
+
+/* بعد إنشاء الملف — نطبّق التاريخ الرجعي لو متحدد */
+async function applyRetroIfPending(jid){
+  if(!RETRO_PENDING || !jid) return;
+  const r=RETRO_PENDING; RETRO_PENDING=null;
+  try{
+    const { error } = await sb.from("os_projects")
+      .update({ opened_on:r.date, date_precision:r.precision, is_retro:true })
+      .eq("id",jid);
+    if(error) throw error;
+    toast("اتسجّل كملف قديم — "+r.date,"ok");
+  }catch(e){ toast("التاريخ ماتحفظش: "+String(e.message||e),"err"); }
+}
+
 /* ═══════════════ المرحلة ٤ — الدفعات والشاشات الإدارية ═══════════════ */
 
 const SVC_AR={C:"إنشاءات",D:"تصميم ورسومات",L:"ترخيص",O:"خدمات أخرى",S:"إشراف ومتابعة",U:"مرافق"};
@@ -2690,6 +2772,8 @@ function renderMore(){
   el.innerHTML = `<div class="page-h"><div><h2>المزيد</h2></div></div>`
   + grp("الشغل",[
       {id:"tasks",   label:"المهام وأوامر الشغل"},
+      {id:"retro",   label:"تسجيل ملف قديم (أرشيف)",
+       show:["owner","coceo","ops","manager"].includes(r)},
       {id:"contract",label:"العقود", show:(typeof canContracts==="function")&&canContracts()},
       {id:"chat",    label:"الدردشة"},
     ])
@@ -2711,6 +2795,7 @@ function renderMore(){
 }
 
 function moreGo(id){
+  if(id==="retro") return openRetroJob();
   const direct={tasks:"tasks",contract:"contract",chat:"chat",ask:"ask"};
   if(direct[id]) return switchTab(direct[id]);
   const fn={finance:"openFinance",vouchers:"openVouchers",staff:"openStaffProgress",
@@ -4163,13 +4248,16 @@ async function paintProjectDetail(id){
     const fl=files||[];
     const tsk=ptasks||[];
     const openTsk=tsk.filter(t=>t.status!=="done");
-    const overdueTsk=openTsk.filter(t=>t.deadline&&new Date(t.deadline)<new Date());
+    /* ملف مُدخل لاحقاً: المهام الفايتة تاريخية مش متأخرة */
+    const overdueTsk = prj.is_retro ? []
+      : openTsk.filter(t=>t.deadline&&new Date(t.deadline)<new Date());
     const dt=prj.created_at?new Date(prj.created_at).toLocaleDateString("ar-EG"):"";
     /* نظرة سريعة ذكية */
     const lastActs=[prj.created_at,...fl.map(f=>f.created_at),...tsk.map(t=>t.created_at)].filter(Boolean).sort().reverse();
     const lastAct=lastActs[0];
     const staleDays=lastAct?Math.floor((Date.now()-new Date(lastAct).getTime())/86400000):null;
-    let h='<div class="card" style="background:linear-gradient(135deg,#EEF4FF,#F3FBF3);border-color:#C7D9F5;margin-bottom:12px">'
+    let h=retroBanner(prj)
+      +'<div class="card" style="background:linear-gradient(135deg,#EEF4FF,#F3FBF3);border-color:#C7D9F5;margin-bottom:12px">'
       +'<div style="font-family:Cairo,sans-serif;font-weight:800;font-size:12.5px;margin-bottom:8px;color:var(--blue-d)">🧠 نظرة سريعة</div>'
       +'<div style="font-size:12.5px;line-height:1.9">'
       +'<div><b>آخر نشاط:</b> '+(lastAct?relativeTime(lastAct):"—")+(staleDays!==null&&staleDays>=7?' <span style="color:#B45309;font-weight:700">— واقف '+staleDays+' يوم</span>':'')+'</div>'
