@@ -417,6 +417,132 @@ const HELP_TEXT={
   decisions:"سجل القرارات الإدارية المهمة بتاريخها ومين اتخذها.",
   meeting:"تقرير اجتماع — بتسجّل المحضر والقرارات والمهام اللي طلعت منه."
 };
+/* ═══════════ لوحة المالك — الفلوس والخطر والقرار ═══════════ */
+function _kj(n){ n=Number(n)||0;
+  if(Math.abs(n)>=1000000) return (n/1000000).toFixed(n%1000000?1:0)+"م";
+  if(Math.abs(n)>=1000)    return (n/1000).toFixed(Math.abs(n)<10000?1:0)+"ألف";
+  return String(Math.round(n));
+}
+
+async function loadOwnerDash(){
+  try{
+    const [{ data:D },{ data:due }]=await Promise.all([
+      sb.from("os_owner_dash").select("*").maybeSingle(),
+      sb.from("os_owner_top_due").select("*").limit(4)
+    ]);
+    if(!D) return;
+    paintOwnerStats(D);
+    paintOwnerMoney(D);
+    paintOwnerDecide(D);
+    paintOwnerRisk(D, due||[]);
+  }catch(e){ /* اللوحة إضافية — مبنوقعش الشاشة */ }
+}
+
+function paintOwnerStats(D){
+  const el=$("ownStats"); if(!el) return;
+  const cash=+D.cash||0, due=+D.due_total||0, late=+D.due_late||0;
+  const cell=(v,lbl,col,go)=>'<button class="card flat" onclick="'+go+'" '
+    +'style="flex:1;text-align:center;cursor:pointer;padding:10px 4px;margin:0">'
+    +'<b style="display:block;font-size:17px;color:'+col+'">'+v+'</b>'
+    +'<span class="muted" style="font-size:10px">'+lbl+'</span></button>';
+  el.innerHTML=
+     cell(_kj(cash),"في الخزينة","var(--green-d)","openFinance()")
+    +cell(_kj(due),"مستحق لينا", due>0?"#B45309":"var(--ink)","openReceivables()")
+    +cell(_kj(late),"منه متأخر", late>0?"var(--red)":"var(--ink-soft)","openReceivables()");
+}
+
+function paintOwnerMoney(D){
+  const el=$("ownMoney"); if(!el) return;
+  const inM=+D.in_month||0, outM=+D.out_month||0, prev=+D.in_prev||0;
+  const net=inM-outM;
+  let trend="";
+  if(prev>0){
+    const pc=Math.round((inM-prev)/prev*100);
+    trend='<span style="font-size:11px;font-weight:800;color:'+(pc>=0?"var(--green-d)":"var(--red)")+'">'
+      +(pc>=0?"▲ ":"▼ ")+Math.abs(pc)+'% عن الشهر اللي فات</span>';
+  }
+  const w=inM+outM>0 ? Math.round(inM/(inM+outM)*100) : 50;
+  el.innerHTML='<div class="card" style="background:linear-gradient(135deg,#F3FBF3,#EEF4FF);border-color:#C7E3C7">'
+    +'<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
+    +'<b style="font-size:13px;flex:1">حركة الشهر</b>'+trend+'</div>'
+    +'<div style="display:flex;gap:10px;text-align:center">'
+    +'<div style="flex:1"><b style="display:block;font-size:16px;color:var(--green-d)">'+_kj(inM)+'</b>'
+    +'<span class="muted" style="font-size:10.5px">دخل</span></div>'
+    +'<div style="flex:1"><b style="display:block;font-size:16px;color:var(--red)">'+_kj(outM)+'</b>'
+    +'<span class="muted" style="font-size:10.5px">خرج</span></div>'
+    +'<div style="flex:1"><b style="display:block;font-size:16px;color:'+(net>=0?"var(--green-d)":"var(--red)")+'">'
+    +(net>=0?"+":"")+_kj(net)+'</b><span class="muted" style="font-size:10.5px">الصافي</span></div></div>'
+    +'<div class="prog" style="margin-top:9px;height:6px"><i style="width:'+w+'%;background:var(--green-d)"></i></div>'
+    +'</div>';
+}
+
+function paintOwnerDecide(D){
+  const el=$("ownDecide"); if(!el) return;
+  const items=[
+    { n:+D.pay_req||0,  t:"طلب دفع مستني اعتمادك",
+      sub:(+D.pay_req_amt||0)>0?_kj(D.pay_req_amt)+" ج":"", go:"openPaymentReqs()" },
+    { n:+D.joins||0,    t:"طلب انضمام", sub:"", go:"switchTab('req')" },
+    { n:+D.reqs||0,     t:"طلب مستني ردّك", sub:"", go:"switchTab('req')" },
+    { n:+D.scans||0,    t:"ورقة سكان محتاجة توجيه", sub:"", go:"openScanInbox()" }
+  ].filter(x=>x.n>0);
+  if(!items.length){ el.innerHTML=""; return; }
+  el.innerHTML='<div class="sec-h">مستني قرارك <span class="ln"></span></div>'
+    +items.map(x=>'<button class="card flat" onclick="'+x.go+'" '
+      +'style="width:100%;text-align:right;cursor:pointer;border-right:4px solid var(--blue)">'
+      +'<div style="display:flex;align-items:center;gap:10px">'
+      +'<b style="font-size:18px;color:var(--blue-d);min-width:28px">'+x.n+'</b>'
+      +'<span style="flex:1;font-size:12.5px;font-weight:700">'+x.t+'</span>'
+      +(x.sub?'<span class="muted" style="font-size:11px">'+x.sub+'</span>':'')
+      +'<span style="color:var(--muted)">‹</span></div></button>').join("");
+}
+
+function paintOwnerRisk(D, due){
+  const el=$("ownRisk"); if(!el) return;
+  let h="";
+  const late=due.filter(x=>x.overdue);
+  if(late.length){
+    h+='<div class="sec-h" style="color:var(--red)">فلوس متأخرة على عملاء <span class="ln"></span></div>'
+      +late.map(x=>'<button class="card flat" onclick="openProjectDetail(\''+x.project_id+'\')" '
+        +'style="width:100%;text-align:right;cursor:pointer;border-right:4px solid var(--red)">'
+        +'<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">'
+        +'<b style="flex:1;min-width:0;font-size:12.5px">'+esc(x.client_name||x.job_label||"")+'</b>'
+        +'<b style="font-size:14px;color:var(--red)">'+_kj(x.due_amount)+' ج</b></div>'
+        +'<div class="meta" style="margin-top:3px">'
+        +'<span style="color:var(--red);font-weight:800">متأخرة '+(x.days_late||0)+' يوم</span>'
+        +(x.job_label?'<span class="dot"></span><span>'+esc(x.job_label)+'</span>':'')
+        +(x.client_phone?'<span class="dot"></span><span>'+esc(x.client_phone)+'</span>':'')
+        +'</div></button>').join("");
+  }
+  const risks=[
+    { n:+D.unpriced_n||0,   t:"ملف شغّال من غير سعر",      why:"شغل ماشي ومحدش عارف هياخد كام", go:"openProjects()" },
+    { n:+D.jobs_stale||0,   t:"ملف واقف من أسبوع",         why:"", go:"openProjects()" },
+    { n:+D.jobs_late||0,    t:"ملف فات وعد العميل",        why:"", go:"openProjects()" },
+    { n:+D.routing_stuck||0,t:"ملف متوجّه ومحدش استلمه",   why:"", go:"openProjects()" },
+    { n:+D.wo_late||0,      t:"أمر شغل فات موعده",         why:"", go:"openWorkOrders()" },
+    { n:+D.staff_never||0,  t:"موظف مدخلش النظام خالص",    why:"أي شغل يتوجّهله هيضيع", go:"openStaffProgress()" }
+  ].filter(x=>x.n>0);
+  if(risks.length){
+    h+='<div class="sec-h" style="color:#B45309">محتاج انتباهك <span class="ln"></span></div>'
+      +risks.map(x=>'<button class="card flat" onclick="'+x.go+'" '
+        +'style="width:100%;text-align:right;cursor:pointer;border-right:4px solid #B45309">'
+        +'<div style="display:flex;align-items:center;gap:10px">'
+        +'<b style="font-size:17px;color:#B45309;min-width:28px">'+x.n+'</b>'
+        +'<span style="flex:1"><span style="font-size:12.5px;font-weight:700">'+x.t+'</span>'
+        +(x.why?'<span class="muted" style="display:block;font-size:11px">'+x.why+'</span>':'')
+        +'</span><span style="color:var(--muted)">‹</span></div></button>').join("");
+  }
+  // لو كل حاجة تمام
+  if(!h){
+    h='<div class="card flat" style="background:#F1F8F2;border-color:#A5D6A7">'
+      +'<b style="font-size:13px">مفيش حاجة متأخرة — الشغل والفلوس ماشيين</b>'
+      +'<div class="muted" style="font-size:11.5px;margin-top:3px">'
+      +(+D.jobs_open||0)+' ملف شغّال بقيمة '+_kj(D.jobs_value)+' ج'
+      +((+D.jobs_done_month||0)>0?' · قفلت '+D.jobs_done_month+' الشهر ده':'')
+      +'</div></div>';
+  }
+  el.innerHTML=h;
+}
+
 /* ═══════════ وارد السكانر ═══════════ */
 let _scFilter="new";
 async function openScanInbox(){
@@ -1814,11 +1940,9 @@ function renderOwnerHome(d){
     return {dep, mgr, open:dt.length, high:dt.filter(t=>t.priority==="high").length};
   });
   const overdue=d.openTasks.filter(t=>t.deadline && new Date(t.deadline)<new Date());
-  $("hStats").innerHTML =
-    statCard("req",d.pendIn.length,"طلب مستنيك",{hot:true})+
-    statCard("tasks",d.openTasks.length,"مهمة شغّالة")+
-    statCard("tasks",overdue.length,"مهمة متأخرة",{hot:true});
-  let body='<div id="alertsBox"></div><div id="pulseBox"></div>';
+  $("hStats").innerHTML='<div id="ownStats" style="display:flex;gap:6px;width:100%"></div>';
+  let body='<div id="ownMoney"></div><div id="ownDecide"></div><div id="ownRisk"></div>'
+    +'<div id="alertsBox"></div><div id="pulseBox"></div>';
   if(d.joins.length){
     body+=`<div class="card" style="border-color:#FCD9A1;background:#FFFBF2"><b>${d.joins.length} طلب انضمام مستني موافقتك</b>
       <div class="muted" style="font-size:12.5px;margin:4px 0 10px">${d.joins.map(j=>esc(j.manager_name)).join("، ")}</div>
@@ -1854,6 +1978,7 @@ function renderOwnerHome(d){
   }
   body+='<div id="presBox"></div><div id="wwBox"></div><div id="wlBox"></div><div id="activityBox"></div>';
   el.innerHTML=body;
+  loadOwnerDash();
   loadAlerts(); loadPresence(); loadWeekWins(); loadWorkload(); loadActivity();
   const hi=deptStats.filter(x=>x.high>0).map(x=>x.dep.name+" ("+x.high+" عاجل)");
   HOME_SUMMARY=`${d.greet} يا ${PROFILE.name}. الشركة عندها ${d.openTasks.length} مهمة شغّالة، منهم ${overdue.length} متأخرة. عندك ${d.pendIn.length} طلب مستني ردك${d.joins.length?(" و"+d.joins.length+" طلب انضمام"):""}. ${hi.length?("أكتر قسم فيه عاجل: "+hi.join("، ")+"."):""} ${d.evs.length?("أقرب موعد: "+d.evs[0].title+"."):"مفيش مواعيد جاية."}`;
