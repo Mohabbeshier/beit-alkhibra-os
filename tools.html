@@ -1984,7 +1984,7 @@ function renderOwnerHome(d){
   HOME_SUMMARY=`${d.greet} يا ${PROFILE.name}. الشركة عندها ${d.openTasks.length} مهمة شغّالة، منهم ${overdue.length} متأخرة. عندك ${d.pendIn.length} طلب مستني ردك${d.joins.length?(" و"+d.joins.length+" طلب انضمام"):""}. ${hi.length?("أكتر قسم فيه عاجل: "+hi.join("، ")+"."):""} ${d.evs.length?("أقرب موعد: "+d.evs[0].title+"."):"مفيش مواعيد جاية."}`;
 }
 
-/* ---------- OPS (مهاب / CEO): like owner but framed around their own desk ---------- */
+/* ---------- OPS: زي المالك بس من زاوية مكتبه ---------- */
 function renderOpsHome(d){
   const el=$("hBody");
   $("hStats").innerHTML =
@@ -2798,7 +2798,7 @@ async function openProjects(){
       +'<div class="field"><label>نوع الملف / الطلب</label>'
         +'<select id="pjSvc"><option value="">— اختار —</option><option value="__new">\u002b نوع جديد…</option></select>'
         +'<input id="pjSvcNew" placeholder="اسم النوع الجديد" style="display:none;margin-top:6px"/></div>'
-      +'<div class="field"><label>اسم الملف</label><input id="pjName" placeholder="مثلاً: ترخيص فيلا — م. أحمد"/></div>'
+      +'<div class="field"><label>اسم الملف</label><input id="pjName" placeholder="مثلاً: ترخيص فيلا — قطعة 145"/></div>'
       +'<div class="field"><label>القيمة (جنيه — اختياري)</label><input id="pjVal" type="number" inputmode="numeric" min="0"/></div>'
       +'<div class="field"><label>القسم</label><select id="pjDept">'+DEPTS.map(d=>'<option value="'+d.key+'"'+(d.key===PROFILE.dept?" selected":"")+'>'+esc(d.name)+'</option>').join("")+'</select></div>'
       +'<div id="pjHint" class="muted" style="font-size:11.5px;margin:2px 0 8px"></div>'
@@ -3504,7 +3504,7 @@ function seNumField(id,label,ph,unitNote){
 async function openStructNew(){
   openSheet('<h3>مشروع إنشائي جديد</h3>'
     +'<div class="field"><label>اسم المشروع</label><input id="seName" placeholder="برج زايد — عميل X"/></div>'
-    +'<div class="field"><label>المعماري</label><input id="seArch" placeholder="مثلاً: دعاء"/></div>'
+    +'<div class="field"><label>المعماري</label><input id="seArch" placeholder="اسم المعماري"/></div>'
     +'<div class="field"><label>المهندس الإنشائي</label><input id="seEng" value="'+esc(PROFILE.name||"")+'"/></div>'
     +'<div class="field"><label>برنامج التحليل</label><select id="seSw"><option value="SAFE">SAFE</option><option value="ETABS">ETABS</option><option value="both">الاتنين</option></select></div>'
     +'<div class="field"><label>وحدة الأحمال</label><select id="seUnits"><option value="ton/m2">طن/م²</option><option value="kN/m2">kN/m²</option><option value="kg/m2">كجم/م²</option></select></div>'
@@ -3727,7 +3727,7 @@ async function openMinutes(){
   openSheet('<h3>محاضر الاجتماعات</h3><div id="minBox"><div class="skel"></div></div>'
     +'<div class="sec-h">محضر جديد <span class="ln"></span></div>'
     +'<div class="field"><label>عنوان الاجتماع</label><input id="mnTitle" placeholder="اجتماع الأحد الأسبوعي"/></div>'
-    +'<div class="field"><label>الحضور (اختياري)</label><input id="mnAtt" placeholder="حامد، مهاب، دعاء…"/></div>'
+    +'<div class="field"><label>الحضور (اختياري)</label><input id="mnAtt" placeholder="الهندسة، المالية، الأوبريشن…"/></div>'
     +'<div class="field"><label>اللي اتقال واتقرر</label><textarea id="mnBody" style="min-height:110px" placeholder="اكتب أو سجّل بصوتك…"></textarea></div>'
     +'<div class="row-actions"><button class="btn green" id="mnGo">سجّل المحضر</button></div>'
     +'<button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
@@ -5540,7 +5540,7 @@ async function collectInst(payId, remaining, prjId){
 async function openFind(pre){
   openSheet('<h3>بحث</h3>'
     +'<div class="field"><input id="fqBox" placeholder="اسم العميل · تليفون · رقم قطعة · كود ملف · اسم مرفق" autocomplete="off"/></div>'
-    +'<div class="muted" style="font-size:11.5px;margin:-6px 0 10px">مثال: 0145 أو ZY-03-0145 أو أحمد</div>'
+    +'<div class="muted" style="font-size:11.5px;margin:-6px 0 10px">مثال: 0145 أو ZY-03-0145 أو اسم العميل</div>'
     +'<div id="fqRes"></div>'
     +'<button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
   const box=$("fqBox"); let t=null;
@@ -7460,7 +7460,7 @@ function openReply(id){
   openSheet(`<h3>ردّ على: ${esc(r.title)}</h3>
     ${r.details?`<div class="card flat" style="background:var(--soft);margin-bottom:14px"><div class="muted" style="font-size:13px"><b>الطلب:</b> ${esc(r.details)}</div></div>`:""}
     ${isApproval?`<div class="field"><label>قرارك (بضغطة)</label><div class="qbtns" id="decBtns">${decisions.map(d=>`<button class="qbtn" data-dec="${d}">${d}</button>`).join("")}</div></div>`:""}
-    <div class="field"><label>ملاحظاتك على بنود الطلب — اكتبها أو قولها بصوتك</label><textarea id="repNotes" placeholder="مثلاً: الرسومات تمام، بس واجهة قطاع أ محتاجة تعديل قبل التسليم، وقول لدعاء تراجع المقاسات…"></textarea></div>
+    <div class="field"><label>ملاحظاتك على بنود الطلب — اكتبها أو قولها بصوتك</label><textarea id="repNotes" placeholder="مثلاً: الرسومات تمام، بس واجهة قطاع أ محتاجة تعديل قبل التسليم، والمقاسات محتاجة مراجعة…"></textarea></div>
     <div class="row-actions" style="margin:-6px 0 12px"><button class="btn ghost sm" id="repMic">سجّل بصوتك</button><button class="btn ghost sm" id="repTpl">قوالب جاهزة</button></div>
     <div id="tplPanel" style="display:none;margin-bottom:12px"></div>
     <button class="btn ghost" id="repAI" style="margin-bottom:12px">نظّم الرد بالذكاء — بنود وتوجيهات</button>
@@ -8456,7 +8456,7 @@ async function autoPolish(text){
 function renderContract(){
   const dep=DEPT_BY_KEY["legal"];
   $("v-contract").innerHTML=`<div class="page-h"><div><h2>إنشاء عقد بالصوت</h2><div class="sub">القسم القانوني والعقود</div></div></div>
-    <div class="banner"><span></span><span>المخرج <b>مسودة بالذكاء الاصطناعي</b> — لازم مراجعة <b>محمد سعد (القانوني)</b> قبل الاعتماد أو التوقيع.</span></div>
+    <div class="banner"><span></span><span>المخرج <b>مسودة بالذكاء الاصطناعي</b> — لازم مراجعة <b>الإدارة القانونية</b> قبل الاعتماد أو التوقيع.</span></div>
     <div class="muted" id="vstat" style="font-size:12px;margin:-4px 2px 12px;font-weight:700">محرك السمع: بيتأكد…</div>
     <div class="sec-h">نوع العقد (اختار بضغطة) <span class="ln"></span></div>
     <div class="qbtns" id="ctypes" style="margin-bottom:14px">${["مقاولة عامة","استشارة هندسية","رسومات هندسية","توريد مواد","تشطيبات","إدارة مشروع"].map(t=>`<button class="qbtn ${chosenCtype===t?'on':''}" data-ct="${t}">${t}</button>`).join("")}</div>
@@ -9634,7 +9634,7 @@ function openNewEvent(){
 function openSmartTask(){
   openSheet(`<h3>مهام بالكلام</h3>
     <div class="field"><label>قول المهام كلها مرة واحدة — والذكاء هيفصلها</label>
-    <textarea id="stStory" style="min-height:120px" placeholder="مثلاً: دعاء تخلص رسومات الفيلا الخميس، ومحمد سعد يراجع المقايسة بكرة، وعوض يتابع رخصة زايد عاجل"></textarea></div>
+    <textarea id="stStory" style="min-height:120px" placeholder="مثلاً: الهندسة تخلص رسومات الفيلا الخميس، والقانوني يراجع المقايسة بكرة، ورخصة زايد عاجلة"></textarea></div>
     <div class="row-actions" style="margin:-2px 0 12px"><button class="btn ghost sm" id="stMic">سجّل بصوتك</button><button class="btn ghost sm" id="stManual">＋ مهمة يدوي</button></div>
     <button class="btn" id="stGo">فصّلها لمهام</button>
     <div id="stPrev"></div>`);
