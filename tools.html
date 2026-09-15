@@ -760,9 +760,10 @@ async function openParcel(pid){
   openSheet('<h3>الأرض</h3><div id="pcdBox"><div class="skel"></div><div class="skel"></div></div>'
     +actMini([{ label:"قفل", on:"closeSheet()" }]));
   try{
-    const [{ data:pc },{ data:jobs }]=await Promise.all([
+    const [{ data:pc },{ data:jobs }, own]=await Promise.all([
       sb.from("os_parcel_board").select("*").eq("parcel_id",pid).maybeSingle(),
-      sb.from("os_projects").select("*").eq("parcel_id",pid).order("created_at",{ascending:false})
+      sb.from("os_projects").select("*").eq("parcel_id",pid).order("created_at",{ascending:false}),
+      loadOwners(pid)
     ]);
     if(!pc){ $("pcdBox").innerHTML='<div class="empty">الأرض مش موجودة.</div>'; return; }
     const J=jobs||[];
@@ -775,14 +776,13 @@ async function openParcel(pid){
     }
     let h='<div class="card" style="background:linear-gradient(135deg,#EEF4FF,#F3FBF3);border-color:#C7D9F5;margin-bottom:12px">'
       +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
-      +'<span class="badge" style="background:#0D47A1;color:#fff;font-weight:800;letter-spacing:.3px">'
+      +'<span class="badge ltr" style="background:#0D47A1;color:#fff;font-weight:800;letter-spacing:.3px">'
       +esc(pc.parcel_code||"")+'</span>'
-      +'<b style="flex:1;font-size:14px">'+esc(pc.client_name||"— من غير عميل")+'</b></div>'
+      +'<b style="flex:1;font-size:14px">قطعة '+esc(pc.parcel_no||"—")+'</b></div>'
+      +ownersBlock(own)
       +'<div class="meta" style="margin-top:6px">'
-      +(pc.area_name?'<span>'+esc(pc.area_name)+'</span><span class="dot"></span>':'')
-      +'<span>قطعة '+esc(pc.parcel_no||"—")+'</span>'
+      +(pc.area_name?'<span>'+esc(pc.area_name)+'</span>':'')
       +(pc.land_code?'<span class="dot"></span><span>كود '+esc(pc.land_code)+'</span>':'')
-      +(pc.client_phone?'<span class="dot"></span><span>'+esc(pc.client_phone)+'</span>':'')
       +'</div>'
       +(pc.address?'<div class="muted" style="font-size:12px;margin-top:4px">'+esc(pc.address)+'</div>':'')
       +'<div style="display:flex;gap:6px;text-align:center;margin-top:10px">'
@@ -794,13 +794,14 @@ async function openParcel(pid){
       +'<span class="muted" style="font-size:10.5px">مرفق</span></div></div></div>';
 
     h+='<div class="sec-h">ملفات الأرض <span class="ln"></span></div>';
-    if(!J.length) h+='<div class="empty">مفيش ملفات على الأرض دي لسه.</div>';
+    if(!J.length) h+='<div class="empty-state"><b>مفيش ملفات على الأرض دي لسه</b>'
+      +'<div class="muted" style="font-size:12px;margin-top:4px">افتح أول ملف من الزرار تحت</div></div>';
     else h+=J.map(j=>{
       const closed=j.status==="closed";
       return '<button class="card flat" onclick="openProjectDetail(\''+j.id+'\')" '
         +'style="width:100%;text-align:right;cursor:pointer'+(closed?';opacity:.65':'')+'">'
         +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
-        +(j.job_code?'<span class="badge" style="background:#eef2f7;color:#0D47A1;font-weight:800">'+esc(j.job_code)+'</span>':'')
+        +(j.job_code?'<span class="badge ltr" style="background:#eef2f7;color:#0D47A1;font-weight:800">'+esc(j.job_code)+'</span>':'')
         +'<b style="flex:1;min-width:0;font-size:12.5px">'+esc(j.name||"")+'</b>'
         +'<span class="badge" style="'+(closed?'background:#E8F5E9;color:#2E7D32':'background:#E3F2FD;color:#0D47A1')
         +';font-size:10px">'+(closed?"مقفول":"مفتوح")+'</span></div>'
@@ -811,8 +812,9 @@ async function openParcel(pid){
     }).join("");
 
     h+='<div class="act-mini" style="margin-top:10px">'
-      +'<button class="btn" onclick="newJobOnParcel(\''+pid+'\')">ملف جديد على الأرض دي</button>'
-      +'<button class="btn" onclick="openUploadTo(null,\''+esc(pc.parcel_code||"")+'\')">ارفع مرفق</button></div>';
+      +'<button class="btn primary" onclick="newJobOnParcel(\''+pid+'\')">ملف جديد على الأرض دي</button>'
+      +'<button class="btn secondary" onclick="openOwnership(\''+pid+'\')">الملكية</button>'
+      +'<button class="btn secondary" onclick="openUploadTo(null,\''+esc(pc.parcel_code||"")+'\')">ارفع مرفق</button></div>';
     $("pcdBox").innerHTML=h;
   }catch(e){ $("pcdBox").innerHTML=failBox("معرفناش نجيبها.",()=>openParcel(pid)); }
 }
@@ -1793,6 +1795,333 @@ function myDeptKey(){ return DEPT_BY_KEY[PROFILE.dept] ? PROFILE.dept : null; }
 function canContracts(){ return myDeptKey()==="legal"; }
 
 /* ===================== TABS ===================== */
+
+/* ═══════════════ المرحلة ٣ب — الملكية والأطراف وسجل العميل ═══════════════ */
+
+const ROLE_AR={owner:"مالك",representative:"وكيل",lawyer:"محامٍ",
+               company_rep:"ممثل شركة",heir:"وريث",other:"أخرى"};
+const EV_AR={recorded:"مُسجّل",claimed:"مُدّعى",documented:"موثّق",historical:"تاريخي"};
+
+function canManageOwn(){
+  return ["owner","coceo","ops","manager"].includes((PROFILE&&PROFILE.role)||"");
+}
+
+/* ── تحميل المُلّاك ── */
+async function loadOwners(pid){
+  try{
+    const { data, error } = await sb.from("os_parcel_owner_history")
+      .select("owner_name,phone,share_percent,valid_from,valid_to,evidence_status,evidence_basis,state")
+      .eq("parcel_id",pid).order("valid_from");
+    if(error) throw error;
+    return data||[];
+  }catch(e){ return []; }
+}
+
+/* ── كتلة المُلّاك في رأس الأرض ── */
+function ownersBlock(rows){
+  const now=(rows||[]).filter(r=>!r.valid_to);
+  if(!now.length){
+    return '<div class="warn-inline" style="margin-top:7px">⚠️ مفيش مالك مسجّل</div>';
+  }
+  const total=now.reduce((a,r)=>a+(+r.share_percent||0),0);
+  const unver=now.some(r=>r.evidence_status==="claimed");
+  return '<div style="margin-top:7px;font-size:13px">'
+    + now.map(r=>'<b>'+esc(r.owner_name)+'</b>'
+        +(r.share_percent?' <span class="muted">('+esc(r.share_percent)+'%)</span>':'')).join(' <span class="muted">+</span> ')
+    + (total>0?' <span class="muted" style="font-size:11.5px">— الإجمالي '+total.toFixed(0)+'%</span>':'')
+    + (total>100?' <span class="chip-warn">مجموع الحصص أكبر من 100% — راجع</span>':'')
+    + (unver?' <span class="chip-warn">غير موثّق</span>':'')
+    + '</div>';
+}
+
+/* ── شاشة الملكية ── */
+async function openOwnership(pid){
+  openSheet('<h3>ملكية الأرض</h3><div id="ownBox"><div class="skel"></div></div>'
+    +actMini([{label:"قفل",on:"closeSheet()"}]));
+  const rows = await loadOwners(pid);
+  const now = rows.filter(r=>!r.valid_to);
+  const past = rows.filter(r=>r.valid_to);
+  const total = now.reduce((a,r)=>a+(+r.share_percent||0),0);
+
+  let h='';
+  h+='<div class="sec-h">المُلّاك الحاليون <span class="ln"></span></div>';
+  if(!now.length){
+    h+='<div class="empty-state"><b>مفيش مالك مسجّل</b>'
+      +'<div class="muted" style="font-size:12px;margin-top:4px">'
+      +'ده عادي — وراثة أو عقد ابتدائي أو توكيل بيع.<br>الشغل بيمشي عادي والملكية بتتوثّق بعدين.</div></div>';
+  }else{
+    h+='<table class="dtable"><thead><tr><th>الطرف</th><th>الحصة</th><th>من</th><th>التوثيق</th></tr></thead><tbody>';
+    now.forEach(r=>{
+      h+='<tr><td><b>'+esc(r.owner_name)+'</b>'
+        +(r.phone?'<div class="muted ltr" style="font-size:11.5px">'+esc(r.phone)+'</div>':'')+'</td>'
+        +'<td>'+(r.share_percent?esc(r.share_percent)+'%':'<span class="muted">غير محددة</span>')+'</td>'
+        +'<td class="ltr">'+esc(r.valid_from)+'</td>'
+        +'<td>'+esc(EV_AR[r.evidence_status]||r.evidence_status)
+        +(r.evidence_status==="claimed"?' <span class="chip-warn">!</span>':'')
+        +(r.evidence_basis?'<div class="muted" style="font-size:11px">'+esc(r.evidence_basis)+'</div>':'')
+        +'</td></tr>';
+    });
+    h+='</tbody></table>';
+    if(total>0) h+='<div class="'+(total>100?'warn-inline':'muted')+'" style="font-size:12px;margin:6px 2px">'
+      +'إجمالي الحصص المسجّلة: <b>'+total.toFixed(1)+'%</b>'
+      +(total<100?' — الباقي غير مسجّل':'')
+      +(total>100?' ⚠️ أكبر من 100% — فيه غلط إدخال':'')+'</div>';
+  }
+
+  if(past.length){
+    h+='<div class="sec-h">ملّاك سابقون <span class="ln"></span></div>';
+    h+='<table class="dtable"><thead><tr><th>الطرف</th><th>الحصة</th><th>الفترة</th></tr></thead><tbody>';
+    past.forEach(r=>{
+      h+='<tr><td>'+esc(r.owner_name)+'</td>'
+        +'<td>'+(r.share_percent?esc(r.share_percent)+'%':'—')+'</td>'
+        +'<td class="ltr">'+esc(r.valid_from)+' → '+esc(r.valid_to)+'</td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+
+  if(canManageOwn()){
+    h+='<div class="act-mini" style="margin-top:12px">'
+      +'<button class="btn primary" onclick="openRecordOwner(\''+pid+'\')">سجّل مالك</button>'
+      +(now.length?'<button class="btn secondary" onclick="openTransferOwner(\''+pid+'\')">نقل ملكية</button>':'')
+      +'</div>';
+  }
+  $("ownBox").innerHTML=h;
+}
+
+/* ── تسجيل مالك ── */
+async function openRecordOwner(pid){
+  const { data:parties } = await sb.from("os_parties")
+    .select("id,name,phone,kind").order("name").limit(300);
+  const opts=(parties||[]).map(p=>'<option value="'+p.id+'">'+esc(p.name)
+    +(p.phone?" · "+esc(p.phone):"")+'</option>').join("");
+  openSheet('<h3>تسجيل مالك</h3>'
+    +'<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">'
+    +'الحصة اختيارية — سيبها فاضية لو مش معروفة</div>'
+    +'<div class="field"><label>الطرف</label>'
+    +'<select id="roParty"><option value="">— اختار —</option>'+opts+'</select></div>'
+    +'<div class="field"><label>أو طرف جديد</label>'
+    +'<input id="roNew" placeholder="اسم الطرف" autocomplete="off"/></div>'
+    +'<div class="field"><label>تليفون الطرف الجديد</label>'
+    +'<input id="roPhone" class="ltr" placeholder="اختياري" inputmode="tel"/></div>'
+    +'<div class="field"><label>الحصة %</label>'
+    +'<input id="roShare" class="ltr" type="number" step="0.001" min="0.001" max="100" placeholder="سيبها فاضية لو مش معروفة"/></div>'
+    +'<div class="field"><label>من تاريخ</label>'
+    +'<input id="roFrom" type="date" value="'+new Date().toISOString().slice(0,10)+'"/></div>'
+    +'<div class="field"><label>حالة التوثيق</label><select id="roEv">'
+    +'<option value="recorded">مُسجّل — من كلام العميل</option>'
+    +'<option value="documented">موثّق — عندنا مستند</option>'
+    +'<option value="claimed">مُدّعى — لسه مش متأكدين</option>'
+    +'<option value="historical">تاريخي — من بيانات قديمة</option></select></div>'
+    +'<div class="field"><label>السند</label>'
+    +'<input id="roBasis" placeholder="مثال: عقد مشهر 1120/2026"/></div>'
+    +'<div class="row-actions" style="margin-top:10px">'
+    +'<button class="btn primary" id="roSave">سجّل</button>'
+    +'<button class="btn secondary" onclick="openOwnership(\''+pid+'\')">رجوع</button></div>');
+  $("roSave").onclick=()=>doRecordOwner(pid);
+}
+
+async function doRecordOwner(pid){
+  const sel=($("roParty").value||"").trim();
+  const nm=($("roNew").value||"").trim();
+  const ph=($("roPhone").value||"").trim();
+  const sh=($("roShare").value||"").trim();
+  const fr=$("roFrom").value||null;
+  const ev=$("roEv").value||"recorded";
+  const bs=($("roBasis").value||"").trim()||null;
+  if(!sel && !nm) return toast("اختار طرف أو اكتب اسم جديد","err");
+  const btn=$("roSave"); btn.disabled=true; btn.textContent="بيسجّل…";
+  try{
+    let party=sel;
+    if(!party){
+      const { data:np, error:e1 } = await sb.from("os_parties")
+        .insert({kind:"person",name:nm,phone:ph||null}).select("id").single();
+      if(e1) throw e1;
+      party=np.id;
+    }
+    const { error } = await sb.rpc("os_record_ownership",{
+      p_parcel:pid, p_party:party,
+      p_share: sh?Number(sh):null,
+      p_from: fr, p_basis: bs, p_status: ev });
+    if(error) throw error;
+    toast("الملكية اتسجّلت","ok");
+    openOwnership(pid);
+  }catch(e){
+    btn.disabled=false; btn.textContent="سجّل";
+    toast(ownErr(e),"err");
+  }
+}
+
+/* ── نقل ملكية ── */
+async function openTransferOwner(pid){
+  const rows=(await loadOwners(pid)).filter(r=>!r.valid_to);
+  if(!rows.length) return toast("مفيش مالك حالي تنقل منه","err");
+  const { data:parties } = await sb.from("os_parties").select("id,name,phone").order("name").limit(300);
+
+  const from=rows.map(r=>'<option value="'+esc(r.owner_name)+'">'+esc(r.owner_name)
+    +(r.share_percent?" ("+esc(r.share_percent)+"%)":"")+'</option>').join("");
+  const to=(parties||[]).map(p=>'<option value="'+p.id+'">'+esc(p.name)
+    +(p.phone?" · "+esc(p.phone):"")+'</option>').join("");
+
+  openSheet('<h3>نقل ملكية</h3>'
+    +'<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">'
+    +'البيع الجزئي بيقفل حصة البايع ويفتح حصة المشتري — الشركاء التانيين مش بيتأثروا</div>'
+    +'<div class="field"><label>من (البايع)</label><select id="tfFrom">'+from+'</select></div>'
+    +'<div class="field"><label>إلى (المشتري)</label>'
+    +'<select id="tfTo"><option value="">— اختار —</option>'+to+'</select></div>'
+    +'<div class="field"><label>أو مشتري جديد</label>'
+    +'<input id="tfNew" placeholder="اسم المشتري" autocomplete="off"/></div>'
+    +'<div class="field"><label>تليفونه</label><input id="tfPhone" class="ltr" inputmode="tel" placeholder="اختياري"/></div>'
+    +'<div class="field"><label>الحصة المنقولة %</label>'
+    +'<input id="tfShare" class="ltr" type="number" step="0.001" placeholder="سيبها فاضية = الحصة كلها"/></div>'
+    +'<div class="field"><label>تاريخ النقل</label>'
+    +'<input id="tfOn" type="date" value="'+new Date().toISOString().slice(0,10)+'"/></div>'
+    +'<div class="field"><label>السند</label><input id="tfBasis" placeholder="مثال: عقد بيع 8842/2029"/></div>'
+    +'<div class="row-actions" style="margin-top:10px">'
+    +'<button class="btn primary" id="tfGo">نفّذ النقل</button>'
+    +'<button class="btn secondary" onclick="openOwnership(\''+pid+'\')">رجوع</button></div>');
+  $("tfGo").onclick=()=>doTransfer(pid);
+}
+
+async function doTransfer(pid){
+  const fromName=$("tfFrom").value;
+  const toSel=($("tfTo").value||"").trim();
+  const nm=($("tfNew").value||"").trim();
+  const ph=($("tfPhone").value||"").trim();
+  const sh=($("tfShare").value||"").trim();
+  const on=$("tfOn").value||null;
+  const bs=($("tfBasis").value||"").trim()||null;
+  if(!toSel && !nm) return toast("اختار مشتري أو اكتب اسم","err");
+  const btn=$("tfGo"); btn.disabled=true; btn.textContent="بينفّذ…";
+  try{
+    const { data:fp } = await sb.from("os_parties").select("id").eq("name",fromName).limit(1).maybeSingle();
+    if(!fp) throw new Error("مالقيناش البايع في الأطراف");
+    let toParty=toSel;
+    if(!toParty){
+      const { data:np, error:e1 } = await sb.from("os_parties")
+        .insert({kind:"person",name:nm,phone:ph||null}).select("id").single();
+      if(e1) throw e1;
+      toParty=np.id;
+    }
+    const { error } = await sb.rpc("os_transfer_ownership",{
+      p_parcel:pid, p_from_party:fp.id, p_to_party:toParty,
+      p_share: sh?Number(sh):null, p_on:on, p_basis:bs });
+    if(error) throw error;
+    toast("الملكية اتنقلت","ok");
+    openOwnership(pid);
+  }catch(e){
+    btn.disabled=false; btn.textContent="نفّذ النقل";
+    toast(ownErr(e),"err");
+  }
+}
+
+/* رسائل أخطاء مفهومة */
+function ownErr(e){
+  const m=String((e&&e.message)||e||"");
+  if(m.includes("no_same_party_overlap")) return "الطرف ده له ملكية مسجّلة في نفس الفترة";
+  if(m.includes("مايتعدلش")||m.includes("مايتمسحش")) return m;
+  if(m.includes("للإدارة فقط")) return "تسجيل الملكية للإدارة بس";
+  if(m.includes("مفيش ملكية سارية")) return "البايع مالوش ملكية سارية على الأرض دي";
+  if(m.includes("share_percent")) return "الحصة لازم تكون بين 0 و 100";
+  return m||"حصل خطأ";
+}
+
+/* ── سجل العميل ── */
+async function openClientRecord(cid){
+  openSheet('<h3>العميل</h3><div id="clBox"><div class="skel"></div><div class="skel"></div></div>'
+    +actMini([{label:"قفل",on:"closeSheet()"}]));
+  try{
+    const [{ data:c },{ data:tree }]=await Promise.all([
+      sb.from("clients").select("id,name,phone,code,source,created_at").eq("id",cid).maybeSingle(),
+      sb.from("os_client_tree").select("*").eq("client_id",cid)
+    ]);
+    if(!c){ $("clBox").innerHTML='<div class="empty">العميل مش موجود.</div>'; return; }
+    const T=tree||[];
+
+    /* الأراضي والملفات */
+    const parcels={};
+    T.forEach(r=>{
+      if(!r.parcel_id) return;
+      if(!parcels[r.parcel_id]) parcels[r.parcel_id]={no:r.parcel_no,code:r.parcel_code,
+        area:r.area_name,opened:r.opened_on,closed:r.closed_on,jobs:[]};
+      if(r.job_id) parcels[r.parcel_id].jobs.push(r);
+    });
+    const noParcel=T.filter(r=>!r.parcel_id && r.job_id);
+
+    let h='<div class="card" style="background:linear-gradient(135deg,#EEF4FF,#F3FBF3);border-color:#C7D9F5;margin-bottom:12px">'
+      +'<b style="font-size:15px">'+esc(c.name)+'</b>'
+      +'<div class="meta" style="margin-top:5px">'
+      +(c.phone?'<span class="ltr">'+esc(c.phone)+'</span>':'')
+      +(c.code?'<span class="dot"></span><span class="ltr">'+esc(c.code)+'</span>':'')
+      +(c.source?'<span class="dot"></span><span>'+esc(c.source)+'</span>':'')
+      +'</div></div>';
+
+    h+='<div class="sec-h">أراضيه وملفاته <span class="ln"></span></div>';
+    const pk=Object.keys(parcels);
+    if(!pk.length && !noParcel.length){
+      h+='<div class="empty-state"><b>العميل ده لسه مربطش بأرض</b>'
+        +'<div class="muted" style="font-size:12px;margin-top:4px">أول ملف هيربطه بأرض</div></div>';
+    }else{
+      pk.forEach(id=>{
+        const p=parcels[id];
+        h+='<button class="card flat" style="width:100%;text-align:right;cursor:pointer;margin-bottom:6px" '
+          +'onclick="openParcel(\''+id+'\')">'
+          +'<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">'
+          +'<b style="flex:1;font-size:13px">📍 قطعة '+esc(p.no||"—")+'</b>'
+          +(p.code?'<span class="badge ltr" style="background:#eef2f7;color:#0D47A1;font-size:10px">'+esc(p.code)+'</span>':'')
+          +(p.closed?'<span class="chip-warn">ارتباط منتهي</span>':'')
+          +'</div>'
+          +(p.area?'<div class="muted" style="font-size:11.5px;margin-top:2px">'+esc(p.area)+'</div>':'')
+          +'</button>';
+        p.jobs.forEach(j=>{
+          h+='<button class="res-row" style="margin-right:14px;margin-bottom:5px" '
+            +'onclick="event.stopPropagation();openProjectDetail(\''+j.job_id+'\')">'
+            +'<div><b class="ltr" style="font-size:12px">'+esc(j.job_code||"")+'</b> '+esc(j.job_name||"")
+            +(j.archived?' <span class="chip-warn">مؤرشف</span>':'')
+            +'<div class="muted" style="font-size:11px">'+esc(j.service_name||"")+'</div></div>'
+            +'<span class="row-go">›</span></button>';
+        });
+      });
+      if(noParcel.length){
+        h+='<div class="muted" style="font-size:11.5px;margin:10px 2px 5px">طلبات من غير أرض</div>';
+        noParcel.forEach(j=>{
+          h+='<button class="res-row" onclick="openProjectDetail(\''+j.job_id+'\')">'
+            +'<div>'+esc(j.job_name||"")+'</div><span class="row-go">›</span></button>';
+        });
+      }
+    }
+    $("clBox").innerHTML=h;
+  }catch(e){ $("clBox").innerHTML=failBox("معرفناش نجيبه.",()=>openClientRecord(cid)); }
+}
+
+/* ── أطراف الملف ── */
+async function openJobParties(jid){
+  openSheet('<h3>أطراف الملف</h3><div id="jpBox"><div class="skel"></div></div>'
+    +actMini([{label:"قفل",on:"closeSheet()"}]));
+  try{
+    const { data } = await sb.from("os_job_parties")
+      .select("party_name,phone,role_ar,authority_basis,valid_from,valid_to,is_active")
+      .eq("job_id",jid);
+    const R=data||[];
+    let h='';
+    if(!R.length){
+      h='<div class="empty-state"><b>مفيش أطراف مسجّلة</b>'
+        +'<div class="muted" style="font-size:12px;margin-top:4px">المالك بيتسجّل تلقائياً أول ما يتفتح الملف</div></div>';
+    }else{
+      h='<table class="dtable"><thead><tr><th>الطرف</th><th>الصفة</th><th>السند</th><th>الحالة</th></tr></thead><tbody>';
+      R.forEach(r=>{
+        h+='<tr><td><b>'+esc(r.party_name)+'</b>'
+          +(r.phone?'<div class="muted ltr" style="font-size:11.5px">'+esc(r.phone)+'</div>':'')+'</td>'
+          +'<td>'+esc(r.role_ar)+'</td>'
+          +'<td>'+(r.authority_basis?esc(r.authority_basis):'<span class="muted">—</span>')
+          +(r.valid_to?'<div class="muted ltr" style="font-size:11px">لحد '+esc(r.valid_to)+'</div>':'')+'</td>'
+          +'<td>'+(r.is_active?'<span class="ok-note">سارٍ</span>':'<span class="chip-warn">منتهي</span>')+'</td></tr>';
+      });
+      h+='</tbody></table>';
+    }
+    $("jpBox").innerHTML=h;
+  }catch(e){ $("jpBox").innerHTML=failBox("معرفناش نجيبهم.",()=>openJobParties(jid)); }
+}
+
 /* ═══════════════ المرحلة ٣ — البحث العام ═══════════════
    الترتيب متدرّج: المطابقة التامة للكود تكسب دايماً — حتى لو الملف مؤرشف.
    الأحدثية والنشاط مرجّحات داخل الطبقة الواحدة فقط، مش مضاعِفات. */
@@ -2000,7 +2329,9 @@ function archParcels(rows){
       <th>القطعة</th><th>الكود</th><th>المُلّاك</th><th>الحصص</th><th></th></tr></thead><tbody>`;
   rows.forEach(r=>{
     const owners = r.owners_label
-      ? esc(r.owners_label) + (r.has_unverified ? ' <span class="chip-warn">غير موثّق</span>' : '')
+      ? esc(r.owners_label)
+        + (r.has_unverified ? ' <span class="chip-warn">غير موثّق</span>' : '')
+        + (r.share_overflow ? ' <span class="chip-warn">&gt;100%</span>' : '')
       : '<span class="warn-inline">⚠️ مفيش مالك مسجّل</span>';
     const share = r.total_share ? esc(r.total_share)+"%" : '<span class="muted">—</span>';
     h += `<tr data-parcel="${r.parcel_id}">
@@ -3666,7 +3997,8 @@ async function paintProjectDetail(id){
         +'<div class="field"><label>وسوم (اختياري — بفاصلة)</label><input id="pdTags" placeholder="واجهات, نسخة نهائية"/></div>'
         +'<div class="field"><label>اختار ملف (أقصى 20 ميجا)</label><input id="pdFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.dwg" style="font-size:12px"/></div>'
         +'<div id="pdStatus" class="muted" style="font-size:12px;margin-bottom:8px"></div>'
-        +'<div class="row-actions"><button class="btn green sm" id="pdUp">ارفع للمشروع</button></div></div>';
+        +'<div class="row-actions"><button class="btn primary sm" id="pdUp">ارفع للمشروع</button>'
+        +'<button class="btn secondary sm" onclick="openJobParties(\''+id+'\')">أطراف الملف</button></div></div>';
     }
     h+='<div id="ftBox" style="margin-top:8px"><div class="skel"></div></div>';
     setTimeout(()=>paintFileTree(id,"ftBox"), 40);
