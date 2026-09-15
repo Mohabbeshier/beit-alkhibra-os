@@ -1825,12 +1825,13 @@ async function openSpineHealth(){
     +'<div id="shBox"><div class="skel"></div></div>'
     +actMini([{label:"قفل",on:"closeSheet()"}]));
   try{
-    const [{ data:h },{ data:rows }]=await Promise.all([
+    const [{ data:h },{ data:rows },{ data:jbad }]=await Promise.all([
       sb.from("os_spine_health").select("*").maybeSingle(),
       sb.from("os_unlinked_work").select("kind,ref,item,amount,on_date,note,why")
-        .order("on_date",{ascending:false}).limit(150)
+        .order("on_date",{ascending:false}).limit(150),
+      sb.from("os_journal_integrity").select("entry_no,entry_date,memo,lines_count,total_debit,total_credit,diff,problem").limit(50)
     ]);
-    const R=rows||[], H=h||{};
+    const R=rows||[], H=h||{}, JB=jbad||[];
 
     let x='<div class="card" style="margin-bottom:12px">'
       +'<div style="display:flex;gap:10px;text-align:center;flex-wrap:wrap">'
@@ -1849,6 +1850,9 @@ async function openSpineHealth(){
     if(+H.jobs_no_engagement>0)
       x+='<div class="warn-inline" style="margin-top:6px">⚠️ '+H.jobs_no_engagement
         +' ملف بلا ارتباط — مش هيظهر في سجل العميل</div>';
+    if(+H.broken_journal>0)
+      x+='<div class="warn-inline" style="margin-top:6px">🔴 '+H.broken_journal
+        +' قيد محاسبي مختل — اضغط لعرضه</div>';
     x+='</div>';
 
     if(!R.length){
@@ -1873,6 +1877,19 @@ async function openSpineHealth(){
       x+='<div class="muted" style="font-size:11.5px;margin-top:10px">'
         +'البنود دي مش غلط بالضرورة — مصروفات المكتب ومعاملاته مالهاش ملف بطبيعتها. '
         +'الشاشة عشان تراجع اللي المفروض يكون على ملف.</div>';
+    }
+    if(JB.length){
+      x+='<div class="sec-h">🔴 قيود محاسبية مختلة ('+JB.length+') <span class="ln"></span></div>'
+        +'<div class="muted" style="font-size:11.5px;margin:-4px 2px 6px">'
+        +'دي قيود قديمة — النظام دلوقتي بيمنع أي قيد مختل جديد</div>'
+        +'<table class="dtable"><thead><tr><th>القيد</th><th>المشكلة</th><th>الفرق</th></tr></thead><tbody>';
+      JB.forEach(r=>{
+        x+='<tr><td><b class="ltr">'+esc(r.entry_no||"—")+'</b> '+esc(r.memo||"")
+          +'<div class="muted ltr" style="font-size:11px">'+esc(r.entry_date||"")+'</div></td>'
+          +'<td><span class="chip-warn">'+esc(r.problem||"")+'</span></td>'
+          +'<td class="ltr">'+(r.diff?Number(r.diff).toLocaleString("en"):'—')+'</td></tr>';
+      });
+      x+='</tbody></table>';
     }
     $("shBox").innerHTML=x;
   }catch(e){ $("shBox").innerHTML=failBox("معرفناش نجيبها.",()=>openSpineHealth()); }
