@@ -2092,7 +2092,7 @@ async function doBuildInstallments(jid, val, replace){
   if(!val || val<=0) return toast("اكتب قيمة الملف الأول","err");
   const btn=$("biGo"); if(btn){ btn.disabled=true; btn.textContent="بيبني…"; }
   try{
-    const { data, error } = await sb.rpc("os_build_installments",
+    const { data, error } = await sb.rpc("os_build_payment_plan",
       { p_project:jid, p_value:val, p_replace:replace });
     if(error) throw error;
     if(data && data.ok===false){
@@ -2120,7 +2120,7 @@ function confirmReplace(jid, val, n){
   $("biRep").onclick=async()=>{
     const b=$("biRep"); b.disabled=true; b.textContent="بيستبدل…";
     try{
-      const { data, error } = await sb.rpc("os_build_installments",
+      const { data, error } = await sb.rpc("os_build_payment_plan",
         { p_project:jid, p_value:val, p_replace:true });
       if(error) throw error;
       toast("الجدول اتبدّل — "+(data.count||0)+" أقساط","ok");
@@ -6738,9 +6738,8 @@ async function buildPlan(id){
     if(!(val>0)) return;
     await sb.from("os_projects").update({ value_egp:val }).eq("id",id);
   }
-  const { error }=await sb.rpc("os_build_payment_plan",{ p_project:id, p_value:val });
-  if(error){ toast(error.message,"bad"); return; }
-  toast("خطة الدفع اتولدت \u2713","ok"); paintProjectDetail(id);
+  /* الشاشة الموحّدة — فيها معاينة للمبالغ وتأكيد للاستبدال */
+  return openBuildInstallments(id, val);
 }
 async function collectInst(payId, remaining, prjId){
   const v=prompt("المبلغ المحصّل (المتبقي "+remaining+")", String(remaining));
