@@ -368,6 +368,23 @@ button.stat,button.dept-card{font-family:inherit;cursor:pointer;}
 .qrrow-t{display:flex;align-items:center;gap:7px;margin-bottom:3px}
 .qrrow-t b{font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .qrrow-s{font-size:11.5px;color:#64748b}
+
+.rev{font-size:10.5px;border-radius:6px;padding:2px 7px;border:1px solid;flex:0 0 auto;font-weight:600}
+.rev.ok{background:#f0fdf4;border-color:#86efac;color:#166534}
+.rev.ok2{background:#f0fdf4;border-color:#fcd34d;color:#166534}
+.rev.amber{background:#fffbeb;border-color:#fcd34d;color:#92400e}
+.rev.red{background:#fef2f2;border-color:#fca5a5;color:#991b1b}
+.rev.muted{background:#f8fafc;border-color:var(--line);color:#64748b}
+.rev.grey{background:#f1f5f9;border-color:#cbd5e1;color:#94a3b8;text-decoration:line-through}
+.rvrow{display:block;width:100%;text-align:right;background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px 11px;margin-bottom:6px;cursor:pointer}
+.rvrow-t{display:flex;align-items:center;gap:7px;margin-bottom:3px}
+.rvrow-t b{font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rvrow-s{font-size:11.5px;color:#64748b}
+.rvrow-n{font-size:11.5px;color:#92400e;background:#fffbeb;border-radius:7px;padding:4px 7px;margin-top:5px}
+.ftrow{display:flex;gap:8px;padding:7px 0 0;margin-top:6px;border-top:1px solid #eef2f7}
+.ftrow[data-frv]{cursor:pointer;border-radius:8px;margin-left:-6px;margin-right:-6px;padding-left:6px;padding-right:6px}
+.ftrow[data-frv]:hover{background:#f8fafc}
+.ftrow.sup{opacity:.55}
 </style>
 </head>
 <body>
@@ -1886,6 +1903,161 @@ function canContracts(){ return myDeptKey()==="legal"; }
 
 
 
+
+
+/* ═══════════════ مراجعة المستندات — بند 6 في المواصفة ═══════════════
+   المالك حسمها: الرسومات الهندسية بتستخدم «معتمد بملاحظات».
+   والخطر الحقيقي: حد يشتغل على رسمة قديمة — فالنسخة الجديدة
+   بتستبدل القديمة تلقائياً. */
+
+const REV_AR={draft:"مسوّدة",under_review:"تحت المراجعة",approved:"معتمد",
+  approved_with_comments:"معتمد بملاحظات",rejected:"مرفوض — يتعدّل",superseded:"مستبدَل"};
+const REV_C={draft:"muted",under_review:"amber",approved:"ok",
+  approved_with_comments:"ok2",rejected:"red",superseded:"grey"};
+
+function revChip(st){
+  if(!st||st==="none") return "";
+  return '<span class="rev '+(REV_C[st]||"muted")+'">'+esc(REV_AR[st]||st)+'</span>';
+}
+function canReview(){ return ["owner","coceo","ops","manager"].includes(PROFILE.role||""); }
+
+async function openReviewQueue(){
+  openSheet('<h3>مراجعة المستندات</h3>'
+    +'<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">'
+    +'كل مستند بيتراجع لوحده — مفيش «اعتمد الكل» للرسومات</div>'
+    +'<div id="rvBox"><div class="skel"></div></div>'
+    +actMini([{label:"قفل",on:"closeSheet()"}]));
+  await paintReviewQueue();
+}
+
+async function paintReviewQueue(){
+  const box=$("rvBox"); if(!box) return;
+  try{
+    const { data, error }=await sb.from("os_review_queue")
+      .select("*").order("created_at",{ascending:false}).limit(100);
+    if(error) throw error;
+    const R=data||[];
+    const wait=R.filter(r=>r.review_status==="under_review");
+    const act=R.filter(r=>["draft","rejected"].includes(r.review_status));
+    const done=R.filter(r=>["approved","approved_with_comments"].includes(r.review_status));
+    if(!R.length){ box.innerHTML='<div class="empty-state"><b>مفيش مستندات في المراجعة</b>'
+      +'<div class="muted" style="font-size:12px;margin-top:4px">ارفع رسمة من الملف وابعتها للمراجعة</div></div>'; return; }
+    const row=r=>'<button class="rvrow" data-rv="'+r.id+'">'
+      +'<div class="rvrow-t"><b>'+esc(r.title||"—")+'</b>'+revChip(r.review_status)+'</div>'
+      +'<div class="rvrow-s">'+(r.job_code?'<span class="ltr">'+esc(r.job_code)+'</span> · ':'')
+      +esc(r.uploaded_name||"")+(r.revision>1?' · نسخة '+r.revision:'')+'</div>'
+      +(r.review_note?'<div class="rvrow-n">'+esc(r.review_note)+'</div>':'')
+      +'</button>';
+    let h='';
+    if(wait.length) h+='<div class="sec-h">مستنية قرارك ('+wait.length+') <span class="ln"></span></div>'+wait.map(row).join("");
+    if(act.length)  h+='<div class="sec-h">محتاجة شغل <span class="ln"></span></div>'+act.map(row).join("");
+    if(done.length) h+='<div class="sec-h">معتمدة <span class="ln"></span></div>'+done.slice(0,20).map(row).join("");
+    box.innerHTML=h;
+    box.querySelectorAll("[data-rv]").forEach(b=>b.onclick=()=>openDocReview(b.dataset.rv));
+  }catch(e){ box.innerHTML=failBox("معرفناش نجيب المراجعات.",paintReviewQueue); }
+}
+
+async function openDocReview(id){
+  const { data:d }=await sb.from("os_review_queue").select("*").eq("id",id).maybeSingle();
+  if(!d) return toast("المستند مش موجود","err");
+  const mine=d.uploaded_by===ME.id;
+  const canDecide=canReview() && d.review_status==="under_review"
+                  && (!mine || ["owner","coceo"].includes(PROFILE.role));
+  const canSubmit=["draft","rejected"].includes(d.review_status);
+  const locked=["approved","approved_with_comments"].includes(d.review_status);
+
+  openSheet('<h3>'+esc(d.title||"مستند")+'</h3>'
+    +'<div style="margin:-4px 0 10px">'+revChip(d.review_status)
+    +(d.revision>1?' <span class="muted" style="font-size:11.5px">نسخة '+d.revision
+      +' من '+d.revisions_count+'</span>':'')+'</div>'
+    +(d.job_code?'<div class="muted" style="font-size:12px;margin-bottom:8px">ملف '+esc(d.job_code)+'</div>':'')
+    +(d.review_note?'<div class="card flat" style="padding:9px 11px;margin-bottom:10px">'
+      +'<div class="muted" style="font-size:11px;margin-bottom:2px">ملاحظات</div>'
+      +'<div style="font-size:12.5px">'+esc(d.review_note)+'</div>'
+      +(d.reviewed_name?'<div class="muted" style="font-size:11px;margin-top:4px">'
+        +esc(d.reviewed_name)+(d.reviewed_at?' · '+new Date(d.reviewed_at).toLocaleDateString("ar-EG"):'')+'</div>':'')
+      +'</div>':'')
+    +(d.review_status==="superseded"
+      ?'<div class="warn-inline">⚠️ المستند ده مستبدَل بنسخة أحدث — ماتشتغلش عليه</div>':'')
+    +(locked?'<div class="hub-ok">المستند معتمد — أي تعديل لازم يبقى نسخة جديدة</div>':'')
+    +(canDecide?'<div class="field"><label>ملاحظات القرار</label>'
+      +'<textarea id="rvNote" placeholder="إجبارية مع الاعتماد بملاحظات أو الرفض"></textarea></div>':'')
+    +'<div class="row-actions">'
+    +(d.url?'<button class="btn secondary sm" onclick="window.open(\''+esc(d.url)+'\',\'_blank\')">افتح</button>':'')
+    +(canSubmit?'<button class="btn primary sm" id="rvSend">ابعت للمراجعة</button>':'')
+    +(canDecide?'<button class="btn green sm" id="rvOk">معتمد ✓</button>'
+      +'<button class="btn secondary sm" id="rvOkC">معتمد بملاحظات</button>'
+      +'<button class="btn secondary sm" id="rvNo" style="color:#b91c1c">مرفوض</button>':'')
+    +(locked||d.review_status==="rejected"?'<button class="btn secondary sm" id="rvNew">نسخة جديدة</button>':'')
+    +(d.job_code?'<button class="btn tertiary sm" onclick="closeSheet();openProjectDetail(\''+d.project_id+'\')">الملف</button>':'')
+    +'</div>');
+
+  const send=$("rvSend");
+  if(send) send.onclick=async()=>{
+    const { data, error }=await sb.rpc("os_submit_for_review",{ p_file:id });
+    if(error) return toast(error.message,"bad");
+    toast("اتبعت للمراجعة ✓","ok"); closeSheet(); paintReviewQueue();
+  };
+  const decide=async(dec)=>{
+    const note=($("rvNote")&&$("rvNote").value||"").trim();
+    if(dec!=="approved" && !note) return toast("اكتب الملاحظات الأول","err");
+    const { data, error }=await sb.rpc("os_review_document",
+      { p_file:id, p_decision:dec, p_note:note||null });
+    if(error) return toast(error.message,"bad");
+    toast((data&&data.status_ar)||"اتسجّل ✓","ok"); closeSheet(); paintReviewQueue();
+  };
+  const ok=$("rvOk"), okc=$("rvOkC"), no=$("rvNo");
+  if(ok)  ok.onclick =()=>decide("approved");
+  if(okc) okc.onclick=()=>decide("approved_with_comments");
+  if(no)  no.onclick =()=>decide("rejected");
+  const nw=$("rvNew");
+  if(nw) nw.onclick=()=>openNewRevision(id, d);
+}
+
+async function openNewRevision(id, d){
+  openSheet('<h3>نسخة جديدة</h3>'
+    +'<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">'
+    +'النسخة القديمة هتبقى «مستبدَل» تلقائياً عشان محدش يشتغل عليها</div>'
+    +'<div class="field"><label>الاسم</label><input id="nrTitle" value="'+esc(d.title||"")+'"/></div>'
+    +'<div class="field"><label>رابط الملف الجديد</label><input id="nrUrl" class="ltr" placeholder="https://..."/></div>'
+    +'<div class="row-actions"><button class="btn primary" id="nrGo">اعمل النسخة</button>'
+    +'<button class="btn secondary" onclick="closeSheet()">إلغاء</button></div>');
+  $("nrGo").onclick=async()=>{
+    const u=($("nrUrl").value||"").trim();
+    if(!u) return toast("حط رابط الملف","err");
+    const { data, error }=await sb.rpc("os_new_revision",
+      { p_old:id, p_title:($("nrTitle").value||"").trim()||d.title, p_url:u });
+    if(error) return toast(error.message,"bad");
+    toast("نسخة "+(data&&data.revision)+" اتعملت ✓","ok");
+    closeSheet(); paintReviewQueue();
+  };
+}
+
+/* ── إسناد التسويق — بند 4 ── */
+async function openAttribution(){
+  openSheet('<h3>مصادر العملاء</h3>'
+    +'<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">'
+    +'أرقام مجمّعة بالمصدر — بلا خزينة ولا مصروفات ولا تاريخ مالي لعميل بعينه</div>'
+    +'<div id="atBox"><div class="skel"></div></div>'
+    +actMini([{label:"قفل",on:"closeSheet()"}]));
+  try{
+    const { data, error }=await sb.from("os_source_attribution").select("*");
+    if(error) throw error;
+    const R=(data||[]).sort((a,b)=>(+b.collected||0)-(+a.collected||0));
+    if(!R.length){ $("atBox").innerHTML='<div class="empty-state"><b>مفيش بيانات</b></div>'; return; }
+    const tot=R.reduce((a,b)=>a+(+b.collected||0),0);
+    $("atBox").innerHTML='<table class="dtable"><thead><tr><th>المصدر</th><th>عملاء</th>'
+      +'<th>ملفات</th><th>محصّل</th></tr></thead><tbody>'
+      + R.map(r=>'<tr><td><b>'+esc(r.source)+'</b>'
+        +(r.converted_clients<r.clients?'<div class="muted" style="font-size:11px">'
+          +r.converted_clients+' اتحوّلوا</div>':'')+'</td>'
+        +'<td class="ltr">'+r.clients+'</td><td class="ltr">'+r.jobs+'</td>'
+        +'<td class="ltr">'+fmtEGP(r.collected)
+        +(tot>0?'<div class="muted" style="font-size:10.5px">'+Math.round(100*(+r.collected||0)/tot)+'%</div>':'')
+        +'</td></tr>').join("")
+      +'</tbody></table>';
+  }catch(e){ $("atBox").innerHTML=failBox("معرفناش نجيبها.",openAttribution); }
+}
 
 /* ═══════════════ الطلب السريع — بند A1 في المواصفة ═══════════════
    «هات لي نسخة مختومة بكرة» — إجبار ده على ملف كامل بيرجّع الناس للواتساب.
@@ -3514,6 +3686,9 @@ function renderMore(){
     ])
   + grp("الإدارة",[
       {id:"qreq",    label:"الطلبات السريعة"},
+      {id:"review",  label:"مراجعة المستندات"},
+      {id:"attrib",  label:"مصادر العملاء",
+       show:["owner","coceo","ops"].includes(r)||(r==="manager"&&PROFILE.dept==="finance")},
       {id:"expiry",  label:"الصلاحيات والانتهاء"},
       {id:"spine",   label:"صحة بيان الأعمال",
        show:["owner","coceo","ops"].includes(r)},
@@ -3532,6 +3707,8 @@ function renderMore(){
 function moreGo(id){
   if(id==="retro")  return openRetroJob();
   if(id==="qreq")   return openQuickRequests();
+  if(id==="review") return openReviewQueue();
+  if(id==="attrib") return openAttribution();
   if(id==="expiry") return openExpiring();
   if(id==="spine")  return openSpineHealth();
   const direct={tasks:"tasks",contract:"contract",chat:"chat",ask:"ask"};
@@ -7477,10 +7654,16 @@ async function paintFileTree(projectId, mountId){
       +'<div style="display:flex;justify-content:space-between;align-items:center">'
       +'<b style="font-size:13px">\ud83d\udcc2 '+esc(name)+'</b>'
       +'<span class="badge" style="background:#eef2f7;color:#0D47A1;font-weight:800">'+items.length+'</span></div>'
-      +items.map(f=>'<div style="display:flex;gap:8px;padding:7px 0 0;margin-top:6px;border-top:1px solid #eef2f7">'
+      +items.map(f=>'<div class="ftrow'+(f.review_status==="superseded"?" sup":"")+'"'
+        +(f.review_status&&f.review_status!=="none"?' data-frv="'+f.file_id+'"':'')+'>'
         +'<span style="flex:none;font-size:12px">\ud83d\udcc4</span>'
         +'<div style="flex:1;min-width:0">'
-        +'<div style="font-size:12.5px">'+esc(f.title||'—')+(Number(f.revision)>1?' <span class="muted">v'+f.revision+'</span>':'')+'</div>'
+        +'<div style="font-size:12.5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+        +'<span>'+esc(f.title||'—')+'</span>'
+        +(Number(f.revision)>1?'<span class="muted">v'+f.revision+'</span>':'')
+        +revChip(f.review_status)+'</div>'
+        +(f.review_note&&["rejected","approved_with_comments"].includes(f.review_status)
+          ?'<div class="rvrow-n" style="margin-top:4px">'+esc(f.review_note)+'</div>':'')
         +'<div class="muted" style="font-size:11px;margin-top:1px">'
         +esc(f.uploaded_name||'—')+' · '+fmtDate(f.created_at)
         +(f.size_bytes?' · '+Math.round(Number(f.size_bytes)/1024)+' KB':'')+'</div>'
@@ -7488,6 +7671,7 @@ async function paintFileTree(projectId, mountId){
           +f.tags.map(t=>'#'+esc(t)).join(' ')+'</div>':'')
         +'</div></div>').join("")
       +'</div>').join("");
+    box.querySelectorAll("[data-frv]").forEach(b=>b.onclick=()=>openDocReview(b.dataset.frv));
   }catch(e){ box.innerHTML='<div class="empty">تعذّر التحميل.</div>'; }
 }
 
