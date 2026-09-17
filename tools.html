@@ -3453,76 +3453,32 @@ function rankTier(q, row){
 }
 
 async function gsearch(q){
-  const nq=normAr(q), pq=normPhone(q), like="%"+q.trim()+"%";
-  const out={clients:[],parcels:[],jobs:[]};
-  const jobs = sb.from("os_client_tree")
-    .select("client_id,client_name,phone,parcel_id,parcel_no,parcel_code,job_id,job_code,job_name,status,archived")
-    .or(`client_name.ilike.${like},job_code.ilike.${like},parcel_no.ilike.${like},parcel_code.ilike.${like},job_name.ilike.${like}`)
-    .limit(60);
-  const parcels = sb.from("os_parcel_owners_now")
-    .select("parcel_id,parcel_no,parcel_code,owners_label,total_share,has_unverified")
-    .or(`parcel_no.ilike.${like},parcel_code.ilike.${like},owners_label.ilike.${like}`)
-    .limit(40);
-  const clients = pq.length>=3
-    ? sb.from("clients").select("id,name,phone,code").ilike("phone","%"+pq+"%").limit(20)
-    : sb.from("clients").select("id,name,phone,code").ilike("name",like).limit(20);
-
-  const [j,p,c] = await Promise.all([jobs,parcels,clients]);
-  if(j.error) throw j.error;
-
-  const seenJob=new Set(), seenCl=new Set();
-  (j.data||[]).forEach(r=>{
-    if(r.job_id && !seenJob.has(r.job_id)){ seenJob.add(r.job_id); out.jobs.push(r); }
-    if(r.client_id && !seenCl.has(r.client_id)){
-      seenCl.add(r.client_id);
-      out.clients.push({id:r.client_id,name:r.client_name,phone:r.phone});
-    }
-  });
-  (c.data||[]).forEach(r=>{ if(!seenCl.has(r.id)){ seenCl.add(r.id);
-      out.clients.push({id:r.id,name:r.name,phone:r.phone}); }});
-  out.parcels = p.data||[];
-
-  /* الترتيب: الطبقة أولاً · ثم النشاط · ثم الاسم */
-  const srt=(a,b)=>{
-    const ta=rankTier(q,a), tb=rankTier(q,b);
-    if(ta!==tb) return ta-tb;                       /* الطبقة تحكم */
-    const aa=a.archived?1:0, ab=b.archived?1:0;
-    if(aa!==ab) return aa-ab;                       /* مرجّح داخل الطبقة */
-    return normAr(a.job_code||a.parcel_no||a.name||"").localeCompare(
-           normAr(b.job_code||b.parcel_no||b.name||""));
-  };
-  out.jobs.sort(srt); out.parcels.sort(srt); out.clients.sort(srt);
-  return out;
+  /* استعلام واحد مرتَّب من قاعدة البيانات بدل 4 متوازية.
+     RLS بيشتغل جوّه الدالة (SECURITY INVOKER) فالنتايج مفلترة بالدور. */
+  const { data, error }=await sb.rpc("os_search",{ p_q:q, p_limit:30 });
+  if(error) throw error;
+  return data||[];
 }
 
-function gsearchHTML(res,q){
-  const n=res.clients.length+res.parcels.length+res.jobs.length;
-  if(!n) return `<div class="empty-state"><b>مفيش نتيجة لـ «${esc(q)}»</b>
-      <div class="muted" style="font-size:12px;margin-top:4px">جرّب رقم القطعة أو آخر أرقام التليفون</div></div>`;
-  let h="";
-  if(res.parcels.length){
-    h+=`<div class="sec-h">📍 الأراضي (${res.parcels.length}) <span class="ln"></span></div>`;
-    h+=res.parcels.slice(0,6).map(r=>`<button class="res-row" data-gp="${r.parcel_id}">
-        <div><b>قطعة ${esc(r.parcel_no)}</b> <span class="muted ltr">${esc(r.parcel_code||"")}</span>
-        <div class="muted" style="font-size:12px">${r.owners_label?esc(r.owners_label):'⚠️ مفيش مالك مسجّل'}</div></div>
-        <span class="row-go">›</span></button>`).join("");
-  }
-  if(res.clients.length){
-    h+=`<div class="sec-h">🧑 العملاء (${res.clients.length}) <span class="ln"></span></div>`;
-    h+=res.clients.slice(0,6).map(r=>`<button class="res-row" data-gc="${r.id}">
-        <div><b>${esc(r.name)}</b>
-        <div class="muted ltr" style="font-size:12px">${esc(r.phone||"")}</div></div>
-        <span class="row-go">›</span></button>`).join("");
-  }
-  if(res.jobs.length){
-    h+=`<div class="sec-h">📁 الملفات (${res.jobs.length}) <span class="ln"></span></div>`;
-    h+=res.jobs.slice(0,8).map(r=>`<button class="res-row" data-gj="${r.job_id}">
-        <div><b class="ltr">${esc(r.job_code||"")}</b> ${esc(r.job_name||"")}
-        ${r.archived?'<span class="chip-warn">مؤرشف</span>':''}
-        <div class="muted" style="font-size:12px">${esc(r.client_name||"")}${r.parcel_no?" · قطعة "+esc(r.parcel_no):""}</div></div>
-        <span class="row-go">›</span></button>`).join("");
-  }
-  return h;
+function gsearchHTML(rows,q){
+  if(!rows.length) return '<div class="empty-state"><b>مفيش نتيجة لـ «'+esc(q)+'»</b>'
+    +'<div class="muted" style="font-size:12px;margin-top:4px">جرّب آخر أرقام التليفون · رقم القطعة · كود الملف</div></div>';
+  const AR={job:"ملف",client:"عميل",parcel:"أرض",party:"طرف"};
+  const IC={job:"\ud83d\udcc2",client:"\ud83d\udc64",parcel:"\ud83d\uddfa",party:"\ud83e\udd1d"};
+  const AT={job:"data-gj",client:"data-gc",parcel:"data-gp",party:"data-gy"};
+  const g={};
+  rows.forEach(r=>{ (g[r.kind]=g[r.kind]||[]).push(r); });
+  return Object.entries(g).map(([k,list])=>
+    '<div class="sec-h">'+esc(AR[k]||k)+' ('+list.length+') <span class="ln"></span></div>'
+    + list.map(r=>'<button class="res-row" '+(AT[k]||"data-gx")+'="'+r.id+'">'
+      +'<span style="flex:none">'+(IC[k]||"\u2022")+'</span>'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.title||"—")+'</div>'
+      +(r.subtitle?'<div class="muted" style="font-size:11.5px">'+esc(r.subtitle)+'</div>':'')
+      +'</div>'
+      +(r.meta?'<span class="muted" style="font-size:11px;flex:none">'+esc(r.meta)+'</span>':'')
+      +'<span class="row-go">\u203a</span></button>').join("")
+  ).join("");
 }
 
 function wireGsearchRows(){
@@ -10258,6 +10214,8 @@ async function gsRun(q){
     box.querySelectorAll("[data-gc]").forEach(b=>b.onclick=()=>{
       closeSheet(); if(typeof openClientRecord==="function") openClientRecord(b.dataset.gc);
       else toast("سجل العميل جاي قريب","ok"); });
+    box.querySelectorAll("[data-gy]").forEach(b=>b.onclick=()=>{
+      closeSheet(); toast("الطرف ده بيظهر في الملفات المرتبطة بيه","ok"); });
   }catch(e){
     box.innerHTML='<div class="empty-state"><b>البحث وقف</b>'
       +'<div class="muted" style="font-size:12px;margin-top:4px">'+esc(e.message||"")+'</div></div>';
