@@ -351,6 +351,17 @@ button.stat,button.dept-card{font-family:inherit;cursor:pointer;}
 .tl-amt{flex:0 0 auto;font-size:12.5px}.tl-amt.in{color:#166534}.tl-amt.out{color:#b91c1c}
 .tl-ev.stage_done{border-color:#bbf7d0}.tl-ev.money_in{border-color:#bbf7d0;background:#f0fdf4}
 .tl-ev.money_out{border-color:#fecaca}.tl-ev.open{border-color:#bfdbfe;background:#eff6ff}
+
+.jbrow{display:block;width:100%;text-align:right;background:#fff;border:1px solid var(--line);border-radius:13px;padding:10px 12px;margin-bottom:7px;cursor:pointer}
+.jbrow.urgent{border-color:#fca5a5}
+.jbrow-t{display:flex;align-items:baseline;gap:7px}
+.jbrow-t b{font-size:12px;color:var(--blue-d);flex:0 0 auto}
+.jbrow-t span{font-size:13.5px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jbrow-s{font-size:11.5px;color:#64748b;margin-top:2px}
+.jbrow-st{display:flex;align-items:center;gap:7px;margin-top:6px;font-size:11px}
+.jb-bar{flex:0 0 52px;height:4px;background:#e2e8f0;border-radius:3px;overflow:hidden}
+.jb-bar i{display:block;height:100%;background:var(--green);border-radius:3px}
+.jbrow-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
 </style>
 </head>
 <body>
@@ -1868,6 +1879,75 @@ function canContracts(){ return myDeptKey()==="legal"; }
 
 
 
+
+/* ═══════════════ لوحة الملفات — التبويب الأساسي ═══════════════ */
+let JB_FILTER="mine", JB_ROWS=[], JB_Q="";
+
+const JB_FILTERS=[
+  {k:"mine",   l:"اللي عليّا"},
+  {k:"urgent", l:"محتاج تدخّل"},
+  {k:"open",   l:"مفتوحة"},
+  {k:"closed", l:"مقفولة"},
+  {k:"all",    l:"الكل"},
+];
+
+async function jbLoad(){
+  const box=$("archBody"); if(!box) return;
+  box.innerHTML='<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+  try{
+    let q=sb.from("os_job_board").select("*").order("last_touch",{ascending:false}).limit(300);
+    if(JB_FILTER==="closed") q=q.eq("status","closed");
+    else if(JB_FILTER!=="all") q=q.neq("status","closed");
+    const { data, error }=await q;
+    if(error) throw error;
+    JB_ROWS=data||[];
+    jbPaint();
+  }catch(e){ box.innerHTML=failBox("معرفناش نجيب الملفات.",jbLoad); }
+}
+
+function jbUrgency(r){
+  return (r.stage_late?3:0)+(+r.tasks_late||0)*2+(+r.gov_late||0)*2+(+r.inst_late||0)*2;
+}
+
+function jbPaint(){
+  const box=$("archBody"); if(!box) return;
+  const me=ME&&ME.id, q=JB_Q.toLowerCase();
+  let R=JB_ROWS.slice();
+  if(JB_FILTER==="mine") R=R.filter(r=>r.stage_owner_id===me);
+  if(JB_FILTER==="urgent") R=R.filter(r=>jbUrgency(r)>0);
+  if(q) R=R.filter(r=>[r.job_code,r.name,r.owner_name,r.client_name,r.client_phone,r.parcel_no,r.area_name,r.stage_now]
+    .some(v=>v && String(v).toLowerCase().includes(q)));
+  R.sort((a,b)=>jbUrgency(b)-jbUrgency(a) || (b.last_touch||"").localeCompare(a.last_touch||""));
+
+  if(!R.length){
+    box.innerHTML='<div class="empty-state"><b>'+(q?"مفيش نتيجة":"مفيش ملفات هنا")+'</b>'
+      +(JB_FILTER!=="all"?'<div class="muted" style="font-size:12px;margin-top:4px">جرّب فلتر «الكل»</div>':'')+'</div>';
+    return;
+  }
+  box.innerHTML='<div class="muted" style="font-size:11.5px;margin-bottom:8px">'+R.length+' ملف</div>'
+    + R.slice(0,120).map(r=>{
+      const u=jbUrgency(r), pct=r.stages_all?Math.round(100*r.stages_done/r.stages_all):0;
+      const tags=[];
+      if(r.stage_late) tags.push('<span class="mj red">مرحلة متأخرة</span>');
+      if(r.tasks_late>0) tags.push('<span class="mj red">'+r.tasks_late+' مهمة فايتة</span>');
+      if(r.gov_late>0) tags.push('<span class="mj red">معاملة متأخرة</span>');
+      if(r.inst_late>0) tags.push('<span class="mj amber">'+r.inst_late+' قسط متأخر</span>');
+      if(r.is_retro) tags.push('<span class="mj muted">تاريخي</span>');
+      if(r.status==="closed") tags.push('<span class="mj muted">مقفول</span>');
+      return '<button class="jbrow'+(u>=3?" urgent":"")+'" data-jb="'+r.id+'">'
+        +'<div class="jbrow-t"><b class="ltr">'+esc(r.job_code||"—")+'</b>'
+        +'<span>'+esc(r.name||"")+'</span></div>'
+        +'<div class="jbrow-s">'+esc(r.owner_name||r.client_name||"—")
+        +(r.parcel_no?' · قطعة '+esc(r.parcel_no):'')+(r.area_name?' · '+esc(r.area_name):'')+'</div>'
+        +(r.stage_now?'<div class="jbrow-st"><span class="jb-bar"><i style="width:'+pct+'%"></i></span>'
+          +'<span class="muted">'+esc(r.stage_now)+' · '+r.stages_done+'/'+r.stages_all+'</span></div>':'')
+        +(tags.length?'<div class="jbrow-tags">'+tags.join("")+'</div>':'')
+        +'</button>';
+    }).join("")
+    + (R.length>120?'<div class="muted" style="font-size:11.5px;text-align:center;padding:8px">بنعرض أول 120 — ضيّق البحث</div>':'');
+  box.querySelectorAll("[data-jb]").forEach(b=>b.onclick=()=>openProjectDetail(b.dataset.jb));
+}
+
 /* ═══════════════ أي كود ملف في أي شاشة = رابط ═══════════════
    بيمسح الـ DOM بعد كل رسم ويحوّل الأكواد اللي شكلها OC-15-0065-L1
    لروابط تفتح الملف. مش محتاج كل شاشة تعمل ده بنفسها. */
@@ -3094,7 +3174,7 @@ function wireGsearchRows(){
 /* ═══════════════ المرحلة ٣ — بيان الأعمال + المزيد ═══════════════ */
 
 /* ── ١ بيان الأعمال: العميل أولاً ── */
-let ARCH_TAB = "clients";   /* clients | parcels */
+let ARCH_TAB="jobs";   /* clients | parcels */
 
 async function renderArchive(){
   const el=$("v-archive"); if(!el) return;
@@ -3105,22 +3185,33 @@ async function renderArchive(){
       <input id="archQ" class="inp gsearch" placeholder="ابحث باسم العميل · التليفون · رقم القطعة · كود الملف"
              autocomplete="off" inputmode="search">
     </div>
-    <div style="display:flex;gap:6px;margin-bottom:12px">
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button class="chip ${ARCH_TAB==='jobs'?'on':''}" data-atab="jobs">الملفات</button>
       <button class="chip ${ARCH_TAB==='clients'?'on':''}" data-atab="clients">العملاء</button>
       <button class="chip ${ARCH_TAB==='parcels'?'on':''}" data-atab="parcels">الأراضي</button>
     </div>
+    ${ARCH_TAB==='jobs' ? '<div id="jbFilters" style="display:flex;gap:5px;overflow-x:auto;margin-bottom:12px;padding-bottom:3px">'
+      + JB_FILTERS.map(f=>'<button class="chip sm '+(JB_FILTER===f.k?'on':'')+'" data-jbf="'+f.k+'">'+f.l+'</button>').join("")
+      + '</div>' : ''}
     <div id="archBody"><div class="muted" style="padding:20px;text-align:center">بيحمّل…</div></div>`;
 
   el.querySelectorAll("[data-atab]").forEach(b=>b.onclick=()=>{
     ARCH_TAB=b.dataset.atab; renderArchive();
   });
+  el.querySelectorAll("[data-jbf]").forEach(b=>b.onclick=()=>{
+    JB_FILTER=b.dataset.jbf;
+    el.querySelectorAll("[data-jbf]").forEach(x=>x.classList.toggle("on",x.dataset.jbf===JB_FILTER));
+    jbLoad();
+  });
   const q=$("archQ");
   if(q){
     let t=null;
-    q.oninput=()=>{ clearTimeout(t); t=setTimeout(()=>archSearch(q.value.trim()),220); };
-    q.onkeydown=e=>{ if(e.key==="Enter"){ clearTimeout(t); archSearch(q.value.trim()); } };
+    const run=()=>{ const v=q.value.trim();
+      if(ARCH_TAB==="jobs"){ JB_Q=v; jbPaint(); } else archSearch(v); };
+    q.oninput=()=>{ clearTimeout(t); t=setTimeout(run,220); };
+    q.onkeydown=e=>{ if(e.key==="Enter"){ clearTimeout(t); run(); } };
   }
-  await archLoad();
+  if(ARCH_TAB==="jobs"){ q&&(q.value=JB_Q); await jbLoad(); } else await archLoad();
 }
 
 async function archLoad(){
@@ -3361,7 +3452,7 @@ async function renderHome(){
   const role=PROFILE.role;
   el.innerHTML=`<div class="page-h"><div><h2>${greet} يا ${esc(PROFILE.name)}</h2><div class="sub">${esc(userTitle(PROFILE))} · ${new Date().toLocaleDateString("ar-EG",{weekday:"long",day:"numeric",month:"long"})}</div></div><button class="btn ghost sm" id="homeRefresh"><span style="display:inline-flex;color:#94a3b8;vertical-align:middle"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></span></button></div>
     <div id="hStats" class="stats"><div class="stat"><div class="n">…</div><div class="l">…</div></div><div class="stat"><div class="n">…</div><div class="l">…</div></div><div class="stat"><div class="n">…</div><div class="l">…</div></div></div>
-    <button class="btn green" id="hSpeak" style="width:100%;margin-bottom:16px">اسمع ملخص النهارده</button>
+    <button class="btn primary" id="hSpeak" style="width:100%;margin-bottom:16px">اسمع ملخص النهارده</button>
     <div id="hJobs"></div>
     <div id="hBody"><div class="skel"></div><div class="skel"></div><div class="skel" style="height:88px"></div></div>`;
   hubMyJobs();
@@ -3454,7 +3545,7 @@ async function paintCompanyPulse(){
           +'<div class="muted" style="font-size:12.5px;line-height:1.9">لسه مفيش بيانات. ابدأ بواحدة من دول:</div>'
           +'<div class="row-actions" style="margin-top:10px;flex-wrap:wrap;gap:8px">'
           +'<button class="btn sm" data-quick="smart">وزّع أول مهمة</button>'
-          +'<button class="btn green sm" data-quick="projects">أضف مشروع</button>'
+          +'<button class="btn primary sm" data-quick="projects">أضف مشروع</button>'
           +'<button class="btn ghost sm" data-quick="addemp">أضف موظف</button>'
           +'</div></div>';
         return;
@@ -3481,7 +3572,7 @@ function renderOwnerHome(d){
   if(d.joins.length){
     body+=`<div class="card" style="border-color:#FCD9A1;background:#FFFBF2"><b>${d.joins.length} طلب انضمام مستني موافقتك</b>
       <div class="muted" style="font-size:12.5px;margin:4px 0 10px">${d.joins.map(j=>esc(j.manager_name)).join("، ")}</div>
-      <button class="btn green sm" data-go="req">راجع واقبل</button></div>`;
+      <button class="btn primary sm" data-go="req">راجع واقبل</button></div>`;
   }
   const ovOthers=overdue.filter(t=>t.assignee_id!==ME.id);
   if(ovOthers.length){
@@ -3528,7 +3619,7 @@ function renderOpsHome(d){
     statCard("tasks",d.evs.length,"موعد جاي",{ev:true});
   let body='<div id="alertsBox"></div>';
   if(d.joins.length){
-    body+=`<div class="card" style="border-color:#FCD9A1;background:#FFFBF2"><b>${d.joins.length} طلب انضمام مستني موافقة الإدارة</b><div style="margin-top:8px"><button class="btn green sm" data-go="req">راجع</button></div></div>`;
+    body+=`<div class="card" style="border-color:#FCD9A1;background:#FFFBF2"><b>${d.joins.length} طلب انضمام مستني موافقة الإدارة</b><div style="margin-top:8px"><button class="btn primary sm" data-go="req">راجع</button></div></div>`;
   }
   if(d.pendIn.length){
     body+=`<div class="sec-h">طلبات مستنية ردّك <span class="ln"></span></div>`+d.pendIn.slice(0,4).map(r=>reqMiniHtml(r)).join("");
@@ -3718,7 +3809,7 @@ async function openClientFiles(){
   openSheet('<h3>ملفات العملاء</h3><div class="muted" style="margin:-6px 0 10px;font-size:12px">ملف رئيسي لكل عميل، وكل مستنداته منظّمة جواه.</div>'
     +'<div class="field" style="margin-bottom:8px"><input id="cfSearch" placeholder="دوّر باسم العميل أو رقم تليفونه…"/></div>'
     +'<div id="cfBox"><div class="skel"></div><div class="skel"></div></div>'
-    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="cfNew">عميل جديد</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn primary sm" id="cfNew">عميل جديد</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
   addMicTo("cfSearch");
   $("cfSearch").addEventListener("input",(e)=>{ _cfSearch=e.target.value; paintClientFiles(); });
   $("cfNew").onclick=()=>openClientNew();
@@ -3746,7 +3837,7 @@ function openClientNew(){
     +'<div class="field"><label>الإيميل (اختياري)</label><input id="cnEmail" type="email"/></div>'
     +'<div class="field"><label>المدينة</label><input id="cnCity" placeholder="الشيخ زايد / أكتوبر / حدايق أكتوبر…"/></div>'
     +'<div class="field"><label>الخدمة المطلوبة</label><input id="cnService" placeholder="رسومات / ترخيص / استشارة…"/></div>'
-    +'<div class="row-actions"><button class="btn green" id="cnGo">أضف العميل</button><button class="btn ghost" onclick="openClientFiles()">إلغاء</button></div>');
+    +'<div class="row-actions"><button class="btn primary" id="cnGo">أضف العميل</button><button class="btn ghost" onclick="openClientFiles()">إلغاء</button></div>');
   addMicTo("cnName");
   $("cnGo").onclick=async()=>{
     const name=$("cnName").value.trim(); if(!name){ toast("اكتب اسم العميل","bad"); return; }
@@ -3774,7 +3865,7 @@ async function paintClientFileDetail(id){
       +'<div class="field"><label>ابعتها لأي قسم؟ (اختياري)</label><select id="cfToDept"><option value="">بدون تحديد</option>'+DEPTS.map(d=>'<option value="'+d.key+'">'+esc(d.name)+'</option>').join("")+'</select></div>'
       +'<div class="field"><label>اختار ملف (أقصى 20 ميجا)</label><input id="cfFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx" style="font-size:12px"/></div>'
       +'<div id="cfStatus" class="muted" style="font-size:12px;margin-bottom:8px"></div>'
-      +'<div class="row-actions"><button class="btn green sm" id="cfUp">ارفع لملف العميل</button></div></div>';
+      +'<div class="row-actions"><button class="btn primary sm" id="cfUp">ارفع لملف العميل</button></div></div>';
     h+='<div id="cfFilesBox" style="margin-top:8px">';
     if(!fl.length){ h+='<div class="empty">مفيش مستندات لسه.</div>'; }
     else { h+=fl.map(f=>{
@@ -3884,7 +3975,7 @@ function renderManagerHome(d){
     body+=myDeptTasks.slice(0,5).map(t=>`<div class="card flat"${t.deadline&&new Date(t.deadline)<new Date()?' style="border-right:4px solid var(--red)"':''}><b>${esc(t.title)}</b><div class="meta"><span>${esc(t.assignee_name||nameOf(t.assignee_id)||"—")}</span>${t.deadline?`<span class="dot"></span><span>${fmtDate(t.deadline)}</span>`:""}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}</div></div>`).join("");
   } else body+=`<div class="empty" style="padding:18px">مفيش مهام بالقسم لسه.</div>`;
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
-    <div class="act-grp"><div class="act-lbl">شغل يومي</div><div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك${helpDot("smart")}</button><button class="btn green sm" data-quick="ask">اسأل القسم${helpDot("ask")}</button><button class="btn ghost sm" data-quick="newreq">طلب${helpDot("newreq")}</button></div></div>
+    <div class="act-grp"><div class="act-lbl">شغل يومي</div><div class="row-actions"><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك${helpDot("smart")}</button><button class="btn primary sm" data-quick="ask">اسأل القسم${helpDot("ask")}</button><button class="btn ghost sm" data-quick="newreq">طلب${helpDot("newreq")}</button></div></div>
     ${(()=>{const d=PROFILE.dept;let b="";
       if(d==="finance") b='<button class="btn sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="approvals">الموافقات'+helpDot("approvals")+'</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب'+helpDot("expiring")+'</button>';
       else if(d==="legal") b='<button class="btn sm" data-quick="contracts">إدارة العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="docs">خزنة المستندات'+helpDot("docs")+'</button><button class="btn ghost sm" data-quick="expiring">بينتهي قريب'+helpDot("expiring")+'</button>';
@@ -3905,7 +3996,7 @@ function renderManagerHome(d){
 function onboardCard(d){
   if((d.tasks&&d.tasks.length)||(d.reqs&&d.reqs.length)) return "";
   return `<div class="card" style="border-color:#BBDEFB;background:#F4F9FF"><b>ابدأ من هنا</b><div class="muted" style="font-size:12.5px;margin:5px 0 10px">أهلًا بيك في المنظومة! أول 3 خطوات:</div>
-    <div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn sm" data-ob="pw" style="background:var(--blue);color:#fff">غيّر باسوردك</button><button class="btn sm" data-ob="day" style="background:#F59E0B;color:#fff">شوف يومك</button><button class="btn green sm" data-ob="ask">اسأل مساعدك</button></div></div>`;
+    <div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn sm" data-ob="pw" style="background:var(--blue);color:#fff">غيّر باسوردك</button><button class="btn sm" data-ob="day" style="background:#F59E0B;color:#fff">شوف يومك</button><button class="btn primary sm" data-ob="ask">اسأل مساعدك</button></div></div>`;
 }
 function wireOnboard(el){
   el.querySelectorAll("[data-ob]").forEach(b=>b.onclick=()=>{
@@ -3934,7 +4025,7 @@ function renderEmployeeHome(d){
       else if(d==="reception") b='<button class="btn sm" data-quick="visitor">تسجيل زائر'+helpDot("visitor")+'</button><button class="btn ghost sm" data-quick="call">تسجيل مكالمة'+helpDot("call")+'</button><button class="btn ghost sm" data-quick="corr">الوارد والصادر'+helpDot("corr")+'</button><button class="btn ghost sm" data-quick="clientfiles">ملفات العملاء'+helpDot("clientfiles")+'</button><button class="btn ghost sm" data-quick="attlog">مين موجود'+helpDot("attlog")+'</button>';
       if(canSeeLeads()) b+='<button class="btn ghost sm" data-quick="leads">📥 الليدز'+helpDot("leads")+'</button>';
       return b?'<div class="act-grp"><div class="act-lbl">شغلك اليومي</div><div class="row-actions">'+b+'</div></div>':"";})()}
-    <div class="act-grp"><div class="act-lbl">حاجات عامة</div><div class="act-grid"><button class="btn green sm" data-quick="ask">اسأل قسمك بصوتك${helpDot("ask")}</button><button class="btn sm" data-quick="event">سجّل موعد${helpDot("event")}</button><button class="btn ghost sm" data-quick="newreq">طلب${helpDot("newreq")}</button><button class="btn ghost sm" data-quick="leaves">الإجازات${helpDot("leaves")}</button>${PROFILE.dept==="reception"?'<button class="btn ghost sm" data-quick="docs">خزنة المستندات'+helpDot("docs")+'</button>':""}</div></div></div>`;
+    <div class="act-grp"><div class="act-lbl">حاجات عامة</div><div class="act-grid"><button class="btn primary sm" data-quick="ask">اسأل قسمك بصوتك${helpDot("ask")}</button><button class="btn sm" data-quick="event">سجّل موعد${helpDot("event")}</button><button class="btn ghost sm" data-quick="newreq">طلب${helpDot("newreq")}</button><button class="btn ghost sm" data-quick="leaves">الإجازات${helpDot("leaves")}</button>${PROFILE.dept==="reception"?'<button class="btn ghost sm" data-quick="docs">خزنة المستندات'+helpDot("docs")+'</button>':""}</div></div></div>`;
   body+=`<div class="sec-h">المهام اللي عليك <span class="ln"></span></div>`;
   if(myTasks.length){
     body+=myTasks.slice(0,6).map(t=>`<button class="card flat" data-task="${t.id}" style="width:100%;text-align:right;cursor:pointer${t.deadline&&new Date(t.deadline)<new Date()?';border-right:4px solid var(--red)':''}"><b>${esc(t.title)}</b><div class="meta">${t.deadline?`<span>${fmtDate(t.deadline)}</span>`:`<span class="muted">من غير موعد</span>`}${t.priority==="high"?'<span class="dot"></span>'+prioBadge("high"):""}<span class="dot"></span><span class="muted">${t.progress||0}%</span></div></button>`).join("");
@@ -3978,7 +4069,7 @@ const DAY_KIND={task:["","مهمة"],request:["","طلب"],event:["","موعد"]
 const LEAVE_KINDS=[["annual","سنوية"],["sick","مرضية"],["casual","عارضة"],["unpaid","بدون مرتب"]];
 const APPROVAL_KINDS=[["expense","مصروف"],["purchase","شراء"],["discount","خصم لعميل"],["other","تاني"]];
 async function openMeetingReport(){
-  openSheet('<h3>تقرير الاجتماع</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">كل أرقام الشركة في نص واحد جاهز للنسخ</div><div id="mrBox"><div class="skel"></div><div class="skel"></div></div><div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="mrCopy">انسخ</button><button class="btn ghost sm" id="mrSay">اسمعه</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+  openSheet('<h3>تقرير الاجتماع</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">كل أرقام الشركة في نص واحد جاهز للنسخ</div><div id="mrBox"><div class="skel"></div><div class="skel"></div></div><div class="row-actions" style="margin-top:10px"><button class="btn primary sm" id="mrCopy">انسخ</button><button class="btn ghost sm" id="mrSay">اسمعه</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
   try{
     const [stR,hrR,fnR,kR,impR]=await Promise.all([
       sb.from("os_dashboard_stats").select("*").maybeSingle(),
@@ -4034,7 +4125,7 @@ let _filesCat="all", _filesSearch="", _filesView="active";
 async function openMyFiles(){
   openSheet('<h3>ملفاتي ومرفقاتي</h3>'
     +'<div class="muted" style="margin:-6px 0 10px;font-size:12px">ارفع ملفات أو احفظ لينكات — كله بيتأرشف وبيتربط بقسمك</div>'
-    +'<div class="row-actions" style="margin-bottom:10px"><button class="btn green sm" id="fUpFile">ارفع ملف</button><button class="btn sm" id="fAddLink" style="background:var(--blue);color:#fff">احفظ لينك</button></div>'
+    +'<div class="row-actions" style="margin-bottom:10px"><button class="btn primary sm" id="fUpFile">ارفع ملف</button><button class="btn sm" id="fAddLink" style="background:var(--blue);color:#fff">احفظ لينك</button></div>'
     +'<div class="field" style="margin-bottom:8px"><input id="fSearch" placeholder="دوّر باسم الملف…"/></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="fViewTabs"><button class="chip on" data-fv="active">النشطة</button><button class="chip" data-fv="incoming">واردة لقسمي</button><button class="chip" data-fv="archive">الأرشيف</button></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="fCats"><button class="chip on" data-fc="all">الكل</button>'+FILE_CATS.map(c=>'<button class="chip" data-fc="'+c[0]+'">'+c[1]+'</button>').join("")+'</div>'
@@ -4106,7 +4197,7 @@ function openFileUploadForm(){
     +'<div class="field"><label>إرسال لقسم (اختياري)</label><select id="ufToDept"><option value="">— من غير —</option>'+DEPTS.map(d=>'<option value="'+d.key+'">'+esc(d.name)+'</option>').join("")+'</select><div class="muted" style="font-size:11px;margin-top:3px">لو اخترت قسم، مدير القسم هيتبعتله إشعار إن فيه ملف وارد</div></div>'
     +'<div class="field"><label>ملاحظة (اختياري)</label><input id="ufNote" placeholder=""/></div>'
     +'<div id="ufStatus" class="muted" style="font-size:12px;margin-bottom:8px"></div>'
-    +'<div class="row-actions"><button class="btn green" id="ufGo">ارفع واحفظ</button><button class="btn ghost" onclick="openMyFiles()">رجوع</button></div>');
+    +'<div class="row-actions"><button class="btn primary" id="ufGo">ارفع واحفظ</button><button class="btn ghost" onclick="openMyFiles()">رجوع</button></div>');
   addMicTo("ufNote");
   (async()=>{ try{
     const { data:tk }=await sb.from("os_tasks").select("id,title").or("assignee_id.eq."+ME.id+",created_by.eq."+ME.id).neq("status","done").order("created_at",{ascending:false}).limit(20);
@@ -4130,7 +4221,7 @@ function openLinkForm(){
     +'<div class="field"><label>النوع</label><select id="ulCat">'+FILE_CATS.map(c=>'<option value="'+c[0]+'">'+c[1]+'</option>').join("")+'</select></div>'
     +'<div class="field"><label>اللينك</label><input id="ulUrl" placeholder="https://…" inputmode="url"/></div>'
     +'<div class="field"><label>ملاحظة (اختياري)</label><input id="ulNote"/></div>'
-    +'<div class="row-actions"><button class="btn green" id="ulGo">احفظ اللينك</button><button class="btn ghost" onclick="openMyFiles()">رجوع</button></div>');
+    +'<div class="row-actions"><button class="btn primary" id="ulGo">احفظ اللينك</button><button class="btn ghost" onclick="openMyFiles()">رجوع</button></div>');
   addMicTo("ulNote");
   $("ulGo").onclick=async()=>{
     const title=$("ulTitle").value.trim(); let url=$("ulUrl").value.trim();
@@ -4281,7 +4372,7 @@ function openComplaint(){
   openSheet('<h3>شكوى سرية</h3>'
     +'<div class="card flat" style="border-right:4px solid var(--green-d);background:#F4FBF5;margin-bottom:12px;font-size:12.5px"><b>سرية تمامًا:</b> محدش هيشوفها غير الإدارة العليا بس — ولا حتى مديرك المباشر. اكتب براحتك.</div>'
     +'<div class="field"><label>إيه اللي مضايقك؟</label><textarea id="cmpTxt" style="min-height:120px" placeholder="اكتب أو سجّل بصوتك…"></textarea></div>'
-    +'<div class="row-actions"><button class="btn green" id="cmpGo">ابعتها بسرية</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>');
+    +'<div class="row-actions"><button class="btn primary" id="cmpGo">ابعتها بسرية</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>');
   addMicTo("cmpTxt");
   $("cmpGo").onclick=async()=>{
     const txt=$("cmpTxt").value.trim(); if(!txt){ toast("اكتب الشكوى الأول","bad"); return; }
@@ -4300,7 +4391,7 @@ async function openComplaintsAdmin(){
       +'<div style="font-size:13px;margin-top:6px;white-space:pre-wrap">'+esc(c.content)+'</div>'
       +(c.hr_note?'<div class="resp-box" style="margin-top:6px"><b>ملاحظة:</b> '+esc(c.hr_note)+'</div>':'')
       +'<div class="meta"><span>'+timeAgo(c.created_at)+'</span></div>'
-      +(c.status!=="resolved"?'<div class="row-actions" style="margin-top:8px"><button class="btn green sm" data-cmpres="'+c.id+'">اتحلت</button></div>':'')
+      +(c.status!=="resolved"?'<div class="row-actions" style="margin-top:8px"><button class="btn primary sm" data-cmpres="'+c.id+'">اتحلت</button></div>':'')
       +'</div>').join("");
     $("cmpBox").querySelectorAll("[data-cmpres]").forEach(b=>b.onclick=async()=>{
       const note=prompt("ملاحظة الحل (اختياري):")||null;
@@ -4337,7 +4428,7 @@ async function openProjects(){
       +'<div class="field"><label>القيمة (جنيه — اختياري)</label><input id="pjVal" type="number" inputmode="numeric" min="0"/></div>'
       +'<div class="field"><label>القسم</label><select id="pjDept">'+DEPTS.map(d=>'<option value="'+d.key+'"'+(d.key===PROFILE.dept?" selected":"")+'>'+esc(d.name)+'</option>').join("")+'</select></div>'
       +'<div id="pjHint" class="muted" style="font-size:11.5px;margin:2px 0 8px"></div>'
-      +'<div class="row-actions"><button class="btn green" id="pjGo">افتح بيان الأعمال</button></div>':"")
+      +'<div class="row-actions"><button class="btn primary" id="pjGo">افتح بيان الأعمال</button></div>':"")
     +'<button class="btn sm" style="margin-top:10px" onclick="openFind()">\ud83d\udd0d بحث في الملفات والقطع</button>'
     +'<button class="btn ghost sm" style="margin-top:10px" onclick="openArchive()">الأرشيف</button>'
     +'<button class="btn ghost sm" style="margin-top:10px" onclick="openGeo()">الأجهزة والمناطق</button>'
@@ -4577,7 +4668,7 @@ async function openHandoff(t){
     <div class="field"><label>المطلوب بالظبط</label><textarea id="hoNote" placeholder="مثلاً: الرسمة اتعتمدت — مطلوب تقديمها للترخيص"></textarea></div>
     <div class="field"><label>الموعد المستهدف</label><input id="hoDue" type="date" min="${todayStr()}"/></div>
     <div class="field"><label>الأولوية</label><select id="hoPrio"><option value="medium">عادي</option><option value="high">عاجل</option></select></div>
-    <div class="row-actions"><button class="btn green" id="hoGo">سلّم المهمة</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+    <div class="row-actions"><button class="btn primary" id="hoGo">سلّم المهمة</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
   addMicTo("hoNote");
   const fillAss=()=>{
     const dk=$("hoDept").value;
@@ -4623,7 +4714,7 @@ function openProjectMilestoneNew(projectId,prj){
     <div class="field"><label>المسؤول</label><select id="msAss">${opts}</select></div>
     <div class="field"><label>الموعد المستهدف</label><input id="msDue" type="date" min="${todayStr()}"/></div>
     <div class="field"><label>الأولوية</label><select id="msPrio"><option value="medium">عادي</option><option value="high">عاجل</option></select></div>
-    <div class="row-actions"><button class="btn green" id="msGo">أضف</button><button class="btn ghost" onclick="openProjectDetail('${projectId}')">إلغاء</button></div>`);
+    <div class="row-actions"><button class="btn primary" id="msGo">أضف</button><button class="btn ghost" onclick="openProjectDetail('${projectId}')">إلغاء</button></div>`);
   addMicTo("msTitle"); makeSearchable("msAss","دوّر باسم الموظف…");
   $("msGo").onclick=async()=>{
     const title=$("msTitle").value.trim(); if(!title){ toast("اكتب العنوان","bad"); return; }
@@ -4829,7 +4920,7 @@ async function paintProjectDetail(id){
     h+='</div><div data-hubsec="tasks">';
     h+='<div class="sec-h">معالم ومهام المشروع <span class="ln"></span></div>';
     if(canUp) h+='<div class="act-grid" style="margin:-4px 0 10px">'
-      +'<button class="btn green sm" id="pdWorkOrder">أمر شغل لموظف</button>'
+      +'<button class="btn primary sm" id="pdWorkOrder">أمر شغل لموظف</button>'
       +'<button class="btn sm" id="pdAddMs">أضف معلم/مهمة</button></div>';
     if(!tsk.length){ h+='<div class="empty">مفيش معالم أو مهام مرتبطة بالمشروع لسه.</div>'; }
     else { h+=tsk.map(t=>{
@@ -4953,7 +5044,7 @@ function isStructUser(){ return isOwnerOps()||PROFILE.dept==="engineering"; }
 async function openStructEng(){
   openSheet('<h3>الهندسة الإنشائية</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">دورة التصميم من المعماري للتنفيذ — مدخلات، تحليل SAFE/ETABS، وتشيكات العناصر</div>'
     +'<div id="seBox"><div class="skel"></div><div class="skel"></div></div>'
-    +(isStructUser()?'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="seNew">مشروع إنشائي جديد</button></div>':"")
+    +(isStructUser()?'<div class="row-actions" style="margin-top:10px"><button class="btn primary sm" id="seNew">مشروع إنشائي جديد</button></div>':"")
     +'<button class="btn ghost" style="margin-top:8px" onclick="closeSheet()">قفل</button>');
   if(isStructUser()) $("seNew").onclick=()=>openStructNew();
   await paintStructProjects();
@@ -5011,7 +5102,7 @@ async function paintStructProjectDetail(id){
       +'<div class="meta" style="margin-top:6px">'+(p.architect_name?'<span>معماري: '+esc(p.architect_name)+'</span><span class="dot"></span>':'')+(p.engineer_name?'<span>إنشائي: '+esc(p.engineer_name)+'</span>':'')+'</div>'
       +'<div class="muted" style="font-size:11.5px;margin-top:6px">'+(p.fc?'fc='+p.fc+' N/mm² · ':'')+(p.fy?'fy='+p.fy+' N/mm² · ':'')+(p.num_floors?p.num_floors+' دور':'')+'</div></div>';
     h+='<div class="sec-h">العناصر ('+rows.length+') <span class="ln"></span></div>';
-    if(isStructUser()) h+='<div class="row-actions" style="margin:-4px 0 10px"><button class="btn green sm" id="seAddEl">➕ أضف عنصر</button></div>';
+    if(isStructUser()) h+='<div class="row-actions" style="margin:-4px 0 10px"><button class="btn primary sm" id="seAddEl">➕ أضف عنصر</button></div>';
     if(!rows.length){ h+='<div class="empty">مفيش عناصر متسجّلة لسه.</div>'; }
     else { h+=rows.map(e=>{
       const cs=e.check_status;
@@ -5021,7 +5112,7 @@ async function paintStructProjectDetail(id){
       return '<div class="card flat" data-el="'+e.id+'"'+(cs==="fail"?' style="border-right:4px solid var(--red)"':'')+'>'
         +'<div style="display:flex;align-items:center;gap:8px"><b style="flex:1">'+esc(e.label)+' — '+(ETYPE_LBL[e.etype]||e.etype)+'</b>'+csBadge+'</div>'
         +'<div class="meta">'+(e.level?'<span>الدور: '+esc(e.level)+'</span><span class="dot"></span>':'')+'<span class="badge" style="background:transparent;color:var(--ink-soft);padding:0">'+rv[0]+'</span>'+(e.worst_ratio!=null?'<span class="dot"></span><span>أسوأ نسبة: '+Number(e.worst_ratio).toFixed(2)+'</span>':'')+'</div>'
-        +(canReview?'<div class="row-actions" style="margin-top:8px"><button class="btn green sm" data-elok="'+e.id+'">اعتماد</button><button class="btn ghost sm" data-eledit="'+e.id+'">محتاجة تعديل</button></div>':'')
+        +(canReview?'<div class="row-actions" style="margin-top:8px"><button class="btn primary sm" data-elok="'+e.id+'">اعتماد</button><button class="btn ghost sm" data-eledit="'+e.id+'">محتاجة تعديل</button></div>':'')
         +'</div>';
     }).join(""); }
     $("sdBox").innerHTML=h;
@@ -5056,7 +5147,7 @@ function openStructElementNew(projectId){
     +'<div class="field"><label>قص (Shear)</label><input id="elChkV" type="number" inputmode="decimal" step="0.01" min="0"/></div>'
     +'<div class="field"><label>ثقب (Punching)</label><input id="elChkP" type="number" inputmode="decimal" step="0.01" min="0"/></div>'
     +'<div class="field"><label>ملاحظات</label><textarea id="elNotes"></textarea></div>'
-    +'<div class="row-actions"><button class="btn green" id="elGo">أضف العنصر</button><button class="btn ghost" onclick="openStructProjectDetail(\''+projectId+'\')">إلغاء</button></div>');
+    +'<div class="row-actions"><button class="btn primary" id="elGo">أضف العنصر</button><button class="btn ghost" onclick="openStructProjectDetail(\''+projectId+'\')">إلغاء</button></div>');
   addMicTo("elLabel");
   $("elGo").onclick=async()=>{
     const label=$("elLabel").value.trim(); if(!label){ toast("اكتب اسم العنصر","bad"); return; }
@@ -5095,7 +5186,7 @@ async function openStructNew(){
     +seNumField("seFh","ارتفاع الدور","3.0","م")
     +'<div class="field"><label>الرياح والزلازل (ملاحظة)</label><input id="seSeis" placeholder="مثلاً: ETABS من الكود المصري"/></div>'
     +'<div class="field"><label>ملاحظات</label><textarea id="seNotes"></textarea></div>'
-    +'<div class="row-actions"><button class="btn green" id="seSave">أضف المشروع</button><button class="btn ghost" id="seBack">رجوع</button></div>');
+    +'<div class="row-actions"><button class="btn primary" id="seSave">أضف المشروع</button><button class="btn ghost" id="seBack">رجوع</button></div>');
   addMicTo("seName");
   $("seBack").onclick=()=>openStructEng();
   $("seSave").onclick=async()=>{
@@ -5125,7 +5216,7 @@ async function openGovCases(){
   openSheet('<h3>المعاملات الحكومية</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">من التقديم للاعتماد — كل معاملة بتاريخها وكودها وحالتها</div>'
     +'<div style="display:flex;gap:6px;margin-bottom:10px" id="govFilters"><button class="chip on" data-gf="active">شغّالة</button><button class="chip" data-gf="archived">الأرشيف</button></div>'
     +'<div id="govBox"><div class="skel"></div><div class="skel"></div></div>'
-    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="govNew">معاملة جديدة</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn primary sm" id="govNew">معاملة جديدة</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
   _govView="active";
   $("govFilters").querySelectorAll("[data-gf]").forEach(b=>b.onclick=()=>{ _govView=b.dataset.gf; $("govFilters").querySelectorAll(".chip").forEach(x=>x.classList.toggle("on",x===b)); paintGovCases(); });
   $("govNew").onclick=()=>openGovCaseNew();
@@ -5170,7 +5261,7 @@ async function openGovCaseNew(preJobId){
     +(preJobId?'<div class="muted" style="font-size:11.5px;margin:-6px 0 8px">✓ مربوطة بالملف اللي جاي منه</div>':'')
     +'<div class="field"><label>موعد مستهدف (اختياري)</label><input id="gcTarget" type="date" min="'+todayStr()+'"/></div>'
     +'<div class="field"><label>ملاحظات</label><textarea id="gcNotes"></textarea></div>'
-    +'<div class="row-actions"><button class="btn green" id="gcGo">أضف المعاملة</button><button class="btn ghost" onclick="openGovCases()">إلغاء</button></div>');
+    +'<div class="row-actions"><button class="btn primary" id="gcGo">أضف المعاملة</button><button class="btn ghost" onclick="openGovCases()">إلغاء</button></div>');
   addMicTo("gcTitle"); addMicTo("gcBody"); allowCustom("gcType","نوع معاملة تاني — اكتبه");
   $("gcGo").onclick=async()=>{
     const title=$("gcTitle").value.trim(); if(!title){ toast("اكتب عنوان المعاملة","bad"); return; }
@@ -5206,7 +5297,7 @@ async function paintGovCaseDetail(id){
     h+='<div class="field"><label>الرقم المرجعي الرسمي</label><input id="gdRef" value="'+esc(c.reference_code||"")+'" placeholder="رقم المعاملة عند الجهة"/></div>';
     h+='<div class="field"><label>مرجع الختم/البصمة (عند الاعتماد)</label><input id="gdStamp" value="'+esc(c.stamp_ref||"")+'" placeholder="رقم الختم أو الاعتماد"/></div>';
     h+='<div class="field"><label>ملاحظات</label><textarea id="gdNotes">'+esc(c.notes||"")+'</textarea></div>';
-    h+='<div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn green sm" id="gdSave">احفظ التحديث</button><button class="btn ghost sm" id="gdEvent">جدولة متابعة</button>'+(c.status!=="archived"?'<button class="btn ghost sm" id="gdArch" style="color:var(--green-d);border-color:#A5D6A7">أرشفة (خلصت)</button>':'')+'</div>';
+    h+='<div class="row-actions" style="flex-wrap:wrap;gap:8px"><button class="btn primary sm" id="gdSave">احفظ التحديث</button><button class="btn ghost sm" id="gdEvent">جدولة متابعة</button>'+(c.status!=="archived"?'<button class="btn ghost sm" id="gdArch" style="color:var(--green-d);border-color:#A5D6A7">أرشفة (خلصت)</button>':'')+'</div>';
     $("gdBox").innerHTML=h;
     const pjBtn=$("gdPrj"); if(pjBtn) pjBtn.onclick=()=>openProjectDetail(c.project_id);
     let chosenProg=c.progress||0;
@@ -5282,7 +5373,7 @@ async function openDecisions(){
     +(isOwnerOps()?'<div class="sec-h">قرار جديد <span class="ln"></span></div>'
       +'<div class="field"><label>القرار</label><input id="dcTitle" placeholder="مثلًا: اعتماد لائحة الحضور الجديدة"/></div>'
       +'<div class="field"><label>تفاصيل (اختياري)</label><textarea id="dcDet"></textarea></div>'
-      +'<div class="row-actions"><button class="btn green" id="dcGo">سجّل القرار</button></div>':"")
+      +'<div class="row-actions"><button class="btn primary" id="dcGo">سجّل القرار</button></div>':"")
     +'<button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
   if(isOwnerOps()){
     addMicTo("dcDet");
@@ -5309,7 +5400,7 @@ async function openMinutes(){
     +'<div class="field"><label>عنوان الاجتماع</label><input id="mnTitle" placeholder="اجتماع الأحد الأسبوعي"/></div>'
     +'<div class="field"><label>الحضور (اختياري)</label><input id="mnAtt" placeholder="الهندسة، المالية، الأوبريشن…"/></div>'
     +'<div class="field"><label>اللي اتقال واتقرر</label><textarea id="mnBody" style="min-height:110px" placeholder="اكتب أو سجّل بصوتك…"></textarea></div>'
-    +'<div class="row-actions"><button class="btn green" id="mnGo">سجّل المحضر</button></div>'
+    +'<div class="row-actions"><button class="btn primary" id="mnGo">سجّل المحضر</button></div>'
     +'<button class="btn ghost" style="margin-top:10px" onclick="closeSheet()">قفل</button>');
   addMicTo("mnBody");
   $("mnGo").onclick=async()=>{
@@ -5350,7 +5441,7 @@ async function paintMinutes(){
         +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
         +'<select class="dcOwn" style="flex:1;min-width:130px;padding:8px;border:1.5px solid var(--line);border-radius:10px;font-family:inherit;font-size:13px"><option value="">المسؤول…</option>'+PROFILES.map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join("")+'</select>'
         +'<input class="dcDl" type="date" style="padding:8px;border:1.5px solid var(--line);border-radius:10px;font-family:inherit;font-size:13px"/>'
-        +'<button class="btn green sm dcGo" data-min="'+m.id+'">سجّل القرار</button></div>'
+        +'<button class="btn primary sm dcGo" data-min="'+m.id+'">سجّل القرار</button></div>'
         +'<div class="muted" style="font-size:10.5px">لو حددت مسؤول وموعد — هتتولد مهمة تلقائيًا وهيظهر رابطها هنا</div>'
         +'</div></details>' : "";
       return '<div class="card flat"><b>'+esc(m.title)+'</b>'+(m.attendees?'<div class="muted" style="font-size:11.5px;margin-top:3px">'+esc(m.attendees)+'</div>':'')+'<div style="font-size:12.5px;margin-top:5px;white-space:pre-wrap">'+esc((m.body||"").slice(0,300))+((m.body||"").length>300?"\u2026":"")+'</div>'+decHtml+addForm+'<div class="meta"><span>'+esc(m.by_name||"")+'</span><span class="dot"></span><span>'+timeAgo(m.created_at)+'</span></div></div>';
@@ -5426,7 +5517,7 @@ function openFollowupNext(id){
     +'<div class="field"><label>المرحلة دلوقتي</label><select id="fuStage">'+Object.entries(OPP_STAGE_LBL).map(([k,v])=>'<option value="'+k+'">'+v+'</option>').join("")+'</select></div>'
     +'<div class="field"><label>الخطوة التالية</label><input id="fuNext" placeholder="مثلاً: إرسال عرض السعر"/></div>'
     +'<div class="field"><label>موعدها</label><input id="fuDue" type="date" value="'+nextDue+'"/></div>'
-    +'<div class="row-actions"><button class="btn green" id="fuGo">احفظ</button><button class="btn ghost" onclick="openFollowups()">إلغاء</button></div>');
+    +'<div class="row-actions"><button class="btn primary" id="fuGo">احفظ</button><button class="btn ghost" onclick="openFollowups()">إلغاء</button></div>');
   addMicTo("fuResult");
   $("fuGo").onclick=async()=>{
     const btn=$("fuGo"); btn.disabled=true; btn.textContent="بيحفظ…";
@@ -5442,7 +5533,7 @@ function openQuickProgress(id,cur){
   openSheet('<h3>وصلت لفين؟</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">حدّث نسبة الإنجاز عشان مديرك يبقى عارف من غير ما يسأل.</div>'
     +'<div class="qbtns" id="qpBtns" style="margin-bottom:12px">'+[10,25,50,75,90].map(p=>'<button class="qbtn'+(cur===p?" on":"")+'" data-qp="'+p+'">'+p+'%</button>').join("")+'</div>'
     +'<div class="field"><label>تعليق (اختياري)</label><textarea id="qpNote" placeholder="مثلاً: خلّصت الرسم المعماري، فاضل الإنشائي"></textarea></div>'
-    +'<div class="row-actions"><button class="btn green" id="qpGo">احفظ التحديث</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>');
+    +'<div class="row-actions"><button class="btn primary" id="qpGo">احفظ التحديث</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>');
   addMicTo("qpNote");
   let chosen=cur||0;
   $("qpBtns").querySelectorAll("[data-qp]").forEach(b=>b.onclick=()=>{
@@ -5626,7 +5717,7 @@ function isLegalUser(){ return isOwnerOps()||PROFILE.dept==="legal"; }
 async function openContracts(){
   if(!isLegalUser()){ toast("الشاشة دي للقانونية والإدارة","bad"); return; }
   openSheet('<h3>العقود والتراخيص</h3><div class="muted" style="margin:-6px 0 12px;font-size:12px">مرتبة بالأولوية — اللي محتاج قرار منك الأول.</div><div id="ctBox"><div class="skel"></div><div class="skel"></div></div>'
-    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="ctNew">أضف عقد/ترخيص</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn primary sm" id="ctNew">أضف عقد/ترخيص</button><button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
   $("ctNew").onclick=()=>openContractNew();
   await paintContracts();
   attachListSearch("ctSearch","ctBox","دوّر بالاسم أو الجهة…");
@@ -5672,7 +5763,7 @@ async function openContractDetail(id){
       +'<div class="field"><label><input type="checkbox" id="ctAuto" '+(c.auto_renew?"checked":"")+'/> تجديد تلقائي</label></div>'
       +'<div class="field"><label>مهلة الإخطار قبل الانتهاء (يوم)</label><input id="ctNotice" type="number" min="0" value="'+(c.notice_days||30)+'"/></div>'
       +'<div class="field"><label>الالتزامات والبنود المهمة</label><textarea id="ctObl">'+esc(c.obligations||"")+'</textarea></div>'
-      +'<div class="row-actions"><button class="btn green" id="ctSave">احفظ</button><button class="btn ghost" onclick="openContracts()">رجوع للعقود</button></div>');
+      +'<div class="row-actions"><button class="btn primary" id="ctSave">احفظ</button><button class="btn ghost" onclick="openContracts()">رجوع للعقود</button></div>');
     addMicTo("ctObl");
     $("ctSave").onclick=async()=>{
       const btn=$("ctSave"); btn.disabled=true; btn.textContent="بيحفظ…";
@@ -5696,7 +5787,7 @@ function openContractNew(){
     +'<div class="field"><label><input type="checkbox" id="ctnAuto"/> تجديد تلقائي</label></div>'
     +'<div class="field"><label>مهلة الإخطار (يوم)</label><input id="ctnNotice" type="number" min="0" value="30"/></div>'
     +'<div class="field"><label>الالتزامات المهمة</label><textarea id="ctnObl" placeholder="مثلاً: غرامة تأخير · ضمان · شروط الإنهاء"></textarea></div>'
-    +'<div class="row-actions"><button class="btn green" id="ctnGo">أضف</button><button class="btn ghost" onclick="openContracts()">إلغاء</button></div>');
+    +'<div class="row-actions"><button class="btn primary" id="ctnGo">أضف</button><button class="btn ghost" onclick="openContracts()">إلغاء</button></div>');
   addMicTo("ctnTitle"); addMicTo("ctnObl"); makeSearchable("ctnDept","دوّر باسم القسم…");
   $("ctnGo").onclick=async()=>{
     const title=$("ctnTitle").value.trim(); if(!title){ toast("اكتب الاسم","bad"); return; }
@@ -5754,7 +5845,7 @@ function applyQuickCollapse(){
 const PAY_METHOD={cash:"كاش",transfer:"تحويل",cheque:"شيك",instapay:"إنستاباي",other:"أخرى"};
 async function openJobAccount(id){
   openSheet('<h3>كشف حساب الملف</h3><div id="jaBox"><div class="skel"></div><div class="skel"></div></div>'
-    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" onclick="addCashIn(\''+id+'\')">\u002b تحصيل كاش</button>'
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn primary sm" onclick="addCashIn(\''+id+'\')">\u002b تحصيل كاش</button>'
     +'<button class="btn ghost sm" onclick="openProjectDetail(\''+id+'\')">رجوع للملف</button></div>');
   try{
     const [{ data:sum },{ data:mv }]=await Promise.all([
@@ -5806,7 +5897,7 @@ async function addCashIn(id){
     +Object.entries(PAY_METHOD).map(([k,v])=>'<option value="'+k+'">'+v+'</option>').join("")+'</select></div>'
     +'<div class="field"><label>تصنيف الإيراد</label><select id="ciCat">'+cats+'</select></div>'
     +'<div class="field"><label>التاريخ</label><input id="ciDate" type="date" value="'+todayStr()+'"/></div>'
-    +'<div class="row-actions"><button class="btn green" id="ciGo">سجّل التحصيل</button>'
+    +'<div class="row-actions"><button class="btn primary" id="ciGo">سجّل التحصيل</button>'
     +'<button class="btn ghost" onclick="openJobAccount(\''+id+'\')">إلغاء</button></div>');
   addMicTo("ciTitle");
   $("ciGo").onclick=async()=>{
@@ -6061,7 +6152,7 @@ async function openProjectFinance(){
 async function openSuppliers(){
   if(!canFinRead()){ toast("الموردين للمالية والإدارة","bad"); return; }
   openSheet('<h3>الموردين</h3><div id="spBox"><div class="skel"></div></div>'
-    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" onclick="addSupplier()">\u002b مورد</button>'
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn primary sm" onclick="addSupplier()">\u002b مورد</button>'
     +'<button class="btn sm" onclick="openPayables()">الفواتير</button>'
     +'<button class="btn ghost sm" onclick="openFinance()">رجوع</button></div>');
   await paintSuppliers();
@@ -6140,7 +6231,7 @@ async function quickJobFromPicker(){
     +'<div class="field"><label>اسم العميل (اختياري)</label><input id="qjCli" placeholder="صاحب القطعة"/></div>'
     +'<div class="field"><label>تليفون العميل</label><input id="qjPhone" type="tel" inputmode="tel" placeholder="01xxxxxxxxx"/></div>'
     +'<div class="field"><label>القيمة (اختياري)</label><input id="qjVal" type="number" inputmode="numeric" min="0"/></div>'
-    +'<div class="row-actions"><button class="btn green" id="qjGo">افتح الملف واختاره</button>'
+    +'<div class="row-actions"><button class="btn primary" id="qjGo">افتح الملف واختاره</button>'
     +'<button class="btn ghost" id="qjBack">رجوع</button></div>');
   addMicTo("qjName");
   $("qjBack").onclick=()=>{ $("sheet").innerHTML=prev; _pickRestore=restore; };
@@ -6198,7 +6289,7 @@ async function pickJob(cb, opts){
   openSheet('<h3>'+(opts.title||"اختار الملف")+'</h3>'
     +(opts.allowGeneral!==false?'<button class="btn sm" style="width:100%;margin-bottom:10px" onclick="pickDone(null,null)">'
       +'\u2014 عام (مش على ملف) \u2014</button>':'')
-    +'<button class="btn green sm" style="width:100%;margin-bottom:10px" onclick="quickJobFromPicker()">\u002b افتح ملف جديد</button>'
+    +'<button class="btn primary sm" style="width:100%;margin-bottom:10px" onclick="quickJobFromPicker()">\u002b افتح ملف جديد</button>'
     +'<div class="field"><input id="pkQ" placeholder="دوّر بكود القطعة أو الملف أو العميل…"/></div>'
     +'<div id="pkTree"></div>'
     +'<button class="btn ghost" style="margin-top:10px" onclick="pickCancel()">رجوع من غير اختيار</button>');
@@ -6355,7 +6446,7 @@ async function openRouteJob(id, jobCode){
     +'<div class="field"><label>لأي قسم؟</label><select id="rtDept">'+opts+'</select></div>'
     +'<div class="field"><label>لشخص معيّن؟</label><select id="rtWho">'+who+'</select></div>'
     +'<div class="field"><label>السبب</label><input id="rtWhy" placeholder="مثلاً: محتاج مراجعة مالية قبل التقديم"/></div>'
-    +'<div class="row-actions"><button class="btn green" id="rtGo">وجّه الملف</button>'
+    +'<div class="row-actions"><button class="btn primary" id="rtGo">وجّه الملف</button>'
     +'<button class="btn ghost" onclick="openProjectDetail(\''+id+'\')">إلغاء</button></div>'
     +(L.length?'<div class="sec-h">سجل التوجيه <span class="ln"></span></div><div class="card flat">'
       +L.map(x=>'<div style="padding:7px 0;border-bottom:1px solid #eef2f7">'
@@ -6391,7 +6482,7 @@ async function quickCash(id, jobCode){
     +'<option value="cash">كاش</option><option value="transfer">تحويل بنكي</option>'
     +'<option value="instapay">إنستاباي</option><option value="cheque">شيك</option></select></div>'
     +'<div class="field"><label>تصنيف الإيراد</label><select id="qcCat"></select></div>'
-    +'<div class="row-actions"><button class="btn green" id="qcGo">سجّل التحصيل</button>'
+    +'<div class="row-actions"><button class="btn primary" id="qcGo">سجّل التحصيل</button>'
     +'<button class="btn ghost" onclick="openProjectDetail(\''+id+'\')">إلغاء</button></div>');
   addMicTo("qcTitle");
   catOptions("income").then(o=>{ const c=$("qcCat"); if(c) c.innerHTML=o; });
@@ -6539,7 +6630,7 @@ async function openJournal(){
 
 async function openCOA(){
   openSheet('<h3>دليل الحسابات</h3><div id="coaBox"><div class="skel"></div></div>'
-    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" onclick="addCOA()">\u002b حساب</button>'
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn primary sm" onclick="addCOA()">\u002b حساب</button>'
     +'<button class="btn ghost sm" onclick="openBooks()">رجوع</button></div>');
   await paintCOA();
 }
@@ -6595,7 +6686,7 @@ async function openManualJV(){
     +'<div class="field"><label>دائن</label><input id="jvC" type="number" inputmode="numeric" min="0" value="0"/></div>'
     +'<button class="btn sm" id="jvAdd">\u002b ضيف السطر</button></div>'
     +'<div id="jvSum" class="muted" style="font-size:12px;margin:6px 0"></div>'
-    +'<div class="row-actions"><button class="btn green" id="jvGo">رحّل القيد</button>'
+    +'<div class="row-actions"><button class="btn primary" id="jvGo">رحّل القيد</button>'
     +'<button class="btn ghost" onclick="openBooks()">إلغاء</button></div>');
   addMicTo("jvMemo"); makeSearchable("jvAcc","دوّر بالكود أو الاسم…");
   const paint=()=>{
@@ -6689,7 +6780,7 @@ async function openSettleAdvance(profileId, staffName, balance){
     +'<div class="field" style="margin-top:10px"><label>الباقي النقدي المرتجع</label>'
     +'<input id="slCash" type="number" inputmode="numeric" min="0" value="0"/></div>'
     +'<div id="slSum" class="muted" style="font-size:12px;margin:6px 0"></div>'
-    +'<div class="row-actions"><button class="btn green" id="slGo">صفّي العهدة</button>'
+    +'<div class="row-actions"><button class="btn primary" id="slGo">صفّي العهدة</button>'
     +'<button class="btn ghost" onclick="openAdvances()">إلغاء</button></div>');
   addMicTo("slTitle");
   const recalc=()=>{
@@ -6755,7 +6846,7 @@ async function paintScope(id, mountId){
     if(!R.length){
       box.innerHTML='<div class="card flat"><div class="empty" style="padding:8px">'
         +'مفيش مشتملات — العميل مش عارف إيه اللي داخل وإيه اللي برّه.</div>'
-        +'<button class="btn green sm" onclick="buildScope(\''+id+'\')">ولّد المشتملات تلقائي</button>'
+        +'<button class="btn primary sm" onclick="buildScope(\''+id+'\')">ولّد المشتملات تلقائي</button>'
         +'<button class="btn ghost sm" onclick="addScopeItem(\''+id+'\')">أضف بند يدوي</button></div>';
       return;
     }
@@ -6829,7 +6920,7 @@ async function openGeo(){
   openSheet('<h3>الأجهزة والمناطق</h3>'
     +'<div class="muted" style="margin:-6px 0 12px;font-size:12px">المنطقة اللي فيها قطع أراضي مينفعش تتمسح — الكود بيفضل ثابت عشان الأكواد القديمة.</div>'
     +'<div id="geoBox"><div class="skel"></div></div>'
-    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" onclick="addAuthority()">\u002b جهاز</button>'
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn primary sm" onclick="addAuthority()">\u002b جهاز</button>'
     +'<button class="btn sm" onclick="addArea()">\u002b منطقة</button>'
     +'<button class="btn ghost sm" onclick="closeSheet()">قفل</button></div>');
   await paintGeo();
@@ -7004,7 +7095,7 @@ async function paintJob360(id, mountId){
         +(I.length?'<span class="badge" style="background:#eef2f7;color:#0D47A1;font-weight:800">'+I.length+'</span>':'')+'</div>';
       if(!I.length){
         h+='<div class="card flat"><div class="empty" style="padding:8px">مفيش خطة دفع لسه.</div>'
-          +(canFin?'<button class="btn green sm" onclick="buildPlan(\''+id+'\')">ولّد خطة الدفع تلقائي</button>':'')
+          +(canFin?'<button class="btn primary sm" onclick="buildPlan(\''+id+'\')">ولّد خطة الدفع تلقائي</button>':'')
           +'</div>';
       } else {
         h+='<div class="card flat">'+I.map(x=>{
@@ -7078,7 +7169,7 @@ async function newJobOnParcel(parcelId, parcelCode){
     +'<div class="field"><label>نوع الملف</label><select id="npSvc">'+svcOpts+'</select></div>'
     +'<div class="field"><label>اسم الملف</label><input id="npName" placeholder="مثلاً: إنشاءات الفيلا"/></div>'
     +'<div class="field"><label>القيمة (جنيه — اختياري)</label><input id="npVal" type="number" inputmode="numeric" min="0"/></div>'
-    +'<div class="row-actions"><button class="btn green" id="npGo">افتح الملف</button>'
+    +'<div class="row-actions"><button class="btn primary" id="npGo">افتح الملف</button>'
     +'<button class="btn ghost" onclick="openParcelHistory(\''+parcelId+'\')">إلغاء</button></div>');
   addMicTo("npName");
   $("npGo").onclick=async()=>{
@@ -7162,7 +7253,7 @@ async function runFind(q){
 /* ═══════════ تاريخ القطعة ═══════════ */
 async function openParcelHistory(pid){
   openSheet('<h3>تاريخ القطعة</h3><div id="phBox"><div class="skel"></div></div>'
-    +'<div class="row-actions" style="margin-top:10px"><button class="btn green sm" id="phNew">\u002b ملف جديد على القطعة دي</button>'
+    +'<div class="row-actions" style="margin-top:10px"><button class="btn primary sm" id="phNew">\u002b ملف جديد على القطعة دي</button>'
     +'<button class="btn ghost sm" onclick="openFind()">رجوع للبحث</button></div>');
   try{
     const { data }=await sb.from("os_parcel_history").select("*").eq("parcel_id",pid).order("opened_on");
@@ -7360,7 +7451,7 @@ async function openPayables(){
     +'<div class="field"><label>البيان</label><input id="pvTitle" placeholder="مثلاً: طباعة رسومات"/></div>'
     +'<div class="field"><label>المبلغ</label><input id="pvAmt" type="number" inputmode="decimal" min="1"/></div>'
     +'<div class="field"><label>تاريخ الاستحقاق</label><input id="pvDue" type="date"/></div>'
-    +'<div class="row-actions"><button class="btn green" id="pvGo">سجّل</button>'
+    +'<div class="row-actions"><button class="btn primary" id="pvGo">سجّل</button>'
     +'<button class="btn ghost" onclick="openFinance()">رجوع للمالية</button></div>');
   $("pvGo").onclick=async()=>{
     const sup=$("pvSup").value.trim(), t=$("pvTitle").value.trim(), a=parseFloat($("pvAmt").value);
@@ -7510,7 +7601,7 @@ async function openAdvances(){
     +'<div class="field"><label>المبلغ (جنيه)</label><input id="advAmt" type="number" inputmode="decimal" min="1"/></div>'
     +jobPickerField("advPrj","على ملف؟ (من بيان الأعمال)")
     +'<div class="field"><label>البيان</label><input id="advNote" placeholder="مثلاً: مصاريف جهاز المدينة"/></div>'
-    +'<div class="row-actions"><button class="btn green" id="advGo">حفظ</button><button class="btn ghost" onclick="openFinance()">رجوع للمالية</button></div>');
+    +'<div class="row-actions"><button class="btn primary" id="advGo">حفظ</button><button class="btn ghost" onclick="openFinance()">رجوع للمالية</button></div>');
   _pickRebind=()=>{ bindAdv(); };
   function bindAdv(){
   $("advGo").onclick=async()=>{
@@ -7560,7 +7651,7 @@ async function openClosing(){
     +'<div class="field"><label>النطاق</label><select id="clsScope"><option value="month">شهر</option><option value="day">يوم</option><option value="year">سنة</option></select></div>'
     +'<div class="field"><label>من</label><input id="clsFrom" type="date"/></div>'
     +'<div class="field"><label>إلى</label><input id="clsTo" type="date"/></div>'
-    +'<div class="row-actions"><button class="btn green" id="clsGo">اقفل الفترة</button><button class="btn ghost" onclick="openFinance()">رجوع للمالية</button></div>');
+    +'<div class="row-actions"><button class="btn primary" id="clsGo">اقفل الفترة</button><button class="btn ghost" onclick="openFinance()">رجوع للمالية</button></div>');
   const d=new Date(), y=d.getFullYear(), m=d.getMonth();
   $("clsFrom").value=new Date(Date.UTC(y,m,1)).toISOString().slice(0,10);
   $("clsTo").value=new Date(Date.UTC(y,m+1,0)).toISOString().slice(0,10);
@@ -7677,7 +7768,7 @@ function openCollect(id,maxAmt){
     +'<div class="field"><label>المبلغ المحصّل</label><input id="clAmt" type="number" min="0" value="'+maxAmt+'"/><div class="muted" style="font-size:11.5px;margin-top:3px">المتبقي: '+egp(maxAmt)+'</div></div>'
     +'<div class="field"><label>تاريخ التحصيل</label><input id="clDate" type="date" value="'+todayStr()+'"/></div>'
     +'<div class="field"><label>رقم الفاتورة (اختياري)</label><input id="clInv" placeholder="INV-2026-..."/></div>'
-    +'<div class="row-actions"><button class="btn green" id="clGo">سجّل التحصيل</button><button class="btn ghost" onclick="openReceivables()">إلغاء</button></div>');
+    +'<div class="row-actions"><button class="btn primary" id="clGo">سجّل التحصيل</button><button class="btn ghost" onclick="openReceivables()">إلغاء</button></div>');
   $("clGo").onclick=async()=>{
     const amt=parseFloat($("clAmt").value); if(!amt||amt<=0){ toast("اكتب المبلغ","bad"); return; }
     const btn=$("clGo"); btn.disabled=true; btn.textContent="بيسجّل…";
@@ -7711,7 +7802,7 @@ async function openPaymentNew(){
     +'<div class="field"><label>المبلغ (ج)</label><input id="pyAmt" type="number" min="0" inputmode="numeric"/></div>'
     +'<div class="field"><label>الحالة</label><select id="pySt"><option value="planned">مخططة (لسه</option><option value="due">مستحقة دلوقتي</option></select></div>'
     +'<div class="field"><label>تاريخ الاستحقاق (اختياري)</label><input id="pyDue" type="date"/></div>'
-    +'<div class="row-actions"><button class="btn green" id="pyGo">أضف الدفعة</button><button class="btn ghost" onclick="openFinance()">إلغاء</button></div>');
+    +'<div class="row-actions"><button class="btn primary" id="pyGo">أضف الدفعة</button><button class="btn ghost" onclick="openFinance()">إلغاء</button></div>');
   addMicTo("pyTitle");
   catOptions("income").then(o=>{ const c=$("pyCat"); if(c) c.innerHTML=o; });
   _pickRebind=()=>{ addMicTo("pyTitle"); bindPy(); };
@@ -7919,7 +8010,7 @@ async function openLeaves(){
     +'<div class="row-actions" style="margin:-4px 0 8px"><button class="btn ghost sm" data-lvq="1">يوم</button><button class="btn ghost sm" data-lvq="3">3 أيام</button><button class="btn ghost sm" data-lvq="7">أسبوع</button></div>'
     +'<div id="lvCalc" class="muted" style="font-size:12.5px;margin-bottom:10px"></div>'
     +'<div class="field"><label>السبب (اختياري)</label><input id="lvWhy" placeholder=""/></div>'
-    +'<div class="row-actions"><button class="btn green" id="lvGo">ابعت الطلب</button><button class="btn ghost" onclick="closeSheet()">قفل</button></div>');
+    +'<div class="row-actions"><button class="btn primary" id="lvGo">ابعت الطلب</button><button class="btn ghost" onclick="closeSheet()">قفل</button></div>');
   addMicTo("lvWhy"); allowCustom("lvKind","نوع إجازة تاني — اكتبه");
   let _lvBal=null;
   const lvCalc=()=>{
@@ -8005,7 +8096,7 @@ async function openDocsVault(){
     +'<div class="field"><label>ارفع ملف (PDF أو صورة — أقصى 20 ميجا)</label><input id="dvFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="font-size:12px"/><div id="dvUpStatus" class="muted" style="font-size:11px;margin-top:4px"></div></div>'
     +'<div class="field"><label>أو اكتب لينك جاهز (Drive…)</label><input id="dvUrl" placeholder="https://…"/></div>'
     +'<div class="field"><label>تاريخ الانتهاء (لو ليه صلاحية)</label><input id="dvExp" type="date"/></div>'
-    +'<div class="row-actions"><button class="btn green" id="dvGo">احفظ المستند</button><button class="btn ghost" onclick="closeSheet()">قفل</button></div>':'<button class="btn ghost" onclick="closeSheet()">قفل</button>'));
+    +'<div class="row-actions"><button class="btn primary" id="dvGo">احفظ المستند</button><button class="btn ghost" onclick="closeSheet()">قفل</button></div>':'<button class="btn ghost" onclick="closeSheet()">قفل</button>'));
   $("dvSearch").addEventListener("input",(e)=>{ _dvSearch=e.target.value; paintDocs(); });
   $("dvFilters").querySelectorAll("[data-df]").forEach(b=>b.onclick=()=>{ _dvFilter=b.dataset.df; $("dvFilters").querySelectorAll(".chip").forEach(x=>x.classList.toggle("on",x===b)); paintDocs(); });
   const go=$("dvGo");
@@ -8082,7 +8173,7 @@ async function openCustody(){
     +'<div class="field"><label>الصنف</label><input id="cuItem" placeholder="مثلًا: لابتوب Dell"/></div>'
     +'<div class="field"><label>الرقم التسلسلي (اختياري)</label><input id="cuSer" placeholder=""/></div>'
     +'<div class="field"><label>لمين؟</label><select id="cuTo">'+PROFILES.filter(p=>p.id!==ME.id).map(p=>'<option value="'+p.id+'" data-nm="'+esc(p.name)+'">'+esc(p.name)+'</option>').join("")+'</select></div>'
-    +'<div class="row-actions"><button class="btn green" id="cuGo">سلّم</button><button class="btn ghost" onclick="closeSheet()">قفل</button></div>':'<button class="btn ghost" onclick="closeSheet()">قفل</button>'));
+    +'<div class="row-actions"><button class="btn primary" id="cuGo">سلّم</button><button class="btn ghost" onclick="closeSheet()">قفل</button></div>':'<button class="btn ghost" onclick="closeSheet()">قفل</button>'));
   makeSearchable("cuTo","دوّر باسم الموظف…");
   const go=$("cuGo");
   if(go) go.onclick=async()=>{
@@ -8119,7 +8210,7 @@ async function openDelegation(){
     +'<div class="field"><label>النائب</label><select id="dgTo">'+PROFILES.filter(p=>p.id!==ME.id).map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join("")+'</select></div>'
     +'<div class="field"><label>من</label><input id="dgFrom" type="date"/></div>'
     +'<div class="field"><label>إلى</label><input id="dgTo2" type="date"/></div>'
-    +'<div class="row-actions"><button class="btn green" id="dgGo">فعّل التفويض</button><button class="btn ghost" onclick="closeSheet()">قفل</button></div>');
+    +'<div class="row-actions"><button class="btn primary" id="dgGo">فعّل التفويض</button><button class="btn ghost" onclick="closeSheet()">قفل</button></div>');
   $("dgGo").onclick=async()=>{
     const f=$("dgFrom").value, t=$("dgTo2").value;
     if(!f||!t){ toast("حدد المدة","bad"); return; }
@@ -8217,7 +8308,7 @@ async function openSalesFunnel(){
       +(k.avg_response_hours!=null?'<div class="muted" style="font-size:12px;margin-top:8px;text-align:center">متوسط سرعة الرد: <b>'+(Math.round(k.avg_response_hours*10)/10)+' ساعة</b></div>':'')
       +(broken?'<div style="color:var(--red);font-weight:800;font-size:12.5px;margin-top:8px;text-align:center">فيه عملاء تجاوزوا مهلة الرد — افتح مهام الليدز فورًا</div>':'')
       +'</div>';
-    h+='<div class="row-actions" style="margin-top:6px"><button class="btn green sm" id="sfLeads">افتح مهام الليدز</button></div>';
+    h+='<div class="row-actions" style="margin-top:6px"><button class="btn primary sm" id="sfLeads">افتح مهام الليدز</button></div>';
     h+='<div id="sfHot"></div>';
     $("sfBox").innerHTML=h;
     $("sfLeads").onclick=()=>{ closeSheet(); _taskSearch=""; _taskDept="all"; taskFilter="all"; switchTab("tasks"); };
@@ -8245,7 +8336,7 @@ async function openSalesFunnel(){
                 +'<div style="flex:1"><b style="font-size:13px">'+esc(o.name||"")+'</b><div class="muted" style="font-size:11px;margin-top:2px">'+esc(o.area||"")+(wa?' · '+esc(wa):'')+'</div></div>'
                 +(wa?'<a class="lnk" href="https://wa.me/'+esc(wa.replace(/^\+/,""))+'" target="_blank" rel="noopener" style="font-size:11.5px;white-space:nowrap">واتساب</a>':'')
                 +(already?'<span class="badge b-blue" style="white-space:nowrap">في المتابعة</span>'
-                         :'<button class="btn green sm sfFollow" data-oid="'+esc(o.id)+'" data-oname="'+esc(o.name||"")+'" style="padding:5px 12px;font-size:11.5px;white-space:nowrap">ابدأ متابعة</button>')
+                         :'<button class="btn primary sm sfFollow" data-oid="'+esc(o.id)+'" data-oname="'+esc(o.name||"")+'" style="padding:5px 12px;font-size:11.5px;white-space:nowrap">ابدأ متابعة</button>')
                 +'</div>';
             }).join("");
           }
@@ -8330,7 +8421,7 @@ async function openMyAccount(){
     +'<div class="sec-h">تغيير كلمة السر <span class="ln"></span></div>'
     +'<div class="field"><label>كلمة السر الجديدة</label><input id="np1" type="password" placeholder="6 حروف على الأقل"/></div>'
     +'<div class="field"><label>تأكيدها</label><input id="np2" type="password" placeholder="اكتبها تاني"/></div>'
-    +'<div class="row-actions"><button class="btn green" id="npGo">غيّر كلمة السر</button><button class="btn ghost" onclick="closeSheet()">قفل</button></div>');
+    +'<div class="row-actions"><button class="btn primary" id="npGo">غيّر كلمة السر</button><button class="btn ghost" onclick="closeSheet()">قفل</button></div>');
   $("myAdminHub").onclick=()=>openAdminHub();
   $("myComplaint").onclick=()=>openComplaint();
   { const mf=$("myFiles"); if(mf) mf.onclick=()=>openMyFiles(); }
@@ -8581,7 +8672,7 @@ function openEmployeeFile(id){
     +'<div class="field"><label>نهاية فترة الاختبار</label><input id="efProb" type="date" value="'+(p.probation_end||"")+'"/></div>'
     +'<div class="field"><label>رصيد الإجازات (يوم)</label><input id="efBal" type="number" min="0" value="'+(p.leave_balance??21)+'"/></div>'
     +'<div class="field"><label>النائب وقت الغياب</label><select id="efBackup"><option value="">بدون تحديد</option>'+others.map(o=>'<option value="'+o.id+'">'+esc(o.name)+'</option>').join("")+'</select></div>'
-    +'<div class="row-actions"><button class="btn green" id="efSave">احفظ</button><button class="btn ghost" onclick="openEmployeeArchive()">رجوع للأرشيف</button></div>');
+    +'<div class="row-actions"><button class="btn primary" id="efSave">احفظ</button><button class="btn ghost" onclick="openEmployeeArchive()">رجوع للأرشيف</button></div>');
   $("efSave").onclick=async()=>{
     const btn=$("efSave"); btn.disabled=true; btn.textContent="بيحفظ…";
     const upd={ contract_start:$("efStart").value||null, contract_end:$("efEnd").value||null, probation_end:$("efProb").value||null, leave_balance:$("efBal").value?parseInt($("efBal").value,10):null, backup_person:$("efBackup").value||null };
@@ -8815,7 +8906,7 @@ async function loadRequests(){
 }
 async function renderRequests(){
   const el=$("v-req");
-  el.innerHTML=`<div class="page-h"><div><h2>الطلبات</h2><div class="sub">طلبات داخلية بين الفريق — لحظية</div></div><button class="btn green sm" id="newReq">+ طلب جديد</button></div><div id="reqList"><div id="reqSkel"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div></div>`;
+  el.innerHTML=`<div class="page-h"><div><h2>الطلبات</h2><div class="sub">طلبات داخلية بين الفريق — لحظية</div></div><button class="btn primary sm" id="newReq">+ طلب جديد</button></div><div id="reqList"><div id="reqSkel"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div></div>`;
   $("newReq").onclick=openNewReq;
   setTimeout(()=>{
     const rl=$("reqList")||document.querySelector("#v-req");
@@ -8864,7 +8955,7 @@ function reqCard(r){
     ${r.details?`<div class="muted" style="margin-top:6px">${esc(r.details)}</div>`:""}
     <div class="meta"><span>${esc(who)}</span><span class="dot"></span><span>${timeAgo(r.created_at)}</span>${prioBadge(r.priority)?'<span class="dot"></span>'+prioBadge(r.priority):""}<span class="dot"></span>${reqStatusBadge(r.status)}${r.from_id===ME.id?(r.seen_at?`<span class="dot"></span><span style="color:var(--blue);font-weight:800;font-size:11px">\u2713\u2713 اتشاف ${timeAgo(r.seen_at)}</span>`:`<span class="dot"></span><span class="muted" style="font-size:11px">\u2713 لسه ما اتشافش</span>`):""}</div>
     ${r.response_text?`<div class="resp-box"><b>الرد:</b> ${esc(r.response_text)}</div>`:""}
-    ${(!done && (r.to_id===ME.id||r.to_id==null) && r.from_id!==ME.id)?`<div class="row-actions"><button class="btn green sm" data-reply="${r.id}" data-title="${esc(r.title)}">ردّ على الطلب</button></div>`:""}
+    ${(!done && (r.to_id===ME.id||r.to_id==null) && r.from_id!==ME.id)?`<div class="row-actions"><button class="btn primary sm" data-reply="${r.id}" data-title="${esc(r.title)}">ردّ على الطلب</button></div>`:""}
     ${(done && r.status!=="rejected" && r.status!=="cancelled" && !r.related_task && (r.from_id===ME.id||r.to_id===ME.id))?`<div class="row-actions"><button class="btn ghost sm" data-totask="${r.id}">حوّل لمهمة</button></div>`:""}
     ${r.related_task?`<div class="meta" style="margin-top:6px"><span style="color:var(--green);font-weight:800;font-size:12px">مرتبط بمهمة ✓</span></div>`:""}
   </div>`;
@@ -8876,7 +8967,7 @@ function joinCard(j){
     ${j.team_members?`<div class="muted" style="margin-top:4px">${esc(j.team_members)}</div>`:""}
     ${j.main_challenge?`<div class="muted" style="margin-top:4px">التحدي: ${esc(j.main_challenge)}</div>`:""}
     <div class="meta">${j.email?`<span>${esc(j.email)}</span><span class="dot"></span>`:""}${j.whatsapp?`<span>${esc(j.whatsapp)}</span><span class="dot"></span>`:""}<span>${timeAgo(j.created_at)}</span></div>
-    <div class="row-actions"><button class="btn green sm" data-jr="${j.id}" data-act="approved">قبول</button><button class="btn ghost sm" data-jr="${j.id}" data-act="rejected">رفض</button></div>
+    <div class="row-actions"><button class="btn primary sm" data-jr="${j.id}" data-act="approved">قبول</button><button class="btn ghost sm" data-jr="${j.id}" data-act="rejected">رفض</button></div>
   </div>`;
 }
 /* === فورمات ديناميكية حسب نوع الطلب (فريق 10) + تحقق لحظي (فريق 13) === */
@@ -8964,7 +9055,7 @@ function openNewReq(){
     <div class="field"><label>التفاصيل</label><textarea id="rDet" placeholder="اكتب التفاصيل… أو سجّلها بصوتك"></textarea></div>
     <div class="row-actions" style="margin:-6px 0 12px;flex-wrap:wrap;gap:8px"><button class="btn ghost sm" id="rMic">سجّل بصوتك</button><button class="btn sm" id="rSmartFill" style="background:linear-gradient(135deg,#7C3AED,#5B21B6);color:#fff">حلّل واملى</button></div>
     <div class="field"><label>الأولوية</label><select id="rPrio"><option value="normal">عادي</option><option value="high">عاجل</option><option value="low">منخفض</option></select></div>
-    <div class="row-actions"><button class="btn green" id="rSave">إرسال الطلب</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+    <div class="row-actions"><button class="btn primary" id="rSave">إرسال الطلب</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
   if(_reqDraft&&(_reqDraft.t||_reqDraft.d)){ $("rTitle").value=_reqDraft.t||""; $("rDet").value=_reqDraft.d||""; toast("رجعنالك مسودتك","ok"); _reqDraft=null; }
   renderReqFields($("rKind").value);
   $("rKind").onchange=()=>renderReqFields($("rKind").value);
@@ -9032,7 +9123,7 @@ function openReqToTask(id){
     ${r.details?`<div class="card flat" style="background:var(--soft);margin-bottom:14px"><div class="muted" style="font-size:13px">${esc(r.details)}</div></div>`:""}
     <div class="field"><label>المسؤول عن التنفيذ</label><select id="rtAss">${opts}</select></div>
     <div class="field"><label>الموعد النهائي</label><input id="rtDue" type="date" value="${defDue}"/><div class="muted" id="rtDueErr" style="color:var(--red);font-size:12px;display:none;margin-top:4px"></div><div class="muted" id="rtDueHint" style="font-size:12px;display:none;margin-top:4px"></div></div>
-    <div class="row-actions"><button class="btn green" id="rtGo">إنشاء المهمة وربطها</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+    <div class="row-actions"><button class="btn primary" id="rtGo">إنشاء المهمة وربطها</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
   if($("rtAss").querySelector(`option[value="${defAss}"]`)) $("rtAss").value=defAss;
   const _rtConf=()=>loadConflictHint($("rtAss").value,$("rtDue").value,$("rtDueHint"));
   $("rtDue").onchange=_rtConf; $("rtAss").onchange=_rtConf; if(defDue) _rtConf();
@@ -9062,7 +9153,7 @@ function openReply(id){
     <div id="tplPanel" style="display:none;margin-bottom:12px"></div>
     <button class="btn ghost" id="repAI" style="margin-bottom:12px">نظّم الرد بالذكاء — بنود وتوجيهات</button>
     <div class="field"><label>الرد النهائي (تقدر تعدّله)</label><textarea id="repTxt" style="min-height:140px" placeholder="هيتكتب هنا بعد التنظيم — أو اكتبه بإيدك"></textarea></div>
-    <div class="row-actions"><button class="btn green" id="repSave">إرسال الرد</button><button class="btn ghost sm" id="repSaveTpl">احفظ كقالب</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+    <div class="row-actions"><button class="btn primary" id="repSave">إرسال الرد</button><button class="btn ghost sm" id="repSaveTpl">احفظ كقالب</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
   let decision="";
   const db=$("decBtns");
   if(db) db.querySelectorAll("[data-dec]").forEach(b=>b.onclick=()=>{ decision=(decision===b.dataset.dec?"":b.dataset.dec); db.querySelectorAll("[data-dec]").forEach(x=>x.classList.toggle("on",x.dataset.dec===decision)); });
@@ -9158,7 +9249,7 @@ function openJoinForm(){
     <div class="field"><label>احكي عن شغلك في دقيقة — والذكاء هيرتّبها</label>
       <textarea id="jStory" style="min-height:130px" placeholder="إنت مسؤول عن إيه؟ فريقك مين؟ أهم مهامك المتكررة إيه؟ أكبر تحدي بتواجهه؟ — اتكلم براحتك أو اكتب"></textarea></div>
     <div class="row-actions" style="margin:-2px 0 12px"><button class="btn ghost sm" id="jMic">سجّل بصوتك</button></div>
-    <div class="row-actions"><button class="btn green" id="jSend">ابعت الطلب</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+    <div class="row-actions"><button class="btn primary" id="jSend">ابعت الطلب</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
   bindSheetMic("jMic","jStory");
   $("jEmail").addEventListener("input",(e)=>{
     const v=(e.target.value||"").trim().toLowerCase(); const h=$("jEmailHint");
@@ -9405,7 +9496,7 @@ function openAddEmployee(){
     <div class="field"><label>القسم أو المكتب</label>${fullAccess?`<select id="neDept">${deptOpts}</select>`:`<div class="muted" style="font-size:12.5px">${esc((DEPT_BY_KEY[PROFILE.dept]&&DEPT_BY_KEY[PROFILE.dept].name)||"قسمك")} <input type="hidden" id="neDept" value="${esc(PROFILE.dept||"")}"/></div>`}</div>
     <div class="field"><label>الدور</label>${fullAccess?`<select id="neRole"><option value="employee">موظف</option><option value="manager">مدير قسم</option>${PROFILE.role==="owner"?'<option value="coceo">مدير المكتب (كل حاجة عدا المالية)</option><option value="ops">إدارة التشغيل (كل حاجة)</option>':""}</select>`:`<div class="muted" style="font-size:12.5px">موظف <input type="hidden" id="neRole" value="employee"/></div>`}</div>
     <div class="field"><label>المسمى (اختياري)</label><select id="nePos"><option value="">بدون تحديد</option>${posOpts}</select></div>
-    <div class="row-actions"><button class="btn green" id="neGo">أنشئ الحساب ✓</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+    <div class="row-actions"><button class="btn primary" id="neGo">أنشئ الحساب ✓</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
   addMicTo("neName"); allowCustom("nePos","مسمى وظيفي تاني — اكتبه");
   $("neGo").onclick=async()=>{
     const btn=$("neGo");
@@ -9428,7 +9519,7 @@ function openApprove(id){
     <div class="field"><label>باسوورد مؤقت (ابعتهوله)</label><input id="aPass" value="${tmpPass}"/></div>
     <div class="field"><label>الدور</label><select id="aRole"><option value="manager">مدير قسم</option><option value="employee">موظف</option></select></div>
     <div class="field"><label>القسم</label>${j.dept&&!DEPT_BY_KEY[j.dept]?`<div class="muted" style="font-size:11.5px;margin-bottom:5px">هو كتب إن قسمه: <b>${esc(j.dept)}</b> — اختار أقرب قسم رسمي:</div>`:""}<select id="aDept">${deptOpts}</select></div>
-    <div class="row-actions"><button class="btn green" id="aGo">اعمل الحساب واقبل ✓</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+    <div class="row-actions"><button class="btn primary" id="aGo">اعمل الحساب واقبل ✓</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
   $("aGo").onclick=async()=>{
     const name=$("aName").value.trim(), email=$("aEmail").value.trim(), pass=$("aPass").value.trim();
     if(!name||!email||!pass){ toast("كمّل البيانات","bad"); return; }
@@ -9924,7 +10015,7 @@ function btnGuard(btn,fn){
 function confirmDlg(msg,onYes){
   const ov=document.createElement("div"); ov.className="confirm-overlay";
   ov.innerHTML=`<div class="confirm-box"><p style="font-size:16px;font-weight:700;margin-bottom:20px">${msg}</p>
-    <div class="row-actions" style="justify-content:center"><button class="btn green sm" id="cfYes">تأكيد</button><button class="btn ghost sm" id="cfNo">إلغاء</button></div></div>`;
+    <div class="row-actions" style="justify-content:center"><button class="btn primary sm" id="cfYes">تأكيد</button><button class="btn ghost sm" id="cfNo">إلغاء</button></div></div>`;
   document.body.appendChild(ov);
   $("cfYes").onclick=()=>{ ov.remove(); onYes(); };
   $("cfNo").onclick=()=>ov.remove();
@@ -10257,14 +10348,14 @@ function showContractFields(f){
     ${cfield("f_start","تاريخ البداية",f.start_date,"YYYY-MM-DD")}
     <div class="field"><label>شروط خاصة</label><textarea id="f_spec">${esc(f.special||"")}</textarea></div>
     <div class="field"><label>ملاحظات</label><input id="f_notes" value="${esc(f.notes||"")}"/></div>
-    <button class="btn green" id="buildC">اطبع مسودة العقد</button>`;
+    <button class="btn primary" id="buildC">اطبع مسودة العقد</button>`;
   $("buildC").onclick=buildContractOut;
 }
 function buildContractOut(){
   const f={ contract_type:$("f_type").value, party_a:$("f_a").value, party_b:$("f_b").value, subject:$("f_subj").value, scope:$("f_scope").value, value_egp:$("f_val").value, payment:$("f_pay").value, duration:$("f_dur").value, start_date:$("f_start").value, special:$("f_spec").value, notes:$("f_notes").value };
   const txt=contractText(f);
   $("cout").innerHTML=`<div class="sec-h">المسودة <span class="ln"></span></div><div class="contract-out" id="cbody">${esc(txt)}</div>
-    <div class="row-actions">${canWrite()?`<button class="btn green" id="cSave">احفظ في معرفة القسم</button>`:""}<button class="btn ghost" id="cCopy">نسخ</button><button class="btn ghost" id="cDl">تحميل</button></div>
+    <div class="row-actions">${canWrite()?`<button class="btn primary" id="cSave">احفظ في معرفة القسم</button>`:""}<button class="btn ghost" id="cCopy">نسخ</button><button class="btn ghost" id="cDl">تحميل</button></div>
     <div class="note-line">مسودة آلية — للمراجعة القانونية البشرية قبل أي اعتماد.</div>`;
   const cs=$("cSave"); if(cs) cs.onclick=()=>saveContract(f,txt);
   $("cCopy").onclick=()=>{ navigator.clipboard&&navigator.clipboard.writeText(txt); toast("اتنسخ ✓","ok"); };
@@ -10479,7 +10570,7 @@ function openAddKnowledge(){
     <div class="field"><label>العنوان</label><input id="kT" placeholder="مثلاً: شروط رخصة فيلا بزايد"/></div>
     <div class="field"><label>المحتوى</label><textarea id="kC" style="min-height:120px" placeholder="اكتب المعلومة بالتفصيل… أو سجّلها بصوتك"></textarea></div>
     <div class="row-actions" style="margin:-6px 0 12px"><button class="btn ghost sm" id="kMic">سجّل بصوتك</button></div>
-    <div class="row-actions"><button class="btn green" id="kSave">حفظ</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+    <div class="row-actions"><button class="btn primary" id="kSave">حفظ</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
   bindSheetMic("kMic","kC");
   $("kSave").onclick=async()=>{ await stopSheetMic();
     const title=$("kT").value.trim(), content=$("kC").value.trim();
@@ -11017,14 +11108,14 @@ function openTask(id,all){
       <div class="field" style="margin-top:8px"><label>القسم المستلم</label><select id="hoDept"></select></div>
       <div class="field"><label>الشخص المستلم</label><select id="hoPerson"></select></div>
       <div class="field"><label>ملاحظة سياق (اختياري)</label><input id="hoNote" placeholder="مثلاً: محتاجة مراجعة قانونية للبند 4"/></div>
-      <div class="row-actions"><button class="btn green sm" id="hoGo">سلّم</button><button class="btn ghost sm" id="hoCancel">إلغاء</button></div>
+      <div class="row-actions"><button class="btn primary sm" id="hoGo">سلّم</button><button class="btn ghost sm" id="hoCancel">إلغاء</button></div>
     </div>
     ${(isOwnerOps()||(PROFILE.role==="manager"&&t.dept===myDeptKey()))?`<div class="field" id="pjLinkWrap" style="display:none"><label>اربطها بمشروع</label><select id="pjLink"><option value="">— من غير مشروع —</option></select></div>`:""}
     ${mine&&isOwnerOps()?`<div class="field"><label>الموعد النهائي — سريع</label><div class="qbtns" id="qd"><button class="qbtn" data-d="0">النهارده</button><button class="qbtn" data-d="1">بكرة</button><button class="qbtn" data-d="3">3 أيام</button><button class="qbtn" data-d="7">أسبوع</button></div></div>`:""}
     ${mine&&t.status!=="review"?`
     <div class="field"><label>حدّث التقدّم</label><div class="qbtns" id="qp">${[0,25,50,75,100].map(p=>`<button class="qbtn ${(t.progress||0)===p?'on':''}" data-p="${p}">${p}%</button>`).join("")}</div></div>
     <div class="field"><label>إيه اللي اتعمل؟ (اختياري)</label><textarea id="tNote" placeholder="اكتب تحديث قصير…"></textarea></div>
-    <button class="btn green" id="tSave">احفظ التحديث</button>`:`<div class="muted">المهمة دي مش مسندة ليك.</div>`}
+    <button class="btn primary" id="tSave">احفظ التحديث</button>`:`<div class="muted">المهمة دي مش مسندة ليك.</div>`}
     <button class="btn ghost" style="margin-top:8px" onclick="closeSheet()">قفل</button>`);
   /* ربط المهمة بمشروع */
   const pjw=$("pjLinkWrap");
@@ -11258,7 +11349,7 @@ function openNewEvent(){
       <input id="eAt" type="datetime-local" style="margin-top:7px"/></div>
     <div class="field"><label>مع مين؟ (اختياري)</label><input id="eWho"/></div>
     <div class="field"><label>فين؟ (اختياري)</label><input id="eLoc"/></div>
-    <div class="row-actions"><button class="btn green" id="eSave">حفظ الموعد</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+    <div class="row-actions"><button class="btn primary" id="eSave">حفظ الموعد</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
   addMicTo("eTitle");
   const pad=(n)=>String(n).padStart(2,"0");
   const setDT=(d)=>{ $("eAt").value=d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes()); };
@@ -11345,7 +11436,7 @@ async function renderSmartPreview(arr){
         ${pr==="high"?'<span class="badge b-red">عاجل</span>':""}
         <button class="qbtn st-del" title="حذف">${ICONS.trash}</button>
       </div></div>`; }).join("")+
-    `<button class="btn green" id="stSave">احفظ المهام ✓</button>`;
+    `<button class="btn primary" id="stSave">احفظ المهام ✓</button>`;
   makeSearchable("stPrj","دوّر باسم المشروع…");
   $("stPrev").querySelectorAll(".st-del").forEach(b=>b.onclick=()=>{ b.closest("[data-row]").remove(); if(!$("stPrev").querySelector("[data-row]")) $("stPrev").innerHTML=""; });
   $("stSave").onclick=saveSmartTasks;
@@ -11397,7 +11488,7 @@ async function openNewTask(){
     <div class="field"><label>الموعد النهائي</label><input id="tDue" type="date" min="${todayStr()}"/><div class="muted" id="tDueHint" style="font-size:12px;display:none;margin-top:4px"></div></div>
     <div class="row-actions" style="margin:-4px 0 10px"><button class="btn ghost sm" data-tq="1">بكرة</button><button class="btn ghost sm" data-tq="3">بعد 3 أيام</button><button class="btn ghost sm" data-tq="7">أسبوع</button></div>
     <div class="field"><label>الأولوية</label><select id="tPrio"><option value="medium">عادي</option><option value="high">عاجل</option><option value="low">منخفض</option></select></div>
-    <div class="row-actions"><button class="btn green" id="tCreate">إنشاء المهمة</button><button class="btn sm" id="tCreateMore" style="background:var(--blue);color:#fff">احفظ وضيف تانية</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
+    <div class="row-actions"><button class="btn primary" id="tCreate">إنشاء المهمة</button><button class="btn sm" id="tCreateMore" style="background:var(--blue);color:#fff">احفظ وضيف تانية</button><button class="btn ghost" onclick="closeSheet()">إلغاء</button></div>`);
   addMicTo("tTitle"); addMicTo("tDetails");
   makeSearchable("tAss","دوّر باسم الموظف…"); makeSearchable("tProject","دوّر باسم المشروع…");
   const _tConf=()=>loadConflictHint($("tAss").value,$("tDue").value,$("tDueHint"));
