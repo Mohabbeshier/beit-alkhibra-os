@@ -385,6 +385,10 @@ button.stat,button.dept-card{font-family:inherit;cursor:pointer;}
 .ftrow[data-frv]{cursor:pointer;border-radius:8px;margin-left:-6px;margin-right:-6px;padding-left:6px;padding-right:6px}
 .ftrow[data-frv]:hover{background:#f8fafc}
 .ftrow.sup{opacity:.55}
+
+.blk-opts{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.blk{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font-size:12px;color:#475569;cursor:pointer}
+.blk.on{background:var(--blue);color:#fff;border-color:var(--blue);font-weight:600}
 </style>
 </head>
 <body>
@@ -2244,7 +2248,9 @@ async function jbLoad(){
 }
 
 function jbUrgency(r){
-  return (r.stage_late?3:0)+(+r.tasks_late||0)*2+(+r.gov_late||0)*2+(+r.inst_late||0)*2;
+  /* التعطيل أعلى من التأخير — لأنه صامت ومحتاج تدخّل من برّه */
+  return (r.is_blocked?4:0)+(r.stage_late?3:0)+(+r.tasks_late||0)*2
+        +(+r.gov_late||0)*2+(+r.inst_late||0)*2+(+r.docs_pending||0);
 }
 
 function jbPaint(){
@@ -2266,7 +2272,9 @@ function jbPaint(){
     + R.slice(0,120).map(r=>{
       const u=jbUrgency(r), pct=r.stages_all?Math.round(100*r.stages_done/r.stages_all):0;
       const tags=[];
+      if(r.is_blocked) tags.push('<span class="mj red">⛔ '+esc(r.blocked_why||"واقفة")+'</span>');
       if(r.stage_late) tags.push('<span class="mj red">مرحلة متأخرة</span>');
+      if(r.docs_pending>0) tags.push('<span class="mj amber">'+r.docs_pending+' مستند للمراجعة</span>');
       if(r.tasks_late>0) tags.push('<span class="mj red">'+r.tasks_late+' مهمة فايتة</span>');
       if(r.gov_late>0) tags.push('<span class="mj red">معاملة متأخرة</span>');
       if(r.inst_late>0) tags.push('<span class="mj amber">'+r.inst_late+' قسط متأخر</span>');
@@ -2354,6 +2362,14 @@ async function hubMyJobs(){
       (inst||[]).forEach(x=>add({project_id:x.project_id,job_code:x.job_code},
         {t:x.state_ar+": "+x.title, s:fmtEGP(x.remaining), w:x.state_ar==="متأخرة"?3:2, c:x.state_ar==="متأخرة"?"red":"amber"}));
     }
+    /* ★ مراحل واقفة — أعلى إلحاح */
+    let bq=sb.from("os_job_stages").select("project_id,stage_name,blocked_why,owner_id,os_projects!inner(job_code,name,status)")
+      .eq("status","blocked").neq("os_projects.status","closed");
+    if(!wide) bq=bq.eq("owner_id",me);
+    const { data:blk }=await bq.limit(40);
+    (blk||[]).forEach(x=>add({project_id:x.project_id,job_code:x.os_projects.job_code,name:x.os_projects.name},
+      {t:"⛔ "+x.stage_name, s:x.blocked_why||"واقفة", w:4, c:"red"}));
+
     /* ٣ مهام متأخرة ليا */
     let tq=sb.from("os_tasks").select("project_id,title,deadline,assignee_id,os_projects(job_code,name)")
       .neq("status","done").not("deadline","is",null).lt("deadline",today).not("project_id","is",null);
@@ -2402,8 +2418,20 @@ async function hubNeedsMe(id, prj){
     const me=ME&&ME.id;
     (st||[]).forEach(x=>{
       const late = x.due_on && x.due_on < new Date().toISOString().slice(0,10);
-      if(x.owner_id===me) items.push({k:"stage",t:"دورك: "+x.stage_name,s:late?"متأخرة من "+x.due_on:"لحد "+(x.due_on||"—"),c:late?"red":"blue",go:()=>{}});
+      if(x.owner_id===me) items.push({k:"stage",t:"دورك: "+x.stage_name,s:late?"متأخرة من "+x.due_on:"لحد "+(x.due_on||"—"),c:late?"red":"blue",go:()=>hubTab(id,"stages")});
     });
+    try{
+      const [{ data:bl },{ data:dp }]=await Promise.all([
+        sb.from("os_job_stages").select("stage_name,blocked_why,owner_name")
+          .eq("project_id",id).eq("status","blocked").limit(3),
+        sb.from("os_files").select("id,title").eq("project_id",id)
+          .eq("review_status","under_review").limit(3)
+      ]);
+      (bl||[]).forEach(x=>items.push({k:"blocked",t:"⛔ واقفة: "+x.stage_name,
+        s:x.blocked_why||"سبب غير محدد",c:"red",go:()=>hubTab(id,"stages")}));
+      (dp||[]).forEach(x=>items.push({k:"doc",t:"مستند مستني مراجعة: "+x.title,
+        s:"اضغط للقرار",c:"amber",go:()=>openDocReview(x.id)}));
+    }catch(e){}
     (inst||[]).forEach(x=>items.push({k:"money",t:x.state_ar+": "+x.title,s:fmtEGP(x.remaining)+(x.due_date?" · "+x.due_date:""),c:x.state_ar==="متأخرة"?"red":"amber",go:()=>hubTab(id,"money")}));
     (tsk||[]).forEach(x=>items.push({k:"task",t:"مهمة متأخرة: "+x.title,s:"كان لحد "+x.deadline,c:"red",go:()=>{ if(typeof openTaskDetail==="function") openTaskDetail(x.id); }}));
     (gov||[]).forEach(x=>{
@@ -2505,11 +2533,12 @@ async function hubPartiesHTML(id, prj){
 
 /* ── الخط الزمني الموحّد ── */
 const TL_ICON={open:"📂",close:"🔒",stage_start:"▶",stage_done:"✓",money_in:"💰",money_out:"💸",
-               file:"📎",task_done:"☑",gov:"🏛",ownership:"🏠"};
+               file:"📎",task_done:"☑",gov:"🏛",ownership:"🏠",
+               blocked:"⛔",doc_review:"📝",converted:"⚡",request:"⚡"};
 async function hubTimelineHTML(id){
   const { data, error } = await sb.from("os_job_timeline")
-    .select("at,kind,title,detail,actor,amount,day").eq("project_id",id)
-    .order("at",{ascending:false}).limit(80);
+    .select("at,kind,title,detail,actor,amount,day,ord").eq("project_id",id)
+    .order("at",{ascending:false}).order("ord",{ascending:false}).limit(80);
   if(error) throw error;
   const R=data||[];
   if(!R.length) return '<div class="muted" style="font-size:12.5px;padding:8px 2px">مفيش أحداث لسه</div>';
@@ -5119,19 +5148,53 @@ async function openTeamLoad(){
 }
 
 /* ===== تعطيل مرحلة: الملف واقف على حاجة برّه إيدنا ===== */
-async function blockJobStage(stageId, projectId){
-  const why=prompt("واقف على إيه؟ (مثلاً: العميل ما جابش صورة العقد)");
-  if(!why||!why.trim()) return;
-  const { error }=await sb.rpc("os_block_stage",{ p_stage:stageId, p_why:why.trim() });
-  if(error){ toast("معرفناش نعطّلها: "+error.message,"bad"); return; }
-  toast("اتسجّل — والإدارة اتبلغت","ok");
-  await paintProjectDetail(projectId);
+/* أسباب شائعة — ضغطة واحدة بدل الكتابة */
+const BLOCK_REASONS=[
+  "العميل ما جابش المستندات",
+  "مستني رد الجهة الحكومية",
+  "مستني دفعة من العميل",
+  "مستني قرار/موافقة من الإدارة",
+  "مستني رسومات من قسم تاني",
+  "مشكلة في الأرض أو الملكية",
+];
+function blockJobStage(stageId, projectId){
+  openSheet('<h3>واقفة على إيه؟</h3>'
+    +'<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">'
+    +'السبب بيوصل للإدارة على طول وبيفضل في تاريخ الملف</div>'
+    +'<div class="blk-opts">'+BLOCK_REASONS.map((r,i)=>
+      '<button class="blk" data-blk="'+i+'">'+esc(r)+'</button>').join("")+'</div>'
+    +'<div class="field"><label>أو اكتبه بنفسك</label>'
+    +'<textarea id="blkWhy" placeholder="مثلاً: الجهاز طلب تعديل المنسوب وهنعيد الرسم"></textarea></div>'
+    +'<div class="row-actions"><button class="btn primary" id="blkGo">سجّل التعطيل</button>'
+    +'<button class="btn secondary" onclick="closeSheet()">إلغاء</button></div>');
+  document.querySelectorAll("[data-blk]").forEach(b=>b.onclick=()=>{
+    const t=$("blkWhy"); if(t){ t.value=BLOCK_REASONS[+b.dataset.blk]; t.focus(); }
+    document.querySelectorAll("[data-blk]").forEach(x=>x.classList.toggle("on",x===b));
+  });
+  $("blkGo").onclick=async()=>{
+    const why=($("blkWhy").value||"").trim();
+    if(why.length<5) return toast("اكتب السبب — حاجة حد تاني يفهمها","err");
+    const { error }=await sb.rpc("os_block_stage",{ p_stage:stageId, p_why:why });
+    if(error) return toast(error.message,"bad");
+    toast("اتسجّل — والإدارة اتبلغت","ok"); closeSheet();
+    await paintProjectDetail(projectId);
+  };
 }
-async function unblockJobStage(stageId, projectId){
-  const { error }=await sb.rpc("os_unblock_stage",{ p_stage:stageId });
-  if(error){ toast("معرفناش نفكها: "+error.message,"bad"); return; }
-  toast("المرحلة رجعت تشتغل \u2713","ok");
-  await paintProjectDetail(projectId);
+function unblockJobStage(stageId, projectId){
+  openSheet('<h3>فكّ التعطيل</h3>'
+    +'<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">'
+    +'السبب الأصلي هيفضل في تاريخ الملف — اكتب اتحل إزاي</div>'
+    +'<div class="field"><label>اتحل إزاي؟ (اختياري)</label>'
+    +'<textarea id="ublNote" placeholder="مثلاً: العميل جاب العقد النهاردة"></textarea></div>'
+    +'<div class="row-actions"><button class="btn green" id="ublGo">رجّعها تشتغل</button>'
+    +'<button class="btn secondary" onclick="closeSheet()">إلغاء</button></div>');
+  $("ublGo").onclick=async()=>{
+    const { error }=await sb.rpc("os_unblock_stage",
+      { p_stage:stageId, p_note:($("ublNote").value||"").trim()||null });
+    if(error) return toast(error.message,"bad");
+    toast("المرحلة رجعت تشتغل \u2713","ok"); closeSheet();
+    await paintProjectDetail(projectId);
+  };
 }
 
 /* ===== إقفال مرحلة في بيان الأعمال — المرحلة اللي بعدها بتبدأ لوحدها ===== */
