@@ -362,6 +362,12 @@ button.stat,button.dept-card{font-family:inherit;cursor:pointer;}
 .jb-bar{flex:0 0 52px;height:4px;background:#e2e8f0;border-radius:3px;overflow:hidden}
 .jb-bar i{display:block;height:100%;background:var(--green);border-radius:3px}
 .jbrow-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+
+.qrrow{display:block;width:100%;text-align:right;background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px 11px;margin-bottom:6px;cursor:pointer}
+.qrrow.late{border-color:#fca5a5}
+.qrrow-t{display:flex;align-items:center;gap:7px;margin-bottom:3px}
+.qrrow-t b{font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qrrow-s{font-size:11.5px;color:#64748b}
 </style>
 </head>
 <body>
@@ -1880,6 +1886,166 @@ function canContracts(){ return myDeptKey()==="legal"; }
 
 
 
+
+/* ═══════════════ الطلب السريع — بند A1 في المواصفة ═══════════════
+   «هات لي نسخة مختومة بكرة» — إجبار ده على ملف كامل بيرجّع الناس للواتساب.
+   العميل إجباري · الأرض والملف اختياريين · قابل للتحويل لملف بلا فقد تاريخ. */
+
+const QR_PRI={low:"عادي",normal:"مهم",high:"مستعجل"};
+
+async function openQuickRequest(preClient, preParcel, preJob){
+  let cliOpts='<option value="">— اختر العميل —</option>', jobOpts='<option value="">— بلا ملف —</option>';
+  try{
+    const [{ data:cl },{ data:jb }]=await Promise.all([
+      sb.from("clients").select("id,name,phone").order("name").limit(400),
+      sb.from("os_projects").select("id,job_code,name,client_id").neq("status","closed").order("job_code").limit(300)
+    ]);
+    cliOpts+=(cl||[]).map(c=>'<option value="'+c.id+'"'+(c.id===preClient?' selected':'')+'>'
+      +esc(c.name)+(c.phone?' — '+esc(c.phone):'')+'</option>').join("");
+    window._QR_JOBS=jb||[];
+    jobOpts+=(jb||[]).map(j=>'<option value="'+j.id+'" data-cli="'+j.client_id+'"'+(j.id===preJob?' selected':'')+'>'
+      +esc(j.job_code||"")+' — '+esc(j.name||"")+'</option>').join("");
+  }catch(e){}
+  let team="";
+  try{ const { data:tm }=await sb.from("os_profiles").select("id,name").eq("active",true).order("name").limit(100);
+    team=(tm||[]).map(u=>'<option value="'+u.id+'">'+esc(u.name)+'</option>').join(""); }catch(e){}
+  openSheet('<h3>طلب سريع</h3>'
+    +'<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">'
+    +'لطلب صغير مش محتاج ملف كامل — نسخة · ورقة · إجراء بسيط</div>'
+    +'<div class="field"><label>العميل *</label><select id="qrCli">'+cliOpts+'</select></div>'
+    +'<div class="field"><label>المطلوب *</label><input id="qrTitle" placeholder="مثلاً: نسخة مختومة من رسم القطعة"/></div>'
+    +'<div class="field"><label>تفاصيل</label><textarea id="qrDet" placeholder="أي تفاصيل تساعد اللي هينفّذ"></textarea></div>'
+    +'<div class="field"><label>مربوط بملف؟ (اختياري)</label><select id="qrJob">'+jobOpts+'</select></div>'
+    +'<div class="field"><label>مين ينفّذه</label><select id="qrWho"><option value="">— لسه —</option>'+team+'</select></div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<div class="field" style="flex:1"><label>لحد إمتى</label><input id="qrDue" type="date"/></div>'
+    +'<div class="field" style="flex:1"><label>الأهمية</label><select id="qrPri">'
+    +'<option value="normal">مهم</option><option value="high">مستعجل</option><option value="low">عادي</option>'
+    +'</select></div></div>'
+    +'<div class="row-actions"><button class="btn primary" id="qrGo">سجّل الطلب</button>'
+    +'<button class="btn secondary" onclick="closeSheet()">إلغاء</button></div>');
+
+  /* الملف بيحدّد العميل تلقائي */
+  const jb=$("qrJob"), cl=$("qrCli");
+  if(jb) jb.onchange=()=>{ const o=jb.options[jb.selectedIndex];
+    const c=o&&o.dataset&&o.dataset.cli; if(c&&cl) cl.value=c; };
+
+  $("qrGo").onclick=async()=>{
+    const cid=cl.value, title=($("qrTitle").value||"").trim();
+    if(!cid) return toast("اختر العميل","err");
+    if(!title) return toast("اكتب المطلوب","err");
+    const jid=jb.value||null;
+    const who=$("qrWho").value||null;
+    const row={ client_id:cid, title, details:($("qrDet").value||"").trim()||null,
+      project_id:jid, parcel_id:preParcel||null, assignee_id:who,
+      deadline:$("qrDue").value||null, priority:$("qrPri").value, created_by:ME.id };
+    const { error }=await sb.from("os_quick_requests").insert(row);
+    if(error) return toast("معرفناش نسجّل: "+error.message,"bad");
+    toast("الطلب اتسجّل ✓","ok"); closeSheet();
+    if(typeof renderQuickRequests==="function" && $("v-more")) renderQuickRequests();
+  };
+}
+
+async function openQuickRequests(){
+  openSheet('<h3>الطلبات السريعة</h3>'
+    +'<div class="row-actions" style="margin-bottom:10px">'
+    +'<button class="btn primary sm" onclick="closeSheet();openQuickRequest()">طلب جديد</button></div>'
+    +'<div id="qrBox"><div class="skel"></div></div>'
+    +actMini([{label:"قفل",on:"closeSheet()"}]));
+  await paintQuickRequests();
+}
+
+async function paintQuickRequests(){
+  const box=$("qrBox"); if(!box) return;
+  try{
+    const { data, error }=await sb.from("os_quick_request_board")
+      .select("*").order("created_at",{ascending:false}).limit(80);
+    if(error) throw error;
+    const R=data||[];
+    const open=R.filter(r=>["new","in_progress"].includes(r.status));
+    const rest=R.filter(r=>!["new","in_progress"].includes(r.status));
+    if(!R.length){ box.innerHTML='<div class="empty-state"><b>مفيش طلبات</b>'
+      +'<div class="muted" style="font-size:12px;margin-top:4px">الطلب السريع للحاجات الصغيرة اللي مش محتاجة ملف</div></div>'; return; }
+    const row=r=>'<button class="qrrow'+(r.is_late?" late":"")+'" data-qr="'+r.id+'">'
+      +'<div class="qrrow-t"><b>'+esc(r.title)+'</b>'
+      +'<span class="mj '+(r.status==="converted"?"blue":r.is_late?"red":"muted")+'">'+esc(r.status_ar)+'</span></div>'
+      +'<div class="qrrow-s">'+esc(r.client_name||"—")
+      +(r.parcel_no?' · قطعة '+esc(r.parcel_no):'')+(r.job_code?' · '+esc(r.job_code):'')+'</div>'
+      +'<div class="qrrow-s">'+(r.assignee_name?esc(r.assignee_name):'<span class="muted">مش متكلّف</span>')
+      +(r.deadline?' · لحد '+esc(r.deadline):'')
+      +(r.priority==="high"?' · <b style="color:#b45309">مستعجل</b>':'')+'</div>'
+      +(r.converted_code?'<div class="muted" style="font-size:11px;margin-top:3px">← '+esc(r.converted_code)+'</div>':'')
+      +'</button>';
+    let h='';
+    if(open.length) h+='<div class="sec-h">مفتوحة ('+open.length+') <span class="ln"></span></div>'+open.map(row).join("");
+    if(rest.length) h+='<div class="sec-h">خلصت <span class="ln"></span></div>'+rest.slice(0,20).map(row).join("");
+    box.innerHTML=h;
+    box.querySelectorAll("[data-qr]").forEach(b=>b.onclick=()=>openQuickRequestDetail(b.dataset.qr));
+  }catch(e){ box.innerHTML=failBox("معرفناش نجيب الطلبات.",paintQuickRequests); }
+}
+
+async function openQuickRequestDetail(id){
+  const { data:r }=await sb.from("os_quick_request_board").select("*").eq("id",id).maybeSingle();
+  if(!r) return toast("الطلب مش موجود","err");
+  const mine=r.assignee_id===ME.id;
+  const mgr=["owner","coceo","ops","manager"].includes(PROFILE.role);
+  const open=["new","in_progress"].includes(r.status);
+  openSheet('<h3>'+esc(r.title)+'</h3>'
+    +'<div class="muted ltr" style="font-size:11.5px;margin:-4px 0 10px">'+esc(r.req_code||"")+'</div>'
+    +'<div class="card flat" style="padding:10px 12px;margin-bottom:10px">'
+    +'<div style="font-size:13px"><b>'+esc(r.client_name||"—")+'</b>'
+    +(r.client_phone?' <span class="muted ltr">'+esc(r.client_phone)+'</span>':'')+'</div>'
+    +(r.parcel_no?'<div class="muted" style="font-size:12px">قطعة '+esc(r.parcel_no)+'</div>':'')
+    +(r.job_code?'<div class="muted" style="font-size:12px">ملف '+esc(r.job_code)+'</div>':'')
+    +(r.details?'<div style="font-size:12.5px;margin-top:6px">'+esc(r.details)+'</div>':'')
+    +'<div class="muted" style="font-size:11.5px;margin-top:6px">'
+    +(r.assignee_name?esc(r.assignee_name):'مش متكلّف')
+    +(r.deadline?' · لحد '+esc(r.deadline):'')+' · '+esc(QR_PRI[r.priority]||"")+'</div>'
+    +'</div>'
+    +(r.status==="converted"
+      ?'<div class="hub-ok">اتحوّل لملف '+esc(r.converted_code||"")+'</div>'
+      :'<div class="field"><label>النتيجة / ملاحظة</label><textarea id="qrRes">'+esc(r.result_note||"")+'</textarea></div>')
+    +'<div class="row-actions">'
+    +(open&&(mine||mgr)?'<button class="btn green sm" id="qrDone">خلّصته ✓</button>':'')
+    +(open&&mgr?'<button class="btn secondary sm" id="qrConv">حوّله لملف</button>':'')
+    +(r.converted_to?'<button class="btn primary sm" onclick="closeSheet();openProjectDetail(\''+r.converted_to+'\')">افتح الملف</button>':'')
+    +'<button class="btn secondary sm" onclick="closeSheet()">قفل</button></div>');
+
+  const d=$("qrDone");
+  if(d) d.onclick=async()=>{
+    const { error }=await sb.from("os_quick_requests")
+      .update({ status:"done", result_note:($("qrRes")&&$("qrRes").value||"").trim()||null }).eq("id",id);
+    if(error) return toast(error.message,"bad");
+    toast("خلص ✓","ok"); closeSheet(); paintQuickRequests();
+  };
+  const cv=$("qrConv");
+  if(cv) cv.onclick=()=>openConvertRequest(id, r);
+}
+
+async function openConvertRequest(id, r){
+  if(!r.parcel_no) return toast("محتاج أرض عشان نفتح ملف — عدّل الطلب وحدّدها","err");
+  let svc='<option value="O">أخرى</option>';
+  try{ const { data:st }=await sb.from("os_service_types").select("code,name").order("code");
+    if(st&&st.length) svc=st.map(x=>'<option value="'+x.code+'">'+esc(x.name)+'</option>').join(""); }catch(e){}
+  openSheet('<h3>حوّل لملف</h3>'
+    +'<div class="muted" style="font-size:11.5px;margin:-4px 0 10px">'
+    +'الطلب هيتقفل والتاريخ كله هينتقل للملف الجديد — المرفقات والتكليف والأولوية</div>'
+    +'<div class="field"><label>نوع الخدمة</label><select id="cvSvc">'+svc+'</select></div>'
+    +'<div class="field"><label>اسم الملف</label><input id="cvName" value="'+esc(r.title)+'"/></div>'
+    +'<div class="field"><label>قيمة الملف (اختياري)</label><input id="cvVal" type="number" inputmode="numeric" placeholder="بالجنيه"/></div>'
+    +'<div class="row-actions"><button class="btn primary" id="cvGo">حوّل</button>'
+    +'<button class="btn secondary" onclick="closeSheet()">إلغاء</button></div>');
+  $("cvGo").onclick=async()=>{
+    const { data, error }=await sb.rpc("os_convert_quick_request",{
+      p_request:id, p_service:$("cvSvc").value, p_name:($("cvName").value||"").trim()||null,
+      p_value:parseFloat($("cvVal").value)||null });
+    if(error) return toast(error.message,"bad");
+    if(!data || data.ok===false) return toast((data&&data.msg)||"معرفناش نحوّل","bad");
+    toast("اتحوّل لملف ✓"+(data.files_moved?" · "+data.files_moved+" مرفق اتنقل":""),"ok");
+    closeSheet(); openProjectDetail(data.project_id);
+  };
+}
+
 /* ═══════════════ لوحة الملفات — التبويب الأساسي ═══════════════ */
 let JB_FILTER="mine", JB_ROWS=[], JB_Q="";
 
@@ -2208,6 +2374,7 @@ function hubActionsHTML(id){
     {l:"✅ مهمة", on:"openWorkOrderNew('"+id+"')", show:mgr},
     {l:"💸 مصروف", on:"openCostNew('"+id+"')", show:fin||r==="ops"},
     {l:"🏛 معاملة", on:"openGovCaseNew('"+id+"')", show:mgr},
+    {l:"⚡ طلب سريع", on:"openQuickRequest(null,null,'"+id+"')", show:true},
   ].filter(a=>a.show);
   return '<div class="hub-actions">'+acts.map(a=>'<button class="btn secondary sm" onclick="'+a.on+'">'+a.l+'</button>').join("")+'</div>';
 }
@@ -3174,7 +3341,7 @@ function wireGsearchRows(){
 /* ═══════════════ المرحلة ٣ — بيان الأعمال + المزيد ═══════════════ */
 
 /* ── ١ بيان الأعمال: العميل أولاً ── */
-let ARCH_TAB="jobs";   /* clients | parcels */
+let ARCH_TAB="clients";   /* clients | parcels */
 
 async function renderArchive(){
   const el=$("v-archive"); if(!el) return;
@@ -3186,9 +3353,9 @@ async function renderArchive(){
              autocomplete="off" inputmode="search">
     </div>
     <div style="display:flex;gap:6px;margin-bottom:10px">
-      <button class="chip ${ARCH_TAB==='jobs'?'on':''}" data-atab="jobs">الملفات</button>
       <button class="chip ${ARCH_TAB==='clients'?'on':''}" data-atab="clients">العملاء</button>
       <button class="chip ${ARCH_TAB==='parcels'?'on':''}" data-atab="parcels">الأراضي</button>
+      <button class="chip ${ARCH_TAB==='jobs'?'on':''}" data-atab="jobs">الملفات</button>
     </div>
     ${ARCH_TAB==='jobs' ? '<div id="jbFilters" style="display:flex;gap:5px;overflow-x:auto;margin-bottom:12px;padding-bottom:3px">'
       + JB_FILTERS.map(f=>'<button class="chip sm '+(JB_FILTER===f.k?'on':'')+'" data-jbf="'+f.k+'">'+f.l+'</button>').join("")
@@ -3346,6 +3513,7 @@ function renderMore(){
       {id:"vouchers",label:"سندات القبض والصرف", show:isFin},
     ])
   + grp("الإدارة",[
+      {id:"qreq",    label:"الطلبات السريعة"},
       {id:"expiry",  label:"الصلاحيات والانتهاء"},
       {id:"spine",   label:"صحة بيان الأعمال",
        show:["owner","coceo","ops"].includes(r)},
@@ -3363,6 +3531,7 @@ function renderMore(){
 
 function moreGo(id){
   if(id==="retro")  return openRetroJob();
+  if(id==="qreq")   return openQuickRequests();
   if(id==="expiry") return openExpiring();
   if(id==="spine")  return openSpineHealth();
   const direct={tasks:"tasks",contract:"contract",chat:"chat",ask:"ask"};
