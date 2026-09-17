@@ -306,6 +306,51 @@ button.stat,button.dept-card{font-family:inherit;cursor:pointer;}
 .exp-amber{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
 .exp-blue{background:#dbeafe;color:#1e40af;border:1px solid #93c5fd}
 .exp-grey{background:#f1f5f9;color:#475569;border:1px solid #cbd5e1}
+
+.hub-needs{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.hub-need{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:right;border-radius:11px;padding:9px 12px;cursor:pointer;border:1px solid;font-size:13px}
+.hub-need b{font-size:13px}.hub-need span{font-size:11.5px;opacity:.85}
+.hub-need.red{background:#fef2f2;border-color:#fca5a5;color:#991b1b}
+.hub-need.amber{background:#fffbeb;border-color:#fcd34d;color:#92400e}
+.hub-need.blue{background:#eff6ff;border-color:#93c5fd;color:#1e40af}
+.hub-ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:11px;padding:9px 12px;font-size:13px;margin-bottom:12px}
+.hub-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(70px,1fr));gap:6px;margin-bottom:12px}
+.hub-kpis>div{background:#fff;border:1px solid var(--line);border-radius:11px;padding:8px 6px;text-align:center}
+.hub-kpis span{display:block;font-size:10.5px;color:#64748b}.hub-kpis b{display:block;font-size:14px;margin-top:2px}
+#hubTabs{display:flex;gap:4px;overflow-x:auto;margin:0 -2px 12px;padding:0 2px 4px;-webkit-overflow-scrolling:touch}
+#hubTabs button{flex:0 0 auto;border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 13px;font-size:12.5px;color:#475569;white-space:nowrap}
+#hubTabs button.on{background:var(--blue);color:#fff;border-color:var(--blue);font-weight:700}
+.hub-actions{position:sticky;bottom:0;display:flex;gap:6px;overflow-x:auto;background:rgba(248,250,252,.96);backdrop-filter:blur(8px);padding:10px 0 6px;margin-top:14px;border-top:1px solid var(--line)}
+.hub-actions .btn{flex:0 0 auto;white-space:nowrap}
+.st-ok{color:#166534;font-weight:600}.st-red{color:#b91c1c;font-weight:600}.st-amber{color:#b45309;font-weight:600}
+
+.myjob{display:block;width:100%;text-align:right;background:#fff;border:1px solid var(--line);border-radius:13px;padding:10px 12px;margin-bottom:7px;cursor:pointer}
+.myjob.urgent{border-color:#fca5a5;background:linear-gradient(180deg,#fff,#fff7f7)}
+.myjob-h{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
+.myjob-h b{font-size:12.5px;color:var(--blue-d)}.myjob-h span{font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.myjob-items{display:flex;flex-wrap:wrap;gap:4px}
+.mj{font-size:11px;border-radius:7px;padding:2px 7px;border:1px solid}
+.mj.red{background:#fef2f2;border-color:#fca5a5;color:#991b1b}.mj.amber{background:#fffbeb;border-color:#fcd34d;color:#92400e}
+.mj.blue{background:#eff6ff;border-color:#bfdbfe;color:#1e40af}.mj.muted{background:#f8fafc;border-color:var(--line);color:#64748b}
+
+.home-more{margin-top:16px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.home-more summary{padding:11px 13px;cursor:pointer;font-size:13px;font-weight:600;color:#334155;list-style:none;display:flex;align-items:center;justify-content:space-between}
+.home-more summary::-webkit-details-marker{display:none}
+.home-more summary::after{content:"›";font-size:18px;color:#94a3b8;transform:rotate(90deg);transition:transform .15s}
+.home-more[open] summary::after{transform:rotate(-90deg)}
+.home-more .act-grid{padding:0 10px 10px}
+.jl{color:var(--blue-d);font-weight:700;text-decoration:none;border-bottom:1px dotted var(--blue);cursor:pointer}.jl:hover{background:#eff6ff}
+
+.tl{position:relative;padding-right:22px;margin-bottom:14px}
+.tl::before{content:"";position:absolute;right:7px;top:6px;bottom:6px;width:2px;background:#e2e8f0;border-radius:2px}
+.tl-day{font-size:11px;font-weight:700;color:#64748b;margin:12px 0 6px;position:relative}
+.tl-day::before{content:"";position:absolute;right:-19px;top:4px;width:8px;height:8px;border-radius:50%;background:#94a3b8}
+.tl-ev{display:flex;gap:8px;align-items:flex-start;background:#fff;border:1px solid var(--line);border-radius:11px;padding:8px 10px;margin-bottom:6px;position:relative;font-size:13px}
+.tl-ic{flex:0 0 auto;width:22px;text-align:center;font-size:13px}
+.tl-body{flex:1;min-width:0}.tl-body b{font-size:12.5px}
+.tl-amt{flex:0 0 auto;font-size:12.5px}.tl-amt.in{color:#166534}.tl-amt.out{color:#b91c1c}
+.tl-ev.stage_done{border-color:#bbf7d0}.tl-ev.money_in{border-color:#bbf7d0;background:#f0fdf4}
+.tl-ev.money_out{border-color:#fecaca}.tl-ev.open{border-color:#bfdbfe;background:#eff6ff}
 </style>
 </head>
 <body>
@@ -1789,6 +1834,17 @@ async function startApp(user){
 /* coceo = مدير المكتب: صلاحيات الأوبريشن كاملة على الشغل — بدون المالية.
    الداتابيز: os_role() بترجّعله 'ops'، ودوال المالية بتقرا الدور الخام فبتستبعده. */
 function isCoCeo(){ return PROFILE.role==="coceo"; }
+
+/* مطابقة لـ os_can_finance_read في قاعدة البيانات — قرار المالك:
+   المالك + الأوبريشن + مدير المالية يقرؤوا. الاعتماد للمالك ومدير المالية بس. */
+function canFinanceRead(){
+  const r=PROFILE.role||"";
+  return r==="owner" || r==="ops" || (r==="manager" && PROFILE.dept==="finance");
+}
+function canFinanceApprove(){
+  const r=PROFILE.role||"";
+  return r==="owner" || (r==="manager" && PROFILE.dept==="finance");
+}
 function isOwnerOps(){ return PROFILE.role==="owner"||PROFILE.role==="ops"||PROFILE.role==="coceo"; }
 function canSeeClients(){ return isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="hr"); }
 function canSeeLeads(){ if(isOwnerOps()) return true; if(PROFILE.position==="assistant") return true; if(PROFILE.role==="manager"&&String(PROFILE.dept||"").startsWith("off_")) return true; if(PROFILE.dept==="legal"||PROFILE.dept==="finance") return true; return false; }
@@ -1808,6 +1864,273 @@ function canContracts(){ return myDeptKey()==="legal"; }
 
 
 
+
+
+
+
+/* ═══════════════ أي كود ملف في أي شاشة = رابط ═══════════════
+   بيمسح الـ DOM بعد كل رسم ويحوّل الأكواد اللي شكلها OC-15-0065-L1
+   لروابط تفتح الملف. مش محتاج كل شاشة تعمل ده بنفسها. */
+const JOB_CODE_RX = /\b([A-Z]{1,3}-\d{1,3}-\d{3,5}(?:-[A-Z0-9\u0621-\u064A]{1,4})?-[A-Z]\d{1,2})\b/g;
+let _linkJobsT=null;
+function linkJobCodes(root){
+  clearTimeout(_linkJobsT);
+  _linkJobsT=setTimeout(()=>{
+    const scope=root||document.body;
+    const walker=document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, {
+      acceptNode:n=>{
+        if(!n.nodeValue || !JOB_CODE_RX.test(n.nodeValue)) return NodeFilter.FILTER_REJECT;
+        JOB_CODE_RX.lastIndex=0;
+        const p=n.parentElement; if(!p) return NodeFilter.FILTER_REJECT;
+        if(p.closest("a,button,input,textarea,select,[contenteditable],.jl,#gsIn,#archQ,#topSearch")) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }});
+    const nodes=[]; let n; while((n=walker.nextNode())) nodes.push(n);
+    nodes.forEach(t=>{
+      const frag=document.createDocumentFragment();
+      let last=0, m; const v=t.nodeValue; JOB_CODE_RX.lastIndex=0;
+      while((m=JOB_CODE_RX.exec(v))){
+        if(m.index>last) frag.appendChild(document.createTextNode(v.slice(last,m.index)));
+        const a=document.createElement("a"); a.className="jl ltr"; a.textContent=m[1]; a.href="#";
+        a.onclick=async(e)=>{ e.preventDefault(); e.stopPropagation();
+          try{ const { data }=await sb.from("os_projects").select("id").eq("job_code",m[1]).maybeSingle();
+            if(data) openProjectDetail(data.id); else toast("الملف "+m[1]+" مش موجود","err"); }catch(x){} };
+        frag.appendChild(a); last=m.index+m[0].length;
+      }
+      if(last<v.length) frag.appendChild(document.createTextNode(v.slice(last)));
+      t.parentNode.replaceChild(frag,t);
+    });
+  }, 120);
+}
+/* يشتغل بعد أي تغيير في الشاشة */
+if(window.MutationObserver){
+  new MutationObserver(ms=>{ if(ms.some(m=>m.addedNodes.length)) linkJobCodes(); })
+    .observe(document.body,{childList:true,subtree:true});
+}
+
+/* ═══════════════ ملفاتي — أول حاجة على الرئيسية ═══════════════
+   مش قايمة مشاريع. الملفات اللي **محتاجاني أنا** مرتّبة بالإلحاح،
+   وكل واحد بيقول إيه المطلوب بالظبط. */
+
+async function hubMyJobs(){
+  const me=ME&&ME.id, role=PROFILE.role||"", today=new Date().toISOString().slice(0,10);
+  const wide=["owner","coceo","ops"].includes(role);
+  const need={};  /* project_id → {code,name,client,items:[]} */
+  const add=(j,item)=>{ if(!j||!j.project_id) return;
+    (need[j.project_id]=need[j.project_id]||{id:j.project_id,code:j.job_code,name:j.job_name||j.name,items:[],w:0}).items.push(item);
+    need[j.project_id].w+=item.w; };
+  try{
+    /* ١ مرحلة دوري */
+    let q=sb.from("os_job_stages").select("project_id,stage_name,due_on,owner_id,os_projects!inner(job_code,name,status)")
+      .eq("status","active").neq("os_projects.status","closed");
+    if(!wide) q=q.eq("owner_id",me);
+    const { data:st }=await q.limit(60);
+    (st||[]).forEach(x=>{ const late=x.due_on&&x.due_on<today;
+      add({project_id:x.project_id,job_code:x.os_projects.job_code,name:x.os_projects.name},
+        {t:(x.owner_id===me?"دورك: ":"مرحلة: ")+x.stage_name, s:late?"متأخرة":(x.due_on?"لحد "+x.due_on:""), w:late?3:1, c:late?"red":"blue"}); });
+
+    /* ٢ أقساط متأخرة (للإدارة والمالية) */
+    if(canFinanceRead()){
+      const { data:inst }=await sb.from("os_job_installments").select("project_id,job_code,title,remaining,state_ar")
+        .in("state_ar",["متأخرة","مستحقة"]).limit(40);
+      (inst||[]).forEach(x=>add({project_id:x.project_id,job_code:x.job_code},
+        {t:x.state_ar+": "+x.title, s:fmtEGP(x.remaining), w:x.state_ar==="متأخرة"?3:2, c:x.state_ar==="متأخرة"?"red":"amber"}));
+    }
+    /* ٣ مهام متأخرة ليا */
+    let tq=sb.from("os_tasks").select("project_id,title,deadline,assignee_id,os_projects(job_code,name)")
+      .neq("status","done").not("deadline","is",null).lt("deadline",today).not("project_id","is",null);
+    if(!wide) tq=tq.eq("assignee_id",me);
+    const { data:tsk }=await tq.limit(40);
+    (tsk||[]).forEach(x=>add({project_id:x.project_id,job_code:x.os_projects&&x.os_projects.job_code,name:x.os_projects&&x.os_projects.name},
+      {t:"مهمة متأخرة: "+x.title, s:"كانت لحد "+x.deadline, w:3, c:"red"}));
+  }catch(e){ console.warn("hubMyJobs",e); }
+
+  const list=Object.values(need).sort((a,b)=>b.w-a.w);
+  const el=$("hJobs"); if(!el) return;
+  if(!list.length){
+    el.innerHTML='<div class="hub-ok" style="margin-bottom:14px">✓ مفيش ملف مستنيك دلوقتي</div>'; return;
+  }
+  el.innerHTML='<div class="sec-h">ملفات محتاجاك ('+list.length+') <span class="ln"></span></div>'
+    + list.slice(0,8).map(j=>'<button class="myjob '+(j.w>=3?"urgent":"")+'" data-job="'+j.id+'">'
+      +'<div class="myjob-h"><b class="ltr">'+esc(j.code||"—")+'</b><span>'+esc(j.name||"")+'</span></div>'
+      +'<div class="myjob-items">'+j.items.slice(0,3).map(i=>'<span class="mj '+i.c+'">'+esc(i.t)+(i.s?' · '+esc(i.s):'')+'</span>').join("")
+      +(j.items.length>3?'<span class="mj muted">+'+(j.items.length-3)+'</span>':'')+'</div></button>').join("")
+    + (list.length>8?'<button class="btn tertiary sm" onclick="switchTab(\'archive\')">شوف الكل في بيان الأعمال</button>':'')
+    + '<div style="height:14px"></div>';
+  el.querySelectorAll("[data-job]").forEach(b=>b.onclick=()=>openProjectDetail(b.dataset.job));
+}
+
+/* ═══════════════ بيان الأعمال = المركز ═══════════════
+   كل حاجة عن الملف في مكان واحد. كل إدخال يبدأ منه ومربوط بيه. */
+
+const fmtEGP = n => (n==null||isNaN(n)) ? "—" : Number(n).toLocaleString("en") + " ج";
+
+/* ── محتاج مني: أول حاجة تتشاف ── */
+async function hubNeedsMe(id, prj){
+  const items=[];
+  try{
+    const [{ data:st },{ data:inst },{ data:tsk },{ data:gov },{ data:own }]=await Promise.all([
+      sb.from("os_job_stages").select("stage_seq,stage_name,status,due_on,owner_id,owner_name")
+        .eq("project_id",id).eq("status","active").limit(1),
+      sb.from("os_job_installments").select("title,remaining,due_date,state_ar,status")
+        .eq("project_id",id).in("state_ar",["متأخرة","مستحقة"]).limit(3),
+      sb.from("os_tasks").select("id,title,deadline,assignee_id,status")
+        .eq("project_id",id).neq("status","done").not("deadline","is",null)
+        .lt("deadline", new Date().toISOString().slice(0,10)).limit(3),
+      sb.from("os_gov_cases").select("id,title,status,target_date")
+        .eq("project_id",id).not("status","in",'("approved","rejected","archived")').limit(2),
+      sb.from("os_parcel_owners_now").select("owners_count,share_overflow").eq("parcel_id",prj.parcel_id||"00000000-0000-0000-0000-000000000000").maybeSingle()
+    ]);
+    const me=ME&&ME.id;
+    (st||[]).forEach(x=>{
+      const late = x.due_on && x.due_on < new Date().toISOString().slice(0,10);
+      if(x.owner_id===me) items.push({k:"stage",t:"دورك: "+x.stage_name,s:late?"متأخرة من "+x.due_on:"لحد "+(x.due_on||"—"),c:late?"red":"blue",go:()=>{}});
+    });
+    (inst||[]).forEach(x=>items.push({k:"money",t:x.state_ar+": "+x.title,s:fmtEGP(x.remaining)+(x.due_date?" · "+x.due_date:""),c:x.state_ar==="متأخرة"?"red":"amber",go:()=>hubTab(id,"money")}));
+    (tsk||[]).forEach(x=>items.push({k:"task",t:"مهمة متأخرة: "+x.title,s:"كان لحد "+x.deadline,c:"red",go:()=>{ if(typeof openTaskDetail==="function") openTaskDetail(x.id); }}));
+    (gov||[]).forEach(x=>{
+      const late=x.target_date && x.target_date < new Date().toISOString().slice(0,10);
+      if(late) items.push({k:"gov",t:"معاملة متأخرة: "+x.title,s:"الهدف كان "+x.target_date,c:"red",go:()=>{ if(typeof openGovCaseDetail==="function") openGovCaseDetail(x.id); }});
+    });
+    if(prj.parcel_id && own && !own.owners_count) items.push({k:"own",t:"مفيش مالك مسجّل على الأرض",s:"سجّله من قسم الأطراف",c:"amber",go:()=>hubTab(id,"parties")});
+    if(own && own.share_overflow) items.push({k:"own",t:"مجموع الحصص أكبر من 100%",s:"راجع الملكية",c:"amber",go:()=>hubTab(id,"parties")});
+  }catch(e){}
+  if(!prj.value_egp) items.push({k:"val",t:"الملف من غير قيمة",s:"حدّدها عشان جدول الدفعات يتبنى",c:"amber",go:()=>openBuildInstallments(id)});
+  return items;
+}
+
+function needsMeHTML(items){
+  if(!items.length) return '<div class="hub-ok">✓ مفيش حاجة مستنياك على الملف ده</div>';
+  return '<div class="hub-needs">'+items.map((x,i)=>
+    '<button class="hub-need '+x.c+'" data-need="'+i+'">'
+    +'<b>'+esc(x.t)+'</b><span>'+esc(x.s)+'</span></button>').join("")+'</div>';
+}
+
+/* ── الفلوس: أقساط + مصروفات + صافي ── */
+async function hubMoneyHTML(id, prj){
+  const canFin = canFinanceRead();
+  const [{ data:inst },{ data:cost }]=await Promise.all([
+    sb.from("os_job_installments").select("payment_id,seq_no,title,amount,paid,remaining,state_ar,due_date,stage_name").eq("project_id",id).order("seq_no"),
+    canFin ? sb.from("os_project_costs").select("id,title,category,amount,spent_on,approved").eq("project_id",id).order("spent_on",{ascending:false}).limit(30) : Promise.resolve({data:[]})
+  ]);
+  const I=inst||[], C=cost||[];
+  const contracted=I.reduce((a,b)=>a+(+b.amount||0),0);
+  const collected=I.reduce((a,b)=>a+(+b.paid||0),0);
+  const spent=C.reduce((a,b)=>a+(+b.amount||0),0);
+  let h='<div class="hub-kpis">'
+    +'<div><span>القيمة</span><b>'+fmtEGP(prj.value_egp)+'</b></div>'
+    +'<div><span>محصّل</span><b class="ok-note">'+fmtEGP(collected)+'</b></div>'
+    +'<div><span>باقي</span><b>'+fmtEGP(contracted-collected)+'</b></div>'
+    +(canFin?'<div><span>مصروف</span><b>'+fmtEGP(spent)+'</b></div>':'')
+    +'</div>';
+  h+='<div class="sec-h">الأقساط <span class="ln"></span></div>';
+  if(!I.length){
+    h+='<div class="empty-state"><b>مفيش جدول دفعات لسه</b>'
+      +(canFin?'<div style="margin-top:8px"><button class="btn primary sm" onclick="openBuildInstallments(\''+id+'\')">ابنِ الجدول من قالب الخدمة</button></div>':'')
+      +'</div>';
+  }else{
+    h+='<table class="dtable"><thead><tr><th>#</th><th>الدفعة</th><th>المبلغ</th><th>الحالة</th></tr></thead><tbody>';
+    I.forEach(r=>{
+      const st={"محصّلة":"ok","متأخرة":"red","مستحقة":"amber"}[r.state_ar]||"";
+      h+='<tr'+(canFin&&r.remaining>0?' data-collect="'+r.payment_id+'" data-rem="'+r.remaining+'"':'')+'>'
+        +'<td>'+r.seq_no+'</td><td><b>'+esc(r.title)+'</b>'
+        +(r.stage_name?'<div class="muted" style="font-size:11px">عند: '+esc(r.stage_name)+'</div>':'')+'</td>'
+        +'<td class="ltr">'+fmtEGP(r.amount)+(r.paid>0&&r.remaining>0?'<div class="muted" style="font-size:11px">باقي '+fmtEGP(r.remaining)+'</div>':'')+'</td>'
+        +'<td><span class="st-'+st+'">'+esc(r.state_ar)+'</span></td></tr>';
+    });
+    h+='</tbody></table>';
+    if(canFin) h+='<div class="muted" style="font-size:11px;margin-top:5px">اضغط على قسط عشان تحصّله</div>';
+  }
+  if(canFin){
+    h+='<div class="sec-h">المصروفات <span class="ln"></span></div>';
+    if(!C.length) h+='<div class="muted" style="font-size:12.5px;padding:6px 2px">مفيش مصروفات على الملف</div>';
+    else{
+      h+='<table class="dtable"><thead><tr><th>البند</th><th>المبلغ</th><th>التاريخ</th></tr></thead><tbody>';
+      C.forEach(c=>h+='<tr><td><b>'+esc(c.title)+'</b>'+(c.approved?'':' <span class="chip-warn">مستني اعتماد</span>')
+        +'<div class="muted" style="font-size:11px">'+esc(c.category||"")+'</div></td>'
+        +'<td class="ltr">'+fmtEGP(c.amount)+'</td><td class="ltr muted" style="font-size:11px">'+esc(c.spent_on||"")+'</td></tr>');
+      h+='</tbody></table>';
+    }
+  }
+  return h;
+}
+
+/* ── الأطراف والملكية جوّه الملف ── */
+async function hubPartiesHTML(id, prj){
+  const [{ data:jp }, own]=await Promise.all([
+    sb.from("os_job_parties").select("party_name,phone,role_ar,authority_basis,valid_to,is_active").eq("job_id",id),
+    prj.parcel_id ? loadOwners(prj.parcel_id) : Promise.resolve([])
+  ]);
+  let h='';
+  if(prj.parcel_id){
+    h+='<div class="sec-h">ملكية الأرض <span class="ln"></span></div>';
+    h+='<div class="card flat" style="padding:10px 12px">'+ownersBlock(own)
+      +(canManageOwn()?'<div class="act-mini" style="margin-top:8px"><button class="btn secondary sm" onclick="openOwnership(\''+prj.parcel_id+'\')">إدارة الملكية</button></div>':'')
+      +'</div>';
+  }
+  h+='<div class="sec-h">أطراف الملف <span class="ln"></span></div>';
+  const P=jp||[];
+  if(!P.length) h+='<div class="muted" style="font-size:12.5px;padding:6px 2px">المالك بيتسجّل تلقائياً أول ما الملف يتفتح</div>';
+  else{
+    h+='<table class="dtable"><thead><tr><th>الطرف</th><th>الصفة</th><th>الحالة</th></tr></thead><tbody>';
+    P.forEach(r=>{
+      const exp = r.valid_to && !r.is_active;
+      h+='<tr><td><b>'+esc(r.party_name)+'</b>'+(r.phone?'<div class="muted ltr" style="font-size:11px">'+esc(r.phone)+'</div>':'')+'</td>'
+        +'<td>'+esc(r.role_ar)+(r.authority_basis?'<div class="muted" style="font-size:11px">'+esc(r.authority_basis)+'</div>':'')+'</td>'
+        +'<td>'+(exp?'<span class="st-red">منتهي</span>':'<span class="st-ok">سارٍ</span>')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+  return h;
+}
+
+
+/* ── الخط الزمني الموحّد ── */
+const TL_ICON={open:"📂",close:"🔒",stage_start:"▶",stage_done:"✓",money_in:"💰",money_out:"💸",
+               file:"📎",task_done:"☑",gov:"🏛",ownership:"🏠"};
+async function hubTimelineHTML(id){
+  const { data, error } = await sb.from("os_job_timeline")
+    .select("at,kind,title,detail,actor,amount,day").eq("project_id",id)
+    .order("at",{ascending:false}).limit(80);
+  if(error) throw error;
+  const R=data||[];
+  if(!R.length) return '<div class="muted" style="font-size:12.5px;padding:8px 2px">مفيش أحداث لسه</div>';
+  let h='<div class="tl">', lastDay="";
+  R.forEach(r=>{
+    if(r.day!==lastDay){ lastDay=r.day; h+='<div class="tl-day">'+esc(r.day)+'</div>'; }
+    h+='<div class="tl-ev '+esc(r.kind)+'"><span class="tl-ic">'+(TL_ICON[r.kind]||"•")+'</span>'
+      +'<div class="tl-body"><b>'+esc(r.title)+'</b>'
+      +(r.detail?'<div class="muted" style="font-size:11.5px">'+esc(r.detail)+'</div>':'')
+      +'<div class="muted" style="font-size:10.5px;margin-top:2px">'
+      +(r.actor?esc(r.actor)+' · ':'')+new Date(r.at).toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"})+'</div></div>'
+      +(r.amount?'<b class="tl-amt ltr '+(r.kind==="money_in"?"in":"out")+'">'+(r.kind==="money_in"?"+":"−")+Number(r.amount).toLocaleString("en")+'</b>':'')
+      +'</div>';
+  });
+  return h+'</div>';
+}
+
+/* ── التنقّل بين أقسام الملف ── */
+let HUB_TAB={};
+function hubTab(id, tab){
+  HUB_TAB[id]=tab;
+  document.querySelectorAll('#hubTabs [data-hub]').forEach(b=>b.classList.toggle("on",b.dataset.hub===tab));
+  document.querySelectorAll('[data-hubsec]').forEach(el=>el.style.display = el.dataset.hubsec===tab ? "" : "none");
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+/* ── شريط الأفعال — كل حاجة مربوطة بالملف ── */
+function hubActionsHTML(id){
+  const r=PROFILE.role||"";
+  const mgr=["owner","coceo","ops","manager"].includes(r);
+  const fin=canFinanceRead();
+  const acts=[
+    {l:"📎 مرفق", on:"openUploadTo('"+id+"')", show:true},
+    {l:"✅ مهمة", on:"openWorkOrderNew('"+id+"')", show:mgr},
+    {l:"💸 مصروف", on:"openCostNew('"+id+"')", show:fin||r==="ops"},
+    {l:"🏛 معاملة", on:"openGovCaseNew('"+id+"')", show:mgr},
+  ].filter(a=>a.show);
+  return '<div class="hub-actions">'+acts.map(a=>'<button class="btn secondary sm" onclick="'+a.on+'">'+a.l+'</button>').join("")+'</div>';
+}
 
 /* ═══════════════ المرحلة ٨ — صحة العمود الفقري ═══════════════
    القياس أثبت إن كل حاجة كانت بتقدر تهرب من بيان الأعمال بصمت.
@@ -3039,7 +3362,9 @@ async function renderHome(){
   el.innerHTML=`<div class="page-h"><div><h2>${greet} يا ${esc(PROFILE.name)}</h2><div class="sub">${esc(userTitle(PROFILE))} · ${new Date().toLocaleDateString("ar-EG",{weekday:"long",day:"numeric",month:"long"})}</div></div><button class="btn ghost sm" id="homeRefresh"><span style="display:inline-flex;color:#94a3b8;vertical-align:middle"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></span></button></div>
     <div id="hStats" class="stats"><div class="stat"><div class="n">…</div><div class="l">…</div></div><div class="stat"><div class="n">…</div><div class="l">…</div></div><div class="stat"><div class="n">…</div><div class="l">…</div></div></div>
     <button class="btn green" id="hSpeak" style="width:100%;margin-bottom:16px">اسمع ملخص النهارده</button>
+    <div id="hJobs"></div>
     <div id="hBody"><div class="skel"></div><div class="skel"></div><div class="skel" style="height:88px"></div></div>`;
+  hubMyJobs();
   $("hSpeak").onclick=()=>speak(HOME_SUMMARY||"لسه بجهّز الملخص، جرّب تاني بعد ثانية.");
 
   let tasks=[],reqs=[],evs=[],joins=[];
@@ -3180,9 +3505,9 @@ function renderOwnerHome(d){
   body+=`<div class="sec-h">تحركات <span class="ln"></span></div>
     <div class="row-actions"><button class="btn sm" data-quick="myday" style="flex:1;background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button></div>
     <div class="act-label" style="margin-top:16px">أنشئ بسرعة</div>
-    <div class="act-grid" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب${helpDot("newreq")}</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك${helpDot("smart")}</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع${helpDot("meeting")}</button>${isOwnerOps()?'<button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="officehub">لوحة المكتب</button><button class="btn sm" data-quick="workorder">أمر شغل</button>':""}</div>
-    <div class="act-label" style="margin-top:18px">روح لـ</div>
-    <div class="act-grid" style="margin-top:0"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال${helpDot("projects")}</button><button class="btn ghost sm" data-quick="sales">المبيعات${helpDot("sales")}</button><button class="btn ghost sm" data-quick="adminhub">الإدارية${helpDot("adminhub")}</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="contracts">العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات'+helpDot("decisions")+'</button>':""}<button class="btn ghost sm" data-quick="roadmap" data-more="1">خطة التطوير${helpDot("roadmap")}</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام'+helpDot("syshealth")+'</button>':""}<button class="btn ghost sm" id="moreBtn" onclick="toggleMore(this)" style="opacity:.7">كل الأقسام ⌄</button></div>`;
+    <div class="act-grid" style="margin-top:0"><button class="btn primary sm" data-quick="newreq">ابعت طلب${helpDot("newreq")}</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك${helpDot("smart")}</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع${helpDot("meeting")}</button>${isOwnerOps()?'<button class="btn secondary sm" data-quick="officehub">لوحة المكتب</button><button class="btn sm" data-quick="workorder">أمر شغل</button>':""}</div>
+    <details class="home-more"><summary>كل الشاشات <span class="muted" style="font-size:11px">— أو من «المزيد»</span></summary>
+    <div class="act-grid" style="margin-top:8px"><button class="btn primary sm" data-quick="projects">\ud83d\udcc1 بيان الأعمال${helpDot("projects")}</button><button class="btn ghost sm" data-quick="sales">المبيعات${helpDot("sales")}</button><button class="btn ghost sm" data-quick="adminhub">الإدارية${helpDot("adminhub")}</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="contracts">العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات'+helpDot("decisions")+'</button>':""}<button class="btn ghost sm" data-quick="roadmap" data-more="1">خطة التطوير${helpDot("roadmap")}</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام'+helpDot("syshealth")+'</button>':""}<button class="btn ghost sm" id="moreBtn" onclick="toggleMore(this)" style="opacity:.7">كل الأقسام ⌄</button></div></details>`;
   if(d.evs.length){
     body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   }
@@ -3217,9 +3542,9 @@ function renderOpsHome(d){
   body+=`<div class="sec-h">تحركات سريعة <span class="ln"></span></div>
     <div class="row-actions"><button class="btn sm" data-quick="myday" style="flex:1;background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff">يومي</button></div>
     <div class="act-label" style="margin-top:16px">أنشئ بسرعة</div>
-    <div class="act-grid" style="margin-top:0"><button class="btn green sm" data-quick="newreq">ابعت طلب${helpDot("newreq")}</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك${helpDot("smart")}</button><button class="btn ghost sm" data-quick="event">موعد${helpDot("event")}</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع${helpDot("meeting")}</button>${isOwnerOps()?'<button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="officehub">لوحة المكتب</button><button class="btn sm" data-quick="workorder">أمر شغل</button>':""}</div>
-    <div class="act-label" style="margin-top:18px">روح لـ</div>
-    <div class="act-grid" style="margin-top:0"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال${helpDot("projects")}</button><button class="btn ghost sm" data-quick="sales">المبيعات${helpDot("sales")}</button><button class="btn ghost sm" data-quick="adminhub">الإدارية${helpDot("adminhub")}</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="contracts">العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات'+helpDot("decisions")+'</button>':""}<button class="btn ghost sm" data-quick="roadmap" data-more="1">خطة التطوير${helpDot("roadmap")}</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام'+helpDot("syshealth")+'</button>':""}<button class="btn ghost sm" id="moreBtn" onclick="toggleMore(this)" style="opacity:.7">كل الأقسام ⌄</button></div>`;
+    <div class="act-grid" style="margin-top:0"><button class="btn primary sm" data-quick="newreq">ابعت طلب${helpDot("newreq")}</button><button class="btn sm" data-quick="smart">وزّع مهمة بصوتك${helpDot("smart")}</button><button class="btn ghost sm" data-quick="event">موعد${helpDot("event")}</button><button class="btn ghost sm" data-quick="meeting">تقرير الاجتماع${helpDot("meeting")}</button>${isOwnerOps()?'<button class="btn secondary sm" data-quick="officehub">لوحة المكتب</button><button class="btn sm" data-quick="workorder">أمر شغل</button>':""}</div>
+    <details class="home-more"><summary>كل الشاشات <span class="muted" style="font-size:11px">— أو من «المزيد»</span></summary>
+    <div class="act-grid" style="margin-top:8px"><button class="btn primary sm" data-quick="projects">\ud83d\udcc1 بيان الأعمال${helpDot("projects")}</button><button class="btn ghost sm" data-quick="sales">المبيعات${helpDot("sales")}</button><button class="btn ghost sm" data-quick="adminhub">الإدارية${helpDot("adminhub")}</button>${(isOwnerOps()||PROFILE.dept==="engineering")?'<button class="btn ghost sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>':""}${isOwnerOps()?'<button class="btn ghost sm" data-quick="finance">المالية'+helpDot("finance")+'</button><button class="btn ghost sm" data-quick="contracts">العقود'+helpDot("contracts")+'</button><button class="btn ghost sm" data-quick="pipeline">قمع المبيعات'+helpDot("pipeline")+'</button><button class="btn ghost sm" data-quick="govcases">المعاملات الحكومية'+helpDot("govcases")+'</button>':""}${["owner","ops","manager"].includes(PROFILE.role)?'<button class="btn ghost sm" data-quick="hr">كفاءة الفريق'+helpDot("hr")+'</button>':""}${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="executive"))?'<button class="btn ghost sm" data-quick="decisions">القرارات'+helpDot("decisions")+'</button>':""}<button class="btn ghost sm" data-quick="roadmap" data-more="1">خطة التطوير${helpDot("roadmap")}</button>${(isOwnerOps()||(PROFILE.role==="manager"&&PROFILE.dept==="dev_ai"))?'<button class="btn ghost sm" data-quick="syshealth">صحة النظام'+helpDot("syshealth")+'</button>':""}<button class="btn ghost sm" id="moreBtn" onclick="toggleMore(this)" style="opacity:.7">كل الأقسام ⌄</button></div></details>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   body+='<div id="presBox"></div><div id="wwBox"></div><div id="wlBox"></div><div id="activityBox"></div>';
   el.innerHTML=body;
@@ -3568,7 +3893,7 @@ function renderManagerHome(d){
       else if(d==="engineering") b='<button class="btn sm" data-quick="structeng">الإنشائي'+helpDot("structeng")+'</button>';
       if(canSeeLeads()) b+='<button class="btn ghost sm" data-quick="leads">📥 الليدز'+helpDot("leads")+'</button>';
       return b?'<div class="act-grp"><div class="act-lbl">شغل قسمك</div><div class="row-actions">'+b+'</div></div>':"";})()}
-    <div class="act-grp"><div class="act-lbl">المشاريع والفريق</div><div class="row-actions"><button class="btn sm" style="background:var(--green-d);color:#fff" data-quick="projects">\ud83d\udcc1 بيان الأعمال${helpDot("projects")}</button><button class="btn ghost sm" data-quick="hr">كفاءة الفريق${helpDot("hr")}</button><button class="btn ghost sm" data-quick="addemp">إضافة موظف${helpDot("addemp")}</button></div></div>
+    <div class="act-grp"><div class="act-lbl">المشاريع والفريق</div><div class="row-actions"><button class="btn primary sm" data-quick="projects">\ud83d\udcc1 بيان الأعمال${helpDot("projects")}</button><button class="btn ghost sm" data-quick="hr">كفاءة الفريق${helpDot("hr")}</button><button class="btn ghost sm" data-quick="addemp">إضافة موظف${helpDot("addemp")}</button></div></div>
     <div class="act-grp"><div class="act-lbl">إدارية</div><div class="row-actions"><button class="btn ghost sm" data-quick="leaves">الإجازات${helpDot("leaves")}</button><button class="btn ghost sm" data-quick="adminhub">الإدارية${helpDot("adminhub")}</button></div></div>`;
   if(d.evs.length) body+=`<div class="sec-h">المواعيد الجاية <span class="ln"></span></div>`+d.evs.map(e=>evCardHtml(e)).join("");
   el.innerHTML=body;
@@ -4440,6 +4765,19 @@ async function paintProjectDetail(id){
         +'</div>';
     }
 
+    /* ═══ المركز: محتاج مني + التبويبات ═══ */
+    h = '<div id="hubNeeds"><div class="skel"></div></div>'
+      + '<div id="hubTabs">'
+      + '<button data-hub="overview" class="on">نظرة</button>'
+      + '<button data-hub="stages">المراحل</button>'
+      + '<button data-hub="money">الفلوس</button>'
+      + '<button data-hub="parties">الأطراف</button>'
+      + '<button data-hub="tasks">المهام</button>'
+      + '<button data-hub="files">المرفقات</button>'
+      + '<button data-hub="log">السجل</button>'
+      + '</div>'
+      + '<div data-hubsec="overview">' + h;
+    h+='</div><div data-hubsec="stages">';
     /* مراحل الملف — الطبقة اللي بتوضّح الملف واقف فين وعند مين */
     const stg=jstages||[];
     if(stg.length){
@@ -4488,6 +4826,7 @@ async function paintProjectDetail(id){
     }
 
     /* معالم ومهام المشروع */
+    h+='</div><div data-hubsec="tasks">';
     h+='<div class="sec-h">معالم ومهام المشروع <span class="ln"></span></div>';
     if(canUp) h+='<div class="act-grid" style="margin:-4px 0 10px">'
       +'<button class="btn green sm" id="pdWorkOrder">أمر شغل لموظف</button>'
@@ -4498,6 +4837,8 @@ async function paintProjectDetail(id){
       return '<div class="card flat"'+(isOverdue?' style="border-right:4px solid var(--red)"':'')+'><div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:13px">'+esc(t.title)+'</b>'+statusBadge(t.status)+'</div>'
         +'<div class="meta"><span>'+esc(t.assignee_name||nameOf(t.assignee_id)||"غير محدد")+'</span>'+(t.deadline?'<span class="dot"></span><span>'+fmtDate(t.deadline)+'</span>':'')+'</div></div>';
     }).join(""); }
+    h+='</div><div data-hubsec="log">';
+    h+='<div class="sec-h">الخط الزمني <span class="ln"></span></div><div id="hubTL"><div class="skel"></div></div>';
     /* سجل الملف — مين ضاف ومين عدّل ومين شاف */
     if(isOwnerOps()){
       const { data:hist }=await sb.from("os_job_history").select("*").eq("project_id",id).order("at",{ascending:false}).limit(40);
@@ -4523,6 +4864,7 @@ async function paintProjectDetail(id){
     }
     h='<div id="j360Box"><div class="skel"></div></div>'+h;
     setTimeout(()=>paintJob360(id,"j360Box"), 30);
+    h+='</div><div data-hubsec="files">';
     h+='<div class="sec-h">مرفقات الملف <span class="ln"></span></div>';
     if(canUp){
       h+='<div class="card flat"><div class="field"><label>اسم المرفق</label><input id="pdTitle" placeholder="مثلًا: رسمة معمارية — الدور الأرضي"/></div>'
@@ -4536,15 +4878,32 @@ async function paintProjectDetail(id){
         +'<div class="field"><label>وسوم (اختياري — بفاصلة)</label><input id="pdTags" placeholder="واجهات, نسخة نهائية"/></div>'
         +'<div class="field"><label>اختار ملف (أقصى 20 ميجا)</label><input id="pdFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.dwg" style="font-size:12px"/></div>'
         +'<div id="pdStatus" class="muted" style="font-size:12px;margin-bottom:8px"></div>'
-        +'<div class="row-actions"><button class="btn primary sm" id="pdUp">ارفع للمشروع</button>'
-        +'<button class="btn secondary sm" onclick="openJobParties(\''+id+'\')">أطراف الملف</button>'
-        +(["owner","coceo","ops","manager"].includes(PROFILE.role)
-          ?'<button class="btn secondary sm" onclick="openBuildInstallments(\''+id+'\')">جدول الدفعات</button>':'')
-        +'</div></div>';
+        +'<div class="row-actions"><button class="btn primary sm" id="pdUp">ارفع للمشروع</button></div></div>';
     }
     h+='<div id="ftBox" style="margin-top:8px"><div class="skel"></div></div>';
     setTimeout(()=>paintFileTree(id,"ftBox"), 40);
+    h+='</div>';
+    h+='<div data-hubsec="money"><div id="hubMoney"><div class="skel"></div></div></div>';
+    h+='<div data-hubsec="parties"><div id="hubParties"><div class="skel"></div></div></div>';
+    h+=hubActionsHTML(id);
     $("pdBox").innerHTML=h;
+    /* ═══ تشغيل المركز ═══ */
+    rememberJob(id, prj.job_code, prj.name);
+    hubTab(id, HUB_TAB[id]||"overview");
+    document.querySelectorAll('#hubTabs [data-hub]').forEach(b=>b.onclick=()=>hubTab(id,b.dataset.hub));
+    hubNeedsMe(id,prj).then(items=>{
+      const el=$("hubNeeds"); if(!el) return;
+      el.innerHTML=needsMeHTML(items);
+      el.querySelectorAll("[data-need]").forEach(b=>b.onclick=()=>items[+b.dataset.need].go());
+    });
+    hubMoneyHTML(id,prj).then(x=>{ const el=$("hubMoney"); if(el){ el.innerHTML=x;
+      el.querySelectorAll("tr[data-collect]").forEach(tr=>tr.onclick=()=>{
+        if(typeof collectInst==="function") collectInst(tr.dataset.collect, tr.dataset.rem, id); }); } })
+      .catch(e=>{ const el=$("hubMoney"); if(el) el.innerHTML=failBox("معرفناش نجيب الفلوس.",()=>paintProjectDetail(id)); });
+    hubTimelineHTML(id).then(x=>{ const el=$("hubTL"); if(el) el.innerHTML=x; })
+      .catch(e=>{ const el=$("hubTL"); if(el) el.innerHTML='<div class="muted" style="font-size:12px">'+esc(e.message||"")+'</div>'; });
+    hubPartiesHTML(id,prj).then(x=>{ const el=$("hubParties"); if(el) el.innerHTML=x; })
+      .catch(e=>{ const el=$("hubParties"); if(el) el.innerHTML=failBox("معرفناش نجيب الأطراف.",()=>paintProjectDetail(id)); });
     const msBtn=$("pdAddMs"); if(msBtn) msBtn.onclick=()=>openProjectMilestoneNew(id,prj);
     const woBtn=$("pdWorkOrder");
     if(woBtn){
@@ -4798,14 +5157,17 @@ async function paintGovCases(){
     if(box._listSearchApply) box._listSearchApply();
   }catch(e){ box.innerHTML=failBox("معرفناش نجيب المعاملات.",paintGovCases); }
 }
-async function openGovCaseNew(){
+async function openGovCaseNew(preJobId){
   let prjOpts='<option value="">بدون ربط بمشروع</option>';
-  try{ const { data:prjs }=await sb.from("os_projects").select("id,name").order("name").limit(200); prjOpts+=(prjs||[]).map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join(""); }catch(e){}
+  try{ const { data:prjs }=await sb.from("os_projects").select("id,name,job_code").order("name").limit(200);
+    prjOpts+=(prjs||[]).map(p=>'<option value="'+p.id+'"'+(p.id===preJobId?' selected':'')+'>'
+      +esc(p.job_code?p.job_code+' — ':'')+esc(p.name)+'</option>').join(""); }catch(e){}
   openSheet('<h3>معاملة حكومية جديدة</h3>'
     +'<div class="field"><label>عنوان المعاملة</label><input id="gcTitle" placeholder="مثلاً: تجديد ترخيص بناء فيلا زايد"/></div>'
     +'<div class="field"><label>النوع</label><select id="gcType">'+Object.entries(GOV_TYPE).map(([k,v])=>'<option value="'+k+'">'+v+'</option>').join("")+'</select></div>'
     +'<div class="field"><label>الجهة الحكومية</label><input id="gcBody" placeholder="مثلاً: حي الشيخ زايد"/></div>'
     +'<div class="field"><label>مربوطة بمشروع؟ (اختياري)</label><select id="gcProject">'+prjOpts+'</select></div>'
+    +(preJobId?'<div class="muted" style="font-size:11.5px;margin:-6px 0 8px">✓ مربوطة بالملف اللي جاي منه</div>':'')
     +'<div class="field"><label>موعد مستهدف (اختياري)</label><input id="gcTarget" type="date" min="'+todayStr()+'"/></div>'
     +'<div class="field"><label>ملاحظات</label><textarea id="gcNotes"></textarea></div>'
     +'<div class="row-actions"><button class="btn green" id="gcGo">أضف المعاملة</button><button class="btn ghost" onclick="openGovCases()">إلغاء</button></div>');
@@ -9333,6 +9695,15 @@ async function paintSysDiag(){
     }).join("");
   }catch(e){ box.innerHTML='<div class="empty">القراءة متاحة للإدارة وفريق التطوير بس.</div>'; }
 }
+let RECENT_JOBS=[];
+function rememberJob(id, code, name){
+  RECENT_JOBS=[{id,code,name}].concat(RECENT_JOBS.filter(j=>j.id!==id)).slice(0,5);
+}
+function recentJobsHTML(){
+  if(!RECENT_JOBS.length) return '';
+  return '<div class="sec-h" style="margin-top:4px">فتحتها قريب <span class="ln"></span></div>'
+    + RECENT_JOBS.map(j=>'<button class="res-row" data-gj="'+j.id+'"><div><b class="ltr">'+esc(j.code||"")+'</b> '+esc(j.name||"")+'</div><span class="row-go">›</span></button>').join("");
+}
 async function openGlobalSearch(){
   /* المرحلة ٣ — البحث هو المنتج: عميل · أرض · ملف · تليفون · كود */
   openSheet('<h3>بحث</h3>'
@@ -9341,14 +9712,17 @@ async function openGlobalSearch(){
     +'<div class="field"><input id="gsIn" class="inp gsearch" '
     +'placeholder="اكتب أي حاجة…" autocomplete="off" inputmode="search"/></div>'
     +'<div id="gsBox" style="margin-top:10px;min-height:120px">'
-    +'<div class="muted" style="padding:18px;text-align:center;font-size:12.5px">'
-    +'ابحث بآخر أرقام التليفون · أو رقم القطعة · أو كود الملف</div></div>'
+    +(RECENT_JOBS.length ? recentJobsHTML()
+      : '<div class="muted" style="padding:18px;text-align:center;font-size:12.5px">'
+       +'ابحث بآخر أرقام التليفون · أو رقم القطعة · أو كود الملف</div>')
+    +'</div>'
     +'<div class="row-actions" style="margin-top:10px">'
     +'<button class="btn secondary sm" onclick="closeSheet()">قفل</button></div>');
+  document.querySelectorAll("#gsBox [data-gj]").forEach(b=>b.onclick=()=>{ closeSheet(); openProjectDetail(b.dataset.gj); });
   const inp=$("gsIn");
   if(inp){
     inp.focus();
-    const go=()=>{ const q=(inp.value||"").trim(); gsRun(q); };
+    const go=()=>{ const q=(inp.value||"").trim(); if(!q){ const bx=$("gsBox"); if(bx){ bx.innerHTML=recentJobsHTML()||bx.innerHTML; bx.querySelectorAll("[data-gj]").forEach(b=>b.onclick=()=>{ closeSheet(); openProjectDetail(b.dataset.gj); }); } return; } gsRun(q); };
     inp.oninput=()=>{ clearTimeout(window._gsT); window._gsT=setTimeout(go,240); };
     inp.onkeydown=e=>{ if(e.key==="Enter"){ clearTimeout(window._gsT); go(); } };
   }
@@ -9356,6 +9730,13 @@ async function openGlobalSearch(){
 
 async function gsRun(q){
   const box=$("gsBox"); if(!box) return;
+  /* ذكي: كود ملف تام = افتحه على طول من غير قايمة */
+  if(/^[A-Za-z]{1,3}-\d{1,3}-\d{3,5}(-[A-Za-z0-9أ-ي]+)?-[A-Z]\d+$/i.test(q.trim())){
+    try{
+      const { data } = await sb.from("os_projects").select("id").ilike("job_code", q.trim()).limit(2);
+      if(data && data.length===1){ closeSheet(); openProjectDetail(data[0].id); return; }
+    }catch(e){}
+  }
   if(!q){ box.innerHTML='<div class="muted" style="padding:18px;text-align:center;font-size:12.5px">'
     +'ابحث بآخر أرقام التليفون · أو رقم القطعة · أو كود الملف</div>'; return; }
   box.innerHTML='<div class="muted" style="padding:16px;text-align:center">بيدوّر…</div>';
