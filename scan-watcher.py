@@ -18,10 +18,10 @@ from urllib.error import HTTPError, URLError
 
 SCAN_DIR = r"C:\Scans"                    # الفولدر اللي الريكو بتحفظ فيه
 EMAIL    = "scanner@beit-alkhibra.com"    # حساب السكانر في النظام
-PASSWORD = "غيّرها"                        # الباسورد بتاعه
+PASSWORD = "BeitScan#2026x7Q"              # حساب سكانر مخصوص — منفصل عن أي حد في الفريق
 
 SUPABASE_URL = "https://uwwjzxzkdxerloiqpykj.supabase.co"
-ANON_KEY     = "ضع_المفتاح_هنا"           # من إعدادات Supabase → API → anon key
+ANON_KEY     = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV3d2p6eHprZHhlcmxvaXFweWtqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNDcxOTAsImV4cCI6MjA5NTkyMzE5MH0.J_PtC8vwZLxtPeifYTJRLMNO3tZs69q80SZm1m3QISk"
 BUCKET       = "os-documents"
 
 CHECK_EVERY   = 10          # يفحص كل كام ثانية
